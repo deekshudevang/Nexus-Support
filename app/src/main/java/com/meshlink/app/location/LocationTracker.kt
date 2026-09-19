@@ -64,7 +64,7 @@ class LocationTracker @Inject constructor(
         val isLowBattery = batteryPct < 20f
         
         // Duty cycle adjustments based on battery
-        val priority = if (isLowBattery) Priority.PRIORITY_LOW_POWER else Priority.PRIORITY_BALANCED_POWER_ACCURACY
+        val priority = if (isLowBattery) Priority.PRIORITY_BALANCED_POWER_ACCURACY else Priority.PRIORITY_HIGH_ACCURACY
         val intervalMs = if (isLowBattery) 15 * 60 * 1000L else 5 * 60 * 1000L
         val minIntervalMs = if (isLowBattery) 5 * 60 * 1000L else 60 * 1000L
         val minDistanceM = if (isLowBattery) 200f else 50f

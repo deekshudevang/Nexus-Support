@@ -88,28 +88,21 @@ fun ChatScreen(
                     )
                     androidx.compose.animation.AnimatedContent(targetState = connState, label = "connState") { state ->
                         Text(
-                            text = if (state == ConnectionState.CONNECTED) "MESH RELAYED // 1-HOP" else "OFFLINE",
+                            text = if (state == ConnectionState.CONNECTED) "Connected via Mesh" else "Offline",
                             color = if (state == ConnectionState.CONNECTED) Primary else Color.Gray,
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.SansSerif
                         )
                     }
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(text = "BAT: ${battery}", color = Color.White, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                    Text(text = "E2EE // ${protocol}", color = Primary, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                    Text(text = "Battery: ${battery}", color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
+                    Text(text = "Encrypted", color = Primary, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                TelemetryBadge(text = "${signalStrength} | SNR ${snr}")
-                TelemetryBadge(text = "${modulation}")
-                TelemetryBadge(text = "0 PKT")
-            }
+            // Telemetry badges removed for simplicity
         }
 
         // Messages List
@@ -140,9 +133,9 @@ fun ChatScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(bottom = 8.dp)
             ) {
-                QuickActionChip(icon = Icons.Default.LocationOn, text = "GPS VECTOR")
-                QuickActionChip(icon = Icons.Default.Memory, text = "SENSOR")
-                QuickActionChip(icon = Icons.Default.Map, text = "TILE")
+                QuickActionChip(icon = Icons.Default.LocationOn, text = "Send Location")
+                QuickActionChip(icon = Icons.Default.Memory, text = "Send Vitals")
+                QuickActionChip(icon = Icons.Default.Map, text = "Send Map Tile")
             }
             
             // Input field
@@ -161,7 +154,7 @@ fun ChatScreen(
                     textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 14.sp),
                     decorationBox = { innerTextField ->
                         if (inputText.isEmpty()) {
-                            Text("> ENTER PAYLOAD...", color = Color.Gray, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+                            Text("Message...", color = Color.Gray, fontSize = 14.sp, fontFamily = FontFamily.SansSerif)
                         }
                         innerTextField()
                     }
@@ -173,14 +166,13 @@ fun ChatScreen(
                         .clickable(enabled = connState == ConnectionState.CONNECTED) { viewModel.onSendClick() }
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    Text("TX", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text("Send", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif)
                 }
             }
             
             // Payload Estimator
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(text = "${inputText.length}/240 B", color = Color.Gray, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                Text(text = "EST. AIRTIME: ~0.84s SF11", color = Color.Gray, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
+                Text(text = "${inputText.length}/240", color = Color.Gray, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
             }
         }
     }
@@ -217,9 +209,9 @@ fun MessageBubble(message: Message, isMe: Boolean) {
         // Status / Telemetry for message
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (isMe) {
-                Text("DELIVERED // 2-HOPS (ACK)", color = Primary, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                Text("Delivered", color = Primary, fontSize = 10.sp, fontFamily = FontFamily.SansSerif)
             } else {
-                Text("via Node-Echo | -64 dBm", color = Color.Gray, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                Text("via Node-Echo", color = Color.Gray, fontSize = 10.sp, fontFamily = FontFamily.SansSerif)
             }
         }
     }
@@ -247,6 +239,6 @@ fun QuickActionChip(icon: androidx.compose.ui.graphics.vector.ImageVector, text:
     ) {
         Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
         Spacer(modifier = Modifier.width(4.dp))
-        Text(text, color = Color.White, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+        Text(text, color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
     }
 }
