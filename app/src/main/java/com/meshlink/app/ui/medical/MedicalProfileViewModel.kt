@@ -26,11 +26,7 @@ data class MedicalProfileState(
     val bloodGroup:        String                = "",
     val allergies:         String                = "",
     val medications:       String                = "",
-    val emergencyContacts: List<EmergencyContact> = listOf(
-        // Pre-populated demo contacts matching the Figma design
-        EmergencyContact(name = "Sarah Miller", relation = "Spouse",  phone = "+1 (555) 012-3456"),
-        EmergencyContact(name = "David Vance",  relation = "Father",  phone = "+1 (555) 098-7654")
-    ),
+    val emergencyContacts: List<EmergencyContact> = emptyList(),
     val isSaved: Boolean = false
 )
 
@@ -138,11 +134,7 @@ class MedicalProfileViewModel @Inject constructor(
                     )
                 }
             } catch (_: Exception) { null }
-        } ?: listOf(
-            // Default demo contacts (only used on first launch)
-            EmergencyContact(name = "Sarah Miller", relation = "Spouse",  phone = "+1 (555) 012-3456"),
-            EmergencyContact(name = "David Vance",  relation = "Father",  phone = "+1 (555) 098-7654")
-        )
+        } ?: emptyList()
 
         return MedicalProfileState(
             fullName          = savedName ?: "ALEXANDER VANCE",

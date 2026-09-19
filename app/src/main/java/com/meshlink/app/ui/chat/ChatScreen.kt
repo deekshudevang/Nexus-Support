@@ -97,7 +97,7 @@ fun ChatScreen(
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(text = "Battery: ${battery}", color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
+                    Text(text = "Battery: ${battery}%", color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
                     Text(text = "Encrypted", color = Primary, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
                 }
             }
