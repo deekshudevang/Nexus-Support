@@ -1,5 +1,8 @@
 package com.meshlink.app.ui.medical
 
+import com.meshlink.app.ui.components.NexusButton
+import com.meshlink.app.ui.components.NexusCard
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -236,13 +239,9 @@ private fun SectionLabel(text: String) {
 
 @Composable
 private fun IdentityCard(name: String, onChange: (String) -> Unit) {
-    Surface(
-        modifier      = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .shadow(2.dp, RoundedCornerShape(16.dp)),
-        shape         = RoundedCornerShape(16.dp),
-        color         = MaterialTheme.colorScheme.surface
+    NexusCard(
+        modifier = Modifier.padding(horizontal = 20.dp),
+        elevation = 2.dp
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Box(
@@ -391,13 +390,9 @@ private fun ProfileInputField(
     placeholder: String,
     minLines:    Int = 1
 ) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .shadow(2.dp, RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface
+    NexusCard(
+        modifier = Modifier.padding(horizontal = 20.dp),
+        elevation = 2.dp
     ) {
         Box(
             modifier = Modifier
@@ -495,35 +490,10 @@ private fun SaveProfileButton(isSaved: Boolean, onClick: () -> Unit) {
             .background(LightSurface)
             .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .clickable(onClick = onClick),
-            shape = RoundedCornerShape(14.dp),
-            color = if (isSaved) EmergencyGreen else EmergencyRed
-        ) {
-            Row(
-                modifier              = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment     = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.Save,
-                    contentDescription = null,
-                    tint     = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(Modifier.size(10.dp))
-                Text(
-                    text       = if (isSaved) "Profile Saved ✓" else "Save Profile",
-                    style      = MaterialTheme.typography.titleSmall,
-                    color      = Color.White,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
+        NexusButton(
+            text = if (isSaved) "Profile Saved ✓" else "Save Profile",
+            onClick = onClick,
+            containerColor = if (isSaved) EmergencyGreen else EmergencyRed
+        )
     }
 }
