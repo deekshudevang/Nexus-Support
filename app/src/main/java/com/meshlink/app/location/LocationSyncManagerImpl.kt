@@ -15,8 +15,8 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
-import com.meshlink.app.mesh.repository.NearbyRepository
-import com.meshlink.app.mesh.repository.DeviceRepository
+import com.meshlink.app.domain.repository.NearbyRepository
+import com.meshlink.app.domain.repository.DeviceRepository
 import com.meshlink.app.domain.repository.LocationSyncManager
 import dagger.Lazy
 

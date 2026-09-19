@@ -1,6 +1,5 @@
 package com.meshlink.app.location
 
-import com.meshlink.app.data.local.dao.LocationSyncQueueDao
 import com.meshlink.app.domain.repository.LocationSyncManager
 import dagger.Binds
 import dagger.Module
