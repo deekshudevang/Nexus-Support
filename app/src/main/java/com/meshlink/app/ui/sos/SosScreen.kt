@@ -87,33 +87,67 @@ fun SosScreen(viewModel: SosViewModel) {
         
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Big SOS Button
+        // Big SOS / Cancel Button
         Box(
             modifier = Modifier
                 .size(200.dp)
                 .shadow(
-                    elevation = if (isBroadcasting) 24.dp else 12.dp,
+                    elevation = if (isBroadcasting) 28.dp else 12.dp,
                     shape = CircleShape,
                     ambientColor = if (isBroadcasting) errorColor else primary,
                     spotColor = if (isBroadcasting) errorColor else primary
                 )
                 .clip(CircleShape)
-                .background(if (isBroadcasting) errorColor else MaterialTheme.colorScheme.surfaceVariant)
+                .background(if (isBroadcasting) errorColor else primary)
                 .border(
                     width = 4.dp,
-                    color = if (isBroadcasting) Color.White else primary,
+                    color = Color.White.copy(alpha = 0.25f),
                     shape = CircleShape
                 )
                 .clickable { viewModel.toggleSos() },
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = if (isBroadcasting) "CANCEL" else "SOS",
-                color = if (isBroadcasting) Color.White else primary,
-                fontSize = 48.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 2.sp
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                if (isBroadcasting) {
+                    // Cancel state: smaller text + subtext so it fits cleanly
+                    Text(
+                        text = "✕",
+                        color = Color.White,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Black,
+                        lineHeight = 32.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "CANCEL",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 3.sp
+                    )
+                } else {
+                    // SOS state: large bold letters
+                    Text(
+                        text = "SOS",
+                        color = Color.White,
+                        fontSize = 52.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 4.sp,
+                        lineHeight = 52.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "TAP TO SEND",
+                        color = Color.White.copy(alpha = 0.75f),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 2.sp
+                    )
+                }
+            }
         }
         
         Spacer(modifier = Modifier.height(48.dp))

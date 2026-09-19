@@ -30,21 +30,13 @@ interface LocationEventDao {
     @Query("SELECT IFNULL(MAX(sequenceNumber), 0) FROM location_events WHERE peerId = :peerId")
     suspend fun getHighestSequenceNumber(peerId: String): Int
 
-    @Query("""
-        SELECT peerId, IFNULL((
-            SELECT MAX(t2.sequenceNumber) 
-            FROM location_events t2 
-            WHERE t2.peerId = t1.peerId 
-              AND t2.sequenceNumber = (
-                  SELECT COUNT(*) 
-                  FROM location_events t3 
-                  WHERE t3.peerId = t1.peerId 
-                    AND t3.sequenceNumber <= t2.sequenceNumber
-              )
-        ), 0) as sequenceNumber 
-        FROM location_events t1 
-        GROUP BY peerId
-    """)
+    /**
+     * Returns the highest sequence number seen per peer.
+     * Used as the VectorClock state for delta-sync negotiation.
+     * NOTE: We intentionally use MAX (not contiguous-max) so that out-of-order events
+     * that arrive during a partition do not reset the clock backward on reconnect.
+     */
+    @Query("SELECT peerId, MAX(sequenceNumber) as sequenceNumber FROM location_events GROUP BY peerId")
     suspend fun getVectorClock(): List<com.meshlink.app.domain.model.VectorClock>
 
     @Query("SELECT * FROM location_events WHERE peerId = :peerId AND sequenceNumber > :sequenceNumber ORDER BY sequenceNumber ASC")
