@@ -68,7 +68,7 @@ Nexus Support is engineered following strict **Clean Architecture** principles, 
 
 ```mermaid
 graph TD
-    subgraph UI_Layer [Presentation Layer (:app)]
+    subgraph UI_Layer [Presentation Layer]
         UI[Jetpack Compose Screens & Material 3]
         VM[StateFlow ViewModels & Navigation]
         Workers[WorkManager Sync & Maintenance]
@@ -76,15 +76,15 @@ graph TD
         VM --> Workers
     end
 
-    subgraph Domain_Layer [Business Domain (:core:domain)]
-        Models[Domain Models: MeshPacket, VectorClock, KnownDevice]
+    subgraph Domain_Layer [Business Domain]
+        Models[Domain Models - MeshPacket, VectorClock]
         Repos[Repository Interfaces & UseCases]
     end
 
     subgraph Engine_Layer [Core Engine Modules]
-        Mesh[":core:mesh (MeshRouter, Dijkstra, SeenCache, Battery)"]
-        Crypto[":core:crypto (KeyStore, ECIES, AES-GCM, Signatures)"]
-        Data[":core:data (SQLCipher, Room DAOs, Retrofit)"]
+        Mesh[core:mesh - MeshRouter, Dijkstra, SeenCache]
+        Crypto[core:crypto - KeyStore, ECIES, AES-GCM]
+        Data[core:data - SQLCipher, Room DAOs, Retrofit]
     end
 
     UI_Layer --> Domain_Layer

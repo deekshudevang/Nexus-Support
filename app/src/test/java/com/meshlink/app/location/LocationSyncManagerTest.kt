@@ -48,7 +48,7 @@ class LocationSyncManagerTest {
 
         // Default stubs
         every { cryptoManager.verify(any(), any(), any()) } returns true
-        every { processedEventDao.isProcessed(any()) } returns false
+        coEvery { processedEventDao.isProcessed(any()) } returns false
     }
 
     @Test

@@ -507,7 +507,7 @@ class MeshRouter @Inject constructor(
                     val lastSeen = heartbeatLastSeen[packet.originId] ?: 0L
                     if (now - lastSeen < HEARTBEAT_MIN_INTERVAL_MS) {
                         Timber.w("MeshRouter: Rate-limiting HEARTBEAT flood from ${packet.originId}")
-                        return@withContext RoutingResult.Drop
+                        return null
                     }
                     heartbeatLastSeen[packet.originId] = now
 
@@ -523,7 +523,7 @@ class MeshRouter @Inject constructor(
                 } catch (e: Exception) {
                     Timber.w(e, "Failed to parse heartbeat payload")
                 }
-                return@withContext RoutingResult.Drop
+                return null
             }
 
             PacketType.LOCATION_SYNC -> {
