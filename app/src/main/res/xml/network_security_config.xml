@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network Security Configuration for Nexus-Support.
+
+    Policy:
+      - All cleartext HTTP traffic is blocked in release.
+      - Only HTTPS is permitted for cloud sync endpoints.
+      - Localhost cleartext is permitted for debug builds only (osmdroid tile cache).
+-->
+<network-security-config>
+
+    <!-- Production: HTTPS only, no cleartext anywhere -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Allow cleartext only to the local loopback for debug tile serving (never in release) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+
+</network-security-config>

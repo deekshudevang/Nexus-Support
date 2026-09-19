@@ -4,13 +4,14 @@
 
 # Nexus Support — Offline Emergency Mesh Communication Platform
 
-**Peer-to-peer encrypted chat that works without internet or cellular signal.**  
+**Peer-to-peer encrypted mesh chat and location sharing that works without internet or cellular signal.**  
 Built with Android Nearby Connections API, Jetpack Compose, and Clean Architecture.
 
-[![Android](https://img.shields.io/badge/Platform-Android-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
+[![Android](https://img.shields.io/badge/Platform-Android%2026+-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Language-Kotlin-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-1.0.0-brightgreen)](https://github.com/deekshudevang/Nexus-Support/releases)
 [![GitHub last commit](https://img.shields.io/github/last-commit/deekshudevang/Nexus-Support)](https://github.com/deekshudevang/Nexus-Support/commits/master)
 
 </div>
@@ -21,195 +22,175 @@ Built with Android Nearby Connections API, Jetpack Compose, and Clean Architectu
 
 - [About](#-about)
 - [Features](#-features)
+- [Security Architecture](#-security-architecture)
 - [Architecture](#-architecture)
 - [Module Structure](#-module-structure)
 - [Tech Stack](#-tech-stack)
 - [Getting Started](#-getting-started)
-- [Project Structure](#-project-structure)
-- [Screenshots](#-screenshots)
-- [Contributing](#-contributing)
+- [Testing](#-testing)
 - [License](#-license)
 
 ---
 
 ## 🌐 About
 
-**Nexus Support** is an offline-first Android application that enables real-time peer-to-peer messaging between nearby devices using the **Google Nearby Connections API** — no internet, no SIM card required.
+**Nexus Support** is an offline-first Android application that enables real-time peer-to-peer messaging and geospatial location sharing between nearby devices using the **Google Nearby Connections API** — no internet, no SIM card required.
 
-It is designed for situations where traditional communication infrastructure is unavailable: disaster zones, remote areas, protests, or campus environments. Messages hop across multiple devices to extend reach beyond direct range, forming a true **mesh network**.
+It is designed for situations where traditional communication infrastructure is unavailable: disaster zones, remote areas, large events, or campus emergencies. Messages and location events hop across multiple devices to extend reach beyond direct range, forming a true **multi-hop mesh network**.
+
+This project proves that a genuine offline-first, multi-hop, store-and-forward emergency mesh is buildable on commodity Android hardware.
 
 ---
 
 ## ✨ Features
 
-| Feature | Description |
+| Category | Feature |
 |---|---|
-| 📡 **Mesh Networking** | Messages are relayed hop-by-hop across multiple devices |
-| 🔒 **End-to-End Encryption** | ECIES-based encryption per session via the `crypto` module |
-| 💬 **Offline Chat** | Real-time messaging with zero internet dependency |
-| 📢 **Broadcast** | Send a message to all nearby devices simultaneously |
-| 🔍 **Device Discovery** | Auto-discover nearby peers via Nearby Connections |
-| 🚨 **SOS Mode** | Emergency broadcast with medical profile info |
-| 🏥 **Medical Profile** | Store and share emergency health details locally |
-| 🔋 **Adaptive Scanning** | Battery-aware scan controller reduces drain when idle |
-| 📬 **Message Queuing** | Messages are queued and auto-delivered on reconnect |
-| 🗃️ **Local Persistence** | All messages and devices stored in Room database |
+| **Mesh Networking** | Multi-hop routing (up to 7 hops) via Dijkstra shortest-path |
+| **Messaging** | AES-256-GCM encrypted direct chat; ECIES multi-hop routed chat |
+| **Location** | HIGH_ACCURACY GPS; CRDT/Vector Clock location sync across mesh |
+| **Store & Forward** | Messages queued up to 48h and delivered when peers reconnect |
+| **Offline Maps** | Mapsforge vector tiles downloadable for fully offline map rendering |
+| **Medical Profile** | User-editable emergency contacts, blood group, allergies, medications |
+| **SOS** | High-priority emergency flood broadcast across entire mesh |
+| **Cloud Sync** | WorkManager syncs pending events when internet returns |
 
 ---
 
-## 🏛️ Architecture
+## 🔐 Security Architecture
 
-Nexus Support follows **Clean Architecture** with a strict separation of concerns across 5 Gradle modules:
+Nexus Support implements a layered security model suitable for emergency deployments:
+
+### Cryptographic Identity
+- **EC P-256 key pair** generated in Android KeyStore on first launch
+- **StrongBox hardware module** used automatically on supported devices (Pixel 3+)
+- Keys are **never exported** from the KeyStore
+
+### Packet Signing & Replay Prevention
+- Every location event is signed: `ECDSA(SHA-256, eventId:peerId:lat:lon:accuracy:timestamp:seq)`
+- `eventId` is bound to the signature — prevents replay of valid signatures on different payloads
+- Events with timestamps **>24 hours old or >60 seconds in the future** are rejected
+
+### Routing Hardening
+- **Heartbeat rate-limiting**: max 1 heartbeat per peer per 5 seconds — blocks Sinkhole/Sybil flooding
+- **Split-horizon forwarding**: packets never echoed back to the endpoint they arrived from
+- **SeenMessageCache**: cryptographic deduplication prevents broadcast loops
+
+### Data at Rest
+- **SQLCipher AES-256**: entire Room database encrypted at rest
+- Passphrase derived from a hardware-backed 256-bit AES key stored in AndroidKeyStore
+- `allowBackup=false`: prevents device backup from leaking encrypted DB
+
+### Network
+- **Cleartext HTTP blocked** in release builds via `network_security_config.xml`
+- All cloud sync uses HTTPS only
+
+---
+
+## 🏗 Architecture
 
 ```
-┌──────────────────────────────────────────┐
-│                  :app                    │  ← Jetpack Compose UI, ViewModels, DI root
-├──────────────────────────────────────────┤
-│                 :domain                  │  ← Models, Repository interfaces (pure Kotlin)
-├────────────────┬─────────────────────────┤
-│     :data      │        :mesh            │  ← Implementations: Room DB │ Nearby Connections
-├────────────────┴─────────────────────────┤
-│                :crypto                   │  ← ECIES encryption, KeyManager, HandshakeManager
-└──────────────────────────────────────────┘
-```
-
-**Data flow:**
-```
-UI (Compose) → ViewModel → Domain Repository Interface
-                                    ↓
-                    ┌───────────────┴──────────────┐
-                    :data (Room DB)           :mesh (Nearby)
-                                    ↑
-                               :crypto (ECIES)
+┌────────────────────────────────────────────────────────┐
+│                        App Layer                       │
+│   UI (Compose) → ViewModels → UseCases → Repositories │
+└───────────────────────┬────────────────────────────────┘
+                        │
+          ┌─────────────┼─────────────┐
+          ▼             ▼             ▼
+    core:data      core:mesh     core:crypto
+   (Room/SQLite   (MeshRouter,   (CryptoManager,
+    encrypted)     RoutingTable)  ECIES, AES-GCM)
+                        │
+                        ▼
+               core:domain (models, interfaces)
 ```
 
 ---
 
 ## 📦 Module Structure
 
-```
-MeshLink/
-│
-├── 📱 app/                          # Main application module
-│   └── src/main/java/.../ui/        # Feature-based UI components
-│
-├── 🧠 core/                         # Core logic and data modules (New Grouping)
-│   ├── domain/                      # Business logic & pure models
-│   ├── data/                        # Room DB & Repository implementations
-│   ├── mesh/                        # Nearby Connections mesh layer
-│   └── crypto/                      # ECIES Encryption module
-│
-├── gradle/                          # Gradle config & version catalog
-├── build.gradle.kts                 # Root build script
-├── settings.gradle.kts              # Module declarations (includes :core: prefix)
-└── README.md
-
-├── gradle/
-│   ├── libs.versions.toml           # Version catalog (single source of truth)
-│   └── wrapper/                     # Gradle wrapper
-│
-├── build.gradle.kts                 # Root build script
-├── settings.gradle.kts              # Module declarations
-├── gradle.properties                # Gradle/JVM flags
-└── README.md
-```
+| Module | Responsibility |
+|---|---|
+| `app` | UI, ViewModels, Navigation, WorkManager scheduling |
+| `core:domain` | Entities, repository interfaces, use cases |
+| `core:data` | Room (SQLCipher), DAOs, Retrofit cloud sync |
+| `core:mesh` | MeshRouter, RoutingTable, SeenMessageCache, BatteryMonitor |
+| `core:crypto` | CryptoManager (KeyStore), EncryptionService (AES-GCM), EciesService |
 
 ---
 
-## 🛠️ Tech Stack
+## 🛠 Tech Stack
 
 | Layer | Technology |
 |---|---|
-| **Language** | Kotlin |
-| **UI** | Jetpack Compose + Material 3 |
-| **Architecture** | MVVM + Clean Architecture |
-| **DI** | Hilt |
-| **Mesh Networking** | Google Nearby Connections API |
-| **Encryption** | ECIES (Elliptic Curve Integrated Encryption Scheme) |
-| **Database** | Room (SQLite) |
-| **Async** | Kotlin Coroutines + StateFlow |
-| **Build** | Gradle Kotlin DSL + Version Catalog |
+| Language | Kotlin 2.0 |
+| UI | Jetpack Compose + Material 3 |
+| DI | Hilt 2.51 |
+| Database | Room 2.8 + SQLCipher 4.6 (AES-256 encrypted) |
+| Background | WorkManager 2.10 (cleanup + cloud sync) |
+| Networking | Google Nearby Connections 19.3 |
+| Maps | OsmDroid 6.1 + Mapsforge 0.20 (fully offline) |
+| Location | Google Play Services Location (HIGH_ACCURACY) |
+| Cryptography | Android KeyStore + EC P-256 + AES-256-GCM + ECIES |
+| Build | Gradle 8.14 + R8 (minification + shrinking enabled) |
 
 ---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
+- Android Studio Meerkat or later
+- Android device/emulator running **API 26+**
+- Two or more physical devices for mesh testing (Nearby Connections requires real hardware)
 
-- Android Studio **Hedgehog** or newer
-- JDK **17**
-- Android device or emulator running **API 26+**
-- Two physical devices for mesh testing (emulators cannot use Nearby Connections)
-
-### Setup
+### Build
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/deekshudevang/Nexus-Support.git
 cd Nexus-Support
-
-# 2. Open in Android Studio
-# File → Open → select the Nexus-Support folder
-
-# 3. Sync Gradle
-# Android Studio will auto-sync. If not: File → Sync Project with Gradle Files
-
-# 4. Run on a physical device
-# Connect device via USB, enable Developer Options & USB Debugging
-# Click ▶ Run
+./gradlew assembleDebug
 ```
 
-### Permissions Required
+### Release Build
 
-Nexus Support requires the following permissions (declared in `AndroidManifest.xml`):
-
-```
-ACCESS_FINE_LOCATION
-ACCESS_WIFI_STATE / CHANGE_WIFI_STATE
-BLUETOOTH / BLUETOOTH_ADMIN / BLUETOOTH_SCAN / BLUETOOTH_ADVERTISE / BLUETOOTH_CONNECT
-NEARBY_WIFI_DEVICES
+```bash
+./gradlew assembleRelease
 ```
 
-> ⚠️ All permissions are runtime-requested. Deny any of them and mesh discovery will not function.
+R8 minification, resource shrinking, and SQLCipher are all active in release.
 
 ---
 
-## 📸 Screenshots
+## 🧪 Testing
 
-> _Add screenshots here after building the app:_
-> 
-> | Discovery | Chat | SOS |
-> |---|---|---|
-> | _screenshot_ | _screenshot_ | _screenshot_ |
+### Unit Tests
 
----
+```bash
+# All mesh routing tests (runs on JVM, no device needed)
+./gradlew :core:mesh:test
 
-## 🤝 Contributing
+# Large-scale 20-node mesh simulation (7 scenarios)
+./gradlew :core:mesh:test --tests "com.meshlink.app.mesh.routing.LargeScaleMeshSimTest"
 
-Contributions are welcome! Please read [CONTRIBUTING.md](.github/CONTRIBUTING.md) before submitting a pull request.
+# CRDT/Vector Clock tests
+./gradlew :app:test --tests "com.meshlink.app.location.LocationSyncManagerTest"
+```
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Commit your changes: `git commit -m "feat: add your feature"`
-4. Push the branch: `git push origin feature/your-feature`
-5. Open a Pull Request
+### Test Scenarios Covered
+
+| Scenario | What it validates |
+|---|---|
+| 20-node linear chain | End-to-end broadcast within TTL |
+| 20-node fully connected | SeenMessageCache deduplication under dense flooding |
+| Partition + reconnect | Store-and-forward delivery on link restoration |
+| 10 churn join/leave | Routing table convergence under peer instability |
+| 1000 heartbeat flood | Rate-limiter blocks Sinkhole/Sybil attacks |
+| TTL wall | Packet dies exactly at `maxHops` boundary |
+| Split-horizon | No echo back to source endpoint |
+| CRDT out-of-order delivery | Vector Clock handles non-contiguous sequences |
 
 ---
 
 ## 📄 License
 
-```
-MIT License
-
-Copyright (c) 2026 Nexus Support Contributors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-```
+MIT License — see [LICENSE](LICENSE) for details.

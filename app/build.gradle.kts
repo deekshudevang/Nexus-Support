@@ -15,18 +15,24 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "com.meshlink.app.HiltTestRunner"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            isMinifyEnabled = false
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
         }
     }
 
@@ -72,7 +78,7 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    // WorkManager + Hilt-Work integration (Phase 4: store-and-forward cleanup)
+    // WorkManager + Hilt-Work integration
     implementation(libs.work.runtime.ktx)
     implementation(libs.hilt.work)
     ksp(libs.hilt.work.compiler)
@@ -91,7 +97,7 @@ dependencies {
     implementation(libs.mapsforge.map.android)
     implementation(libs.mapsforge.map.reader)
     implementation(libs.mapsforge.themes)
-implementation(libs.osmbonuspack)
+    implementation(libs.osmbonuspack)
 
     // Testing — unit tests
     testImplementation(libs.junit)
