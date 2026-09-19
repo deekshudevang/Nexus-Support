@@ -28,11 +28,17 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
+import org.osmdroid.mapsforge.MapsForgeTileSource
+import org.osmdroid.mapsforge.MapsForgeTileProvider
+import org.mapsforge.map.reader.MapFile
+import java.io.File
+import androidx.compose.material.icons.filled.Download
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MeshMapScreen(
-    viewModel: MeshMapViewModel = hiltViewModel()
+    viewModel: MeshMapViewModel = hiltViewModel(),
+    onNavigateToDownloads: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showFilterModal by remember { mutableStateOf(false) }
@@ -51,6 +57,9 @@ fun MeshMapScreen(
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 ),
                 actions = {
+                    IconButton(onClick = onNavigateToDownloads) {
+                        Icon(Icons.Default.Download, contentDescription = "Offline Maps")
+                    }
                     IconButton(onClick = { showFilterModal = true }) {
                         Icon(Icons.Default.FilterList, contentDescription = "Filter")
                     }
@@ -73,8 +82,28 @@ fun MeshMapScreen(
                 AndroidView(
                     factory = { ctx ->
                         MapView(ctx).apply {
-                            setTileSource(TileSourceFactory.MAPNIK)
-                            setUseDataConnection(true) // Allow loading online map tiles
+                            // Check if local mapsforge file exists (simulated location)
+                            val mapFile = File(ctx.getExternalFilesDir(null), "offline_map.map")
+                            if (mapFile.exists()) {
+                                try {
+                                    val map = MapFile(mapFile)
+                                    val forge = MapsForgeTileSource.createFromFiles(arrayOf(mapFile))
+                                    val provider = MapsForgeTileProvider(
+                                        org.osmdroid.tileprovider.IRegisterReceiver { _, _ -> null },
+                                        forge,
+                                        null
+                                    )
+                                    setTileProvider(provider)
+                                    setUseDataConnection(false)
+                                } catch (e: Exception) {
+                                    setTileSource(TileSourceFactory.MAPNIK)
+                                    setUseDataConnection(true)
+                                }
+                            } else {
+                                setTileSource(TileSourceFactory.MAPNIK)
+                                setUseDataConnection(true) // Allow loading online map tiles as fallback
+                            }
+                            
                             setMultiTouchControls(true)
                             controller.setZoom(15.0)
                         }
