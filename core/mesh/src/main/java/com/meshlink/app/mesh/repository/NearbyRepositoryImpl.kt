@@ -73,7 +73,7 @@ class NearbyRepositoryImpl @Inject constructor(
     // Phase 7: Meshtastic
     private val meshtasticTransport: com.meshlink.app.mesh.transport.MeshtasticTransport,
     // Phase 4: Location Sync
-    private val locationSyncManager: com.meshlink.app.location.LocationSyncManager
+    private val locationSyncManager: com.meshlink.app.domain.repository.LocationSyncManager
 ) : NearbyRepository {
 
     companion object {

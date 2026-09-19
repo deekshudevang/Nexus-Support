@@ -16,6 +16,8 @@ import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
 import com.meshlink.app.mesh.repository.NearbyRepository
+import com.meshlink.app.mesh.repository.DeviceRepository
+import com.meshlink.app.domain.repository.LocationSyncManager
 import dagger.Lazy
 
 @Singleton
@@ -23,6 +25,7 @@ class LocationSyncManagerImpl @Inject constructor(
     private val locationEventDao: LocationEventDao,
     private val locationSyncQueueDao: LocationSyncQueueDao,
     private val meshRouter: MeshRouter,
+    private val deviceRepository: DeviceRepository,
     @Named("localDeviceId") private val localDeviceId: String,
     private val nearbyRepository: Lazy<NearbyRepository> // Lazy to avoid circular dependency
 ) : LocationSyncManager {

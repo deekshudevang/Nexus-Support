@@ -33,6 +33,9 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.timber)
+    
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.gson)
 
     androidTestImplementation(libs.room.testing)
     androidTestImplementation(libs.androidx.junit)

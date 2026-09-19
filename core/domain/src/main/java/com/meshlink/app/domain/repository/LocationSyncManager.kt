@@ -1,6 +1,4 @@
-package com.meshlink.app.location
-
-import com.meshlink.app.domain.model.RoutingResult
+package com.meshlink.app.domain.repository
 
 interface LocationSyncManager {
     /**
