@@ -72,7 +72,7 @@ androidx-security-crypto = { group = "androidx.security", name = "security-crypt
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
-androidx-test-core = { group = "androidx.test", name = "core", version = "1.6.1" }
+androidx-test-core = { group = "androidx.test", name = "core", version = "1.7.0" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 mockk-android = { group = "io.mockk", name = "mockk-android", version.ref = "mockk" }
