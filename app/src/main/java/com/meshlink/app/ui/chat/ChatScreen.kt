@@ -68,13 +68,13 @@ fun ChatScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(TranslucentPanel)
-                .border(1.dp, NeonOrange.copy(alpha = 0.15f))
-                .padding(12.dp)
+                .background(CardSurface)
+                .border(1.dp, Primary.copy(alpha = 0.15f))
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBackClick) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = NeonOrange)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Primary)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
@@ -88,7 +88,7 @@ fun ChatScreen(
                     androidx.compose.animation.AnimatedContent(targetState = connState, label = "connState") { state ->
                         Text(
                             text = if (state == ConnectionState.CONNECTED) "MESH RELAYED // 1-HOP" else "OFFLINE",
-                            color = if (state == ConnectionState.CONNECTED) NeonOrange else Color.Gray,
+                            color = if (state == ConnectionState.CONNECTED) Primary else Color.Gray,
                             fontSize = 10.sp,
                             fontFamily = FontFamily.Monospace
                         )
@@ -97,7 +97,7 @@ fun ChatScreen(
                 Spacer(modifier = Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.End) {
                     Text(text = "BAT: ${battery}", color = Color.White, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                    Text(text = "E2EE // ${protocol}", color = NeonOrange, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                    Text(text = "E2EE // ${protocol}", color = Primary, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -130,8 +130,8 @@ fun ChatScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(TranslucentPanel)
-                .border(1.dp, NeonOrange.copy(alpha = 0.15f))
+                .background(CardSurface)
+                .border(1.dp, Primary.copy(alpha = 0.15f))
                 .padding(12.dp)
         ) {
             // Quick action chips
@@ -195,12 +195,12 @@ fun MessageBubble(message: Message, isMe: Boolean) {
             modifier = Modifier
                 .widthIn(max = 280.dp)
                 .background(
-                    color = if (isMe) NeonOrange.copy(alpha = 0.2f) else Color(0xFF1E1E1E),
-                    shape = RoundedCornerShape(4.dp)
+                    color = if (isMe) Primary.copy(alpha = 0.2f) else Color(0xFF1E1E1E),
+                    shape = RoundedCornerShape(12.dp)
                 )
                 .border(
                     width = 1.dp,
-                    color = if (isMe) NeonOrange.copy(alpha = 0.6f) else Color.DarkGray,
+                    color = if (isMe) Primary.copy(alpha = 0.6f) else Color.DarkGray,
                     shape = RoundedCornerShape(4.dp)
                 )
                 .padding(12.dp)
@@ -216,7 +216,7 @@ fun MessageBubble(message: Message, isMe: Boolean) {
         // Status / Telemetry for message
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (isMe) {
-                Text("DELIVERED // 2-HOPS (ACK)", color = NeonOrange, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                Text("DELIVERED // 2-HOPS (ACK)", color = Primary, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
             } else {
                 Text("via Node-Echo | -64 dBm", color = Color.Gray, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
             }
@@ -231,7 +231,7 @@ fun TelemetryBadge(text: String) {
             .background(Color(0xFF2A1105), RoundedCornerShape(2.dp))
             .padding(horizontal = 4.dp, vertical = 2.dp)
     ) {
-        Text(text = text, color = NeonOrange, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+        Text(text = text, color = Primary, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
     }
 }
 
@@ -241,7 +241,7 @@ fun QuickActionChip(icon: androidx.compose.ui.graphics.vector.ImageVector, text:
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .background(Color.Transparent)
-            .border(1.dp, NeonOrange.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
+            .border(1.dp, Primary.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
             .padding(horizontal = 6.dp, vertical = 4.dp)
     ) {
         Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))

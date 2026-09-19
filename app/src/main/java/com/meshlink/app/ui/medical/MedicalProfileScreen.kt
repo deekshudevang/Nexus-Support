@@ -47,7 +47,13 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.meshlink.app.domain.model.EmergencyContact
-import com.meshlink.app.ui.theme.MeshLinkLightTheme
+import com.meshlink.app.ui.theme.EmergencyGreen
+import com.meshlink.app.ui.theme.EmergencyRed
+import com.meshlink.app.ui.theme.LightSurface
+import com.meshlink.app.ui.theme.TextMuted
+import com.meshlink.app.ui.theme.TextPrimary
+import com.meshlink.app.ui.theme.TextSecondary
+import com.meshlink.app.ui.theme.MeshLinkThemeLightTheme
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
