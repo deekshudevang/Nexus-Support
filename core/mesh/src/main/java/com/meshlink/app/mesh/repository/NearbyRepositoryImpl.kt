@@ -122,76 +122,6 @@ class NearbyRepositoryImpl @Inject constructor(
      */
     private val endpointIdToDeviceId = ConcurrentHashMap<String, String>()
 
-    init {
-        // Battery heartbeat loop
-        scope.launch {
-            while (true) {
-                delay(30_000L) // Broadcast heartbeat every 30 seconds
-                if (getConnectedPeers().isNotEmpty()) {
-                    val battery = batteryMonitor.getBatteryLevel()
-                    val result = meshRouter.buildHeartbeat(battery, getConnectedPeers())
-                    if (result is RoutingResult.Processed) {
-                        result.forwardTargets.forEach { dispatchToNearby(it) }
-                    }
-                }
-            }
-        }
-
-        // Scan Strategy Observer Loop
-        scope.launch {
-            adaptiveScanController.scanStrategy.collect { strategy ->
-                when (strategy) {
-                    com.meshlink.app.domain.model.ScanStrategy.PAUSED -> {
-                        Timber.w("Scan strategy PAUSED due to low battery.")
-                        if (isDiscovering) {
-                            connectionsClient.stopDiscovery()
-                            meshtasticTransport.stopScanning()
-                            isDiscovering = false
-                        }
-                    }
-                    com.meshlink.app.domain.model.ScanStrategy.INTERMITTENT -> {
-                        // In intermittent mode, we can cycle on/off, but for simplicity
-                        // we just rely on adaptiveScanController.nextRestartDelayMs in the start loop.
-                        // Here we just ensure we resume if we were paused.
-                        if (!isDiscovering) {
-                            startAdvertisingAndDiscovery()
-                        }
-                    }
-                    com.meshlink.app.domain.model.ScanStrategy.CONTINUOUS -> {
-                        if (!isDiscovering) {
-                            startAdvertisingAndDiscovery()
-                        }
-                    }
-                }
-            }
-        }
-
-        // Phase 7: Start Meshtastic BLE Scanner
-        meshtasticTransport.startScanning()
-        
-        // Listen to Meshtastic packets
-        scope.launch {
-            meshtasticTransport.receivedPackets.collect { packet ->
-                val domainPacket = MeshPacket(
-                    senderId = packet.from.toString(),
-                    receiverId = packet.to.toString(),
-                    content = if (packet.hasDecoded()) packet.decoded.payload.toStringUtf8() else "",
-                    timestamp = packet.rxTime * 1000L,
-                    type = MeshPacket.PacketType.ROUTED_CHAT,
-                    messageId = packet.id.toString(),
-                    originId = packet.from.toString(),
-                    finalDestId = packet.to.toString(),
-                    hopCount = 0,
-                    maxHops = packet.hopLimit,
-                    priority = packet.priority
-                )
-                
-                val result = meshRouter.route("meshtastic", domainPacket, _connectionStates.value.mapValues { it.key })
-                handleRoutingResult(result, domainPacket, "meshtastic")
-                _incomingPackets.emit(domainPacket)
-            }
-        }
-    }
 
     // ── Nearby callbacks ──────────────────────────────────────────────────────
 
@@ -274,6 +204,78 @@ class NearbyRepositoryImpl @Inject constructor(
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
             if (update.status == PayloadTransferUpdate.Status.SUCCESS) {
                 Timber.v("Payload delivered to $endpointId payloadId=${update.payloadId}")
+            }
+        }
+    }
+
+
+    init {
+        // Battery heartbeat loop
+        scope.launch {
+            while (true) {
+                delay(30_000L) // Broadcast heartbeat every 30 seconds
+                if (getConnectedPeers().isNotEmpty()) {
+                    val battery = batteryMonitor.getBatteryLevel()
+                    val result = meshRouter.buildHeartbeat(battery, getConnectedPeers())
+                    if (result is RoutingResult.Processed) {
+                        result.forwardTargets.forEach { dispatchToNearby(it) }
+                    }
+                }
+            }
+        }
+
+        // Scan Strategy Observer Loop
+        scope.launch {
+            adaptiveScanController.scanStrategy.collect { strategy ->
+                when (strategy) {
+                    com.meshlink.app.domain.model.ScanStrategy.PAUSED -> {
+                        Timber.w("Scan strategy PAUSED due to low battery.")
+                        if (isDiscovering) {
+                            connectionsClient.stopDiscovery()
+                            meshtasticTransport.stopScanning()
+                            isDiscovering = false
+                        }
+                    }
+                    com.meshlink.app.domain.model.ScanStrategy.INTERMITTENT -> {
+                        // In intermittent mode, we can cycle on/off, but for simplicity
+                        // we just rely on adaptiveScanController.nextRestartDelayMs in the start loop.
+                        // Here we just ensure we resume if we were paused.
+                        if (!isDiscovering) {
+                            startAdvertisingAndDiscovery()
+                        }
+                    }
+                    com.meshlink.app.domain.model.ScanStrategy.CONTINUOUS -> {
+                        if (!isDiscovering) {
+                            startAdvertisingAndDiscovery()
+                        }
+                    }
+                }
+            }
+        }
+
+        // Phase 7: Start Meshtastic BLE Scanner
+        meshtasticTransport.startScanning()
+        
+        // Listen to Meshtastic packets
+        scope.launch {
+            meshtasticTransport.receivedPackets.collect { packet ->
+                val domainPacket = MeshPacket(
+                    senderId = packet.from.toString(),
+                    receiverId = packet.to.toString(),
+                    content = if (packet.hasDecoded()) packet.decoded.payload.toStringUtf8() else "",
+                    timestamp = packet.rxTime * 1000L,
+                    type = MeshPacket.PacketType.ROUTED_CHAT,
+                    messageId = packet.id.toString(),
+                    originId = packet.from.toString(),
+                    finalDestId = packet.to.toString(),
+                    hopCount = 0,
+                    maxHops = packet.hopLimit,
+                    priority = packet.priority
+                )
+                
+                val result = meshRouter.route("meshtastic", domainPacket, _connectionStates.value.mapValues { it.key })
+                handleRoutingResult(result, domainPacket, "meshtastic")
+                _incomingPackets.emit(domainPacket)
             }
         }
     }
