@@ -25,7 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.meshlink.app.domain.model.ConnectionState
 import com.meshlink.app.domain.model.Message
-
+import com.meshlink.app.ui.theme.CardSurface
+import com.meshlink.app.ui.theme.Primary
 
 
 @Composable

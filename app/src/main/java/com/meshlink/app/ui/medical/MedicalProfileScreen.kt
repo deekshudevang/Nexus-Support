@@ -53,7 +53,7 @@ import com.meshlink.app.ui.theme.LightSurface
 import com.meshlink.app.ui.theme.TextMuted
 import com.meshlink.app.ui.theme.TextPrimary
 import com.meshlink.app.ui.theme.TextSecondary
-import com.meshlink.app.ui.theme.MeshLinkThemeLightTheme
+import com.meshlink.app.ui.theme.MeshLinkLightTheme
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
