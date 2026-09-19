@@ -62,7 +62,9 @@ data class MeshPacket(
         /** Emergency SOS flood. Plaintext, high priority. */
         SOS,
         /** Routing metadata. Plaintext JSON (battery, link quality). 1-2 hops max. */
-        HEARTBEAT
+        HEARTBEAT,
+        /** Location synchronization payload. Contains JSON array of LocationEventEntity. */
+        LOCATION_SYNC
     }
 
     val isBroadcast: Boolean get() = finalDestId == BROADCAST_DEST

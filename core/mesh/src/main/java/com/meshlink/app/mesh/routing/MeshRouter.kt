@@ -387,6 +387,32 @@ class MeshRouter @Inject constructor(
         return RoutingResult.Processed(localMessage = null, forwardTargets = targets)
     }
 
+    fun buildLocationSync(
+        content: String,
+        connectedPeers: Map<String, String>
+    ): RoutingResult {
+        val messageId = UUID.randomUUID().toString()
+        seenMessageCache.markSeen(messageId)
+
+        val packet = MeshPacket(
+            senderId    = myDeviceId,
+            receiverId  = MeshPacket.BROADCAST_DEST,
+            content     = content,
+            timestamp   = System.currentTimeMillis(),
+            type        = PacketType.LOCATION_SYNC,
+            messageId   = messageId,
+            originId    = myDeviceId,
+            finalDestId = MeshPacket.BROADCAST_DEST,
+            hopCount    = 0,
+            maxHops     = 5, // Location events have lower TTL to prevent stale flooding
+            priority    = 2,
+            senderName  = userProfileManager.getDisplayName()
+        )
+
+        val targets = connectedPeers.keys.map { ep -> ForwardTarget(ep, packet) }
+        return RoutingResult.Processed(localMessage = null, forwardTargets = targets)
+    }
+
     // ── Pending queue flushing ────────────────────────────────────────────────
 
     /**
@@ -484,6 +510,14 @@ class MeshRouter @Inject constructor(
                 } catch (e: Exception) {
                     Timber.w(e, "Failed to parse heartbeat payload")
                 }
+                return null
+            }
+
+            PacketType.LOCATION_SYNC -> {
+                // Return null because location events are not normal chat messages
+                // We let the dedicated Sync Manager process the payload later.
+                // Just log it for now.
+                Timber.d("MeshRouter: Received LOCATION_SYNC payload size=${packet.content.length}")
                 return null
             }
 

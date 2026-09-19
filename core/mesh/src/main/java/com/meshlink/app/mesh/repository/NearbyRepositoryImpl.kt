@@ -71,7 +71,9 @@ class NearbyRepositoryImpl @Inject constructor(
     // User identity
     private val userProfileManager: UserProfileManager,
     // Phase 7: Meshtastic
-    private val meshtasticTransport: com.meshlink.app.mesh.transport.MeshtasticTransport
+    private val meshtasticTransport: com.meshlink.app.mesh.transport.MeshtasticTransport,
+    // Phase 4: Location Sync
+    private val locationSyncManager: com.meshlink.app.location.LocationSyncManager
 ) : NearbyRepository {
 
     companion object {
@@ -198,6 +200,11 @@ class NearbyRepositoryImpl @Inject constructor(
                 MeshPacket.PacketType.BROADCAST,
                 MeshPacket.PacketType.SOS,
                 MeshPacket.PacketType.HEARTBEAT  -> handleRoutedPacket(endpointId, packet)
+                MeshPacket.PacketType.LOCATION_SYNC -> {
+                    // Send to MeshRouter to forward (if TTL > 0), then process locally
+                    handleRoutedPacket(endpointId, packet)
+                    scope.launch { locationSyncManager.processIncomingSync(packet.content) }
+                }
             }
         }
 
@@ -321,6 +328,9 @@ class NearbyRepositoryImpl @Inject constructor(
                 val peers   = getConnectedPeers()
                 val pending = meshRouter.flushPendingQueue(peers)
                 pending.forEach { target -> dispatchToNearby(target) }
+
+                // 6. Phase 4: trigger offline location exchange handshake
+                locationSyncManager.onPeerConnected(packet.senderId)
 
                 Timber.i("Session CONNECTED with $endpointId — E2E active, ${pending.size} pending flushed")
             } else {
