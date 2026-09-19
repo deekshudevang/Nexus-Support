@@ -1,66 +1,170 @@
 package com.meshlink.app.mesh.routing
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import timber.log.Timber
+import java.util.PriorityQueue
 import javax.inject.Inject
+import javax.inject.Named
 import javax.inject.Singleton
 
-/**
- * In-memory routing table: maps a known [destinationDeviceId] to the live [endpointId]
- * of the best next-hop Nearby peer that can reach it.
- *
- * Phase 4 uses a simple **direct-neighbor** routing model:
- *   • Every directly connected peer is a 1-hop route to itself.
- *   • Multi-hop routes are NOT stored here — unknown destinations use flooding.
- *
- * Routes have a TTL ([ROUTE_TTL_MS], default 60 s).  A route is considered stale once
- * [getNextHop] is called and the entry's age exceeds the TTL.  Routes are also explicitly
- * removed when a peer disconnects via [removeRoutesFor].
- *
- * Thread safety: all public methods are @Synchronized.
- */
 @Singleton
-class RoutingTable @Inject constructor() {
+class RoutingTable @Inject constructor(
+    @Named("localDeviceId") private val myDeviceId: String
+) {
 
     companion object {
-        /** A route entry older than this is treated as expired. */
-        private const val ROUTE_TTL_MS = 60_000L
+        private const val LINK_TTL_MS = 120_000L // 2 minutes
     }
 
-    data class RouteEntry(
-        val nextHopEndpointId: String,
-        val batteryLevel: Int = 100,
-        val hopCount: Int = 1,
-        val addedAt: Long = System.currentTimeMillis()
+    data class Link(
+        val source: String,
+        val target: String,
+        val battery: Int = 100,
+        val timestamp: Long = System.currentTimeMillis()
     )
 
-    // destinationDeviceId → list of possible next-hop entries
-    private val table = HashMap<String, MutableList<RouteEntry>>()
-    
-    private val _routesFlow = kotlinx.coroutines.flow.MutableStateFlow<Map<String, List<RouteEntry>>>(emptyMap())
-    val routesFlow: kotlinx.coroutines.flow.StateFlow<Map<String, List<RouteEntry>>> = _routesFlow.asStateFlow()
+    // A map of source node to a map of target node -> Link
+    private val graph = HashMap<String, HashMap<String, Link>>()
+
+    private val _graphFlow = MutableStateFlow<Map<String, Map<String, Link>>>(emptyMap())
+    val graphFlow: StateFlow<Map<String, Map<String, Link>>> = _graphFlow.asStateFlow()
 
     private fun publishState() {
-        // Deep copy the map
-        _routesFlow.value = table.mapValues { it.value.toList() }
+        val snapshot = graph.mapValues { entry -> entry.value.toMap() }
+        _graphFlow.value = snapshot
     }
 
     @Synchronized
-    fun addRoute(destinationDeviceId: String, nextHopEndpointId: String, batteryLevel: Int = 100, hopCount: Int = 1) {
-        val entries = table.getOrPut(destinationDeviceId) { mutableListOf() }
-        entries.removeAll { it.nextHopEndpointId == nextHopEndpointId }
-        entries.add(RouteEntry(nextHopEndpointId, batteryLevel, hopCount))
-        Timber.d("RoutingTable: added route $destinationDeviceId → endpointId=$nextHopEndpointId (batt=$batteryLevel, hops=$hopCount)")
+    fun addLink(source: String, target: String, battery: Int = 100) {
+        val nodeLinks = graph.getOrPut(source) { HashMap() }
+        nodeLinks[target] = Link(source, target, battery, System.currentTimeMillis())
+        publishState()
+    }
+
+    /**
+     * Update links from a node to multiple targets (from a topology heartbeat)
+     */
+    @Synchronized
+    fun updateLinks(source: String, neighbors: List<String>, battery: Int) {
+        val now = System.currentTimeMillis()
+        val nodeLinks = graph.getOrPut(source) { HashMap() }
+        
+        // Remove old links not in the new neighbors list
+        val iterator = nodeLinks.iterator()
+        while(iterator.hasNext()) {
+            val entry = iterator.next()
+            if (!neighbors.contains(entry.key)) {
+                iterator.remove()
+            }
+        }
+
+        // Add or update links
+        for (neighbor in neighbors) {
+            nodeLinks[neighbor] = Link(source, neighbor, battery, now)
+        }
         publishState()
     }
 
     @Synchronized
     fun updatePeerMetrics(deviceId: String, batteryLevel: Int) {
-        val entries = table[deviceId] ?: return
+        // Direct neighbor update
+        val nodeLinks = graph[myDeviceId]
+        if (nodeLinks?.containsKey(deviceId) == true) {
+            nodeLinks[deviceId] = nodeLinks[deviceId]!!.copy(
+                battery = batteryLevel, 
+                timestamp = System.currentTimeMillis()
+            )
+            publishState()
+        }
+    }
+
+    @Synchronized
+    fun getNextHop(destinationDeviceId: String): String? {
+        cleanStaleLinks()
+
+        if (myDeviceId == destinationDeviceId) return null
+
+        // Dijkstra's algorithm
+        val distances = HashMap<String, Int>()
+        val previous = HashMap<String, String>()
+        val queue = PriorityQueue<Pair<String, Int>>(compareBy { it.second })
+
+        // Initialize
+        val allNodes = graph.keys.toMutableSet()
+        graph.values.forEach { it.keys.forEach { node -> allNodes.add(node) } }
+        
+        for (node in allNodes) {
+            distances[node] = Int.MAX_VALUE
+        }
+        distances[myDeviceId] = 0
+        queue.add(Pair(myDeviceId, 0))
+
+        while (queue.isNotEmpty()) {
+            val (u, distU) = queue.poll()
+
+            if (distU > (distances[u] ?: Int.MAX_VALUE)) continue
+            if (u == destinationDeviceId) break // Found shortest path
+
+            val neighbors = graph[u] ?: continue
+            for ((v, link) in neighbors) {
+                // Cost is inversely proportional to battery, plus a base cost per hop
+                val baseCost = 10
+                val batteryPenalty = (100 - link.battery) / 10
+                val cost = baseCost + batteryPenalty
+
+                val newDist = distU + cost
+                val currentDistV = distances[v] ?: Int.MAX_VALUE
+                if (newDist < currentDistV) {
+                    distances[v] = newDist
+                    previous[v] = u
+                    queue.add(Pair(v, newDist))
+                }
+            }
+        }
+
+        // Backtrack to find the first hop
+        var curr = destinationDeviceId
+        if (!previous.containsKey(curr)) {
+            return null // No path
+        }
+
+        while (previous[curr] != myDeviceId) {
+            curr = previous[curr] ?: return null
+        }
+
+        return curr
+    }
+
+    @Synchronized
+    fun removeRoutesFor(deviceId: String) { // Renamed param for clarity since it's deviceId now, wait, no, caller might pass endpointId!
+        // The previous code passed endpointId, but if we changed the routing table to deal with deviceId, we should remove routes by deviceId.
+        // I will change the caller to pass deviceId.
+        graph[myDeviceId]?.remove(deviceId)
+        
+        // Also remove if deviceId is the source of any links
+        graph.remove(deviceId)
+        publishState()
+    }
+
+    @Synchronized
+    private fun cleanStaleLinks() {
+        val now = System.currentTimeMillis()
         var changed = false
-        for (i in entries.indices) {
-            if (entries[i].hopCount == 1) { // Only update direct neighbors' battery
-                entries[i] = entries[i].copy(batteryLevel = batteryLevel, addedAt = System.currentTimeMillis())
+        val nodeIter = graph.iterator()
+        while (nodeIter.hasNext()) {
+            val (node, links) = nodeIter.next()
+            val linkIter = links.iterator()
+            while (linkIter.hasNext()) {
+                val link = linkIter.next()
+                if (now - link.value.timestamp > LINK_TTL_MS) {
+                    linkIter.remove()
+                    changed = true
+                }
+            }
+            if (links.isEmpty() && node != myDeviceId) {
+                nodeIter.remove()
                 changed = true
             }
         }
@@ -68,54 +172,21 @@ class RoutingTable @Inject constructor() {
     }
 
     @Synchronized
-    fun getNextHop(destinationDeviceId: String): String? {
-        val entries = table[destinationDeviceId] ?: return null
-        
-        // Remove stale routes
-        val now = System.currentTimeMillis()
-        entries.removeAll { now - it.addedAt > ROUTE_TTL_MS }
-        
-        if (entries.isEmpty()) {
-            table.remove(destinationDeviceId)
-            return null
-        }
-        
-        // Dijkstra / scoring: Maximize battery, minimize hops
-        // Score = battery - (hopCount * 10). Higher is better.
-        val bestRoute = entries.maxByOrNull { it.batteryLevel - (it.hopCount * 10) }
-        
-        return bestRoute?.nextHopEndpointId
+    fun knownDestinations(): Set<String> {
+        val nodes = mutableSetOf<String>()
+        graph.keys.forEach { nodes.add(it) }
+        graph.values.forEach { it.keys.forEach { node -> nodes.add(node) } }
+        return nodes
     }
 
-    /**
-     * Remove all routes whose next-hop is [endpointId].
-     * Called when a Nearby endpoint disconnects so we don't forward into a dead link.
-     */
     @Synchronized
-    fun removeRoutesFor(endpointId: String) {
-        var removedAny = false
-        val it = table.iterator()
-        while (it.hasNext()) {
-            val entry = it.next()
-            val removed = entry.value.removeAll { it.nextHopEndpointId == endpointId }
-            if (removed) removedAny = true
-            if (entry.value.isEmpty()) {
-                it.remove()
-            }
-        }
-        if (removedAny) {
-            Timber.d("RoutingTable: removed routes via endpointId=$endpointId")
-            publishState()
-        }
+    fun getDirectNeighbors(): List<String> {
+        return graph[myDeviceId]?.keys?.toList() ?: emptyList()
     }
-
-    /** Returns a snapshot of all known destinations (for debug/logging). */
-    @Synchronized
-    fun knownDestinations(): Set<String> = table.keys.toSet()
 
     @Synchronized
     fun clear() {
-        table.clear()
+        graph.clear()
         publishState()
     }
 }

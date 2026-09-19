@@ -354,11 +354,19 @@ class MeshRouter @Inject constructor(
     }
 
     fun buildHeartbeat(
-        content: String,
+        battery: Int,
         connectedPeers: Map<String, String>
     ): RoutingResult {
         val messageId = UUID.randomUUID().toString()
         seenMessageCache.markSeen(messageId)
+
+        val neighbors = routingTable.getDirectNeighbors()
+        val json = org.json.JSONObject()
+        json.put("battery", battery)
+        val arr = org.json.JSONArray()
+        neighbors.forEach { arr.put(it) }
+        json.put("neighbors", arr)
+        val content = json.toString()
 
         val packet = MeshPacket(
             senderId    = myDeviceId,
@@ -406,6 +414,16 @@ class MeshRouter @Inject constructor(
                 // Update local DB status to 1 (SENT) now that it's leaving the queue
                 messageRepository.updateMessageStatus(packet.messageId, 1)
                 Timber.i("MeshRouter: flushing pending ${packet.messageId} → $nextHop")
+            } else if (packet.priority >= 10 || packet.type == PacketType.SOS) {
+                // Epidemic Store-and-Forward (Data Mule):
+                // For critical packets (e.g. SOS), opportunistically forward to all connected peers
+                // even if we don't have a definitive route, hoping they will carry it closer.
+                val refreshed = packet.copy(hopCount = 0)
+                connectedPeers.keys.forEach { ep ->
+                    targets.add(ForwardTarget(ep, refreshed))
+                }
+                // Do not remove from pendingQueue; let it expire via TTL so we can hand it off to future peers too.
+                Timber.i("MeshRouter: epidemic forwarding for pending SOS ${packet.messageId}")
             }
         }
         targets
@@ -456,7 +474,13 @@ class MeshRouter @Inject constructor(
                 try {
                     val j = org.json.JSONObject(packet.content)
                     val battery = j.optInt("battery", 100)
-                    routingTable.updatePeerMetrics(packet.originId, battery)
+                    val nArr = j.optJSONArray("neighbors")
+                    val neighbors = buildList {
+                        if (nArr != null) {
+                            for (i in 0 until nArr.length()) add(nArr.getString(i))
+                        }
+                    }
+                    routingTable.updateLinks(packet.originId, neighbors, battery)
                 } catch (e: Exception) {
                     Timber.w(e, "Failed to parse heartbeat payload")
                 }
@@ -571,8 +595,11 @@ class MeshRouter @Inject constructor(
         if (directEp != null) return directEp
 
         // 2. Routing table lookup (learned from previous packets)
-        val tableHop = routingTable.getNextHop(finalDestDeviceId)
-        if (tableHop != null && connectedPeers.containsKey(tableHop)) return tableHop
+        val tableHopDeviceId = routingTable.getNextHop(finalDestDeviceId)
+        if (tableHopDeviceId != null) {
+            val tableHopEndpoint = connectedPeers.entries.firstOrNull { it.value == tableHopDeviceId }?.key
+            if (tableHopEndpoint != null) return tableHopEndpoint
+        }
 
         return null
     }

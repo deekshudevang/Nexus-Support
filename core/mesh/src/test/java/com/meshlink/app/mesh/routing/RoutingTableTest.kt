@@ -9,10 +9,11 @@ import org.junit.Test
 class RoutingTableTest {
 
     private lateinit var table: RoutingTable
+    private val myDeviceId = "ME"
 
     @Before
     fun setUp() {
-        table = RoutingTable()
+        table = RoutingTable(myDeviceId)
     }
 
     @Test
@@ -21,60 +22,59 @@ class RoutingTableTest {
     }
 
     @Test
-    fun `addRoute then getNextHop returns the endpoint`() {
-        table.addRoute("device-A", "endpoint-1")
-        assertEquals("endpoint-1", table.getNextHop("device-A"))
+    fun `addLink then getNextHop returns the direct target`() {
+        table.addLink(myDeviceId, "device-A")
+        assertEquals("device-A", table.getNextHop("device-A"))
     }
 
     @Test
-    fun `addRoute overwrites an existing entry`() {
-        table.addRoute("device-A", "endpoint-1")
-        table.addRoute("device-A", "endpoint-2")
-        assertEquals("endpoint-2", table.getNextHop("device-A"))
+    fun `multi-hop getNextHop returns the correct first hop`() {
+        // ME -> A -> B -> C
+        table.addLink(myDeviceId, "device-A")
+        table.updateLinks("device-A", listOf("device-B"), 100)
+        table.updateLinks("device-B", listOf("device-C"), 100)
+        
+        assertEquals("device-A", table.getNextHop("device-C"))
+        assertEquals("device-A", table.getNextHop("device-B"))
     }
 
     @Test
-    fun `removeRoutesFor removes all routes through that endpoint`() {
-        table.addRoute("device-A", "endpoint-1")
-        table.addRoute("device-B", "endpoint-1")
-        table.addRoute("device-C", "endpoint-2")
+    fun `dijkstra selects shortest path based on hops`() {
+        // ME -> A -> B -> D
+        // ME -> C -> D
+        table.addLink(myDeviceId, "device-A")
+        table.addLink(myDeviceId, "device-C")
+        
+        table.updateLinks("device-A", listOf("device-B"), 100)
+        table.updateLinks("device-B", listOf("device-D"), 100)
+        table.updateLinks("device-C", listOf("device-D"), 100)
+        
+        // Path via C is shorter (2 hops vs 3 hops)
+        assertEquals("device-C", table.getNextHop("device-D"))
+    }
 
-        table.removeRoutesFor("endpoint-1")
+    @Test
+    fun `removeRoutesFor removes links from ME`() {
+        table.addLink(myDeviceId, "device-A")
+        table.addLink(myDeviceId, "device-B")
+        table.updateLinks("device-B", listOf("device-C"), 100)
+        
+        table.removeRoutesFor("device-B")
 
-        assertNull(table.getNextHop("device-A"))
+        assertEquals("device-A", table.getNextHop("device-A"))
         assertNull(table.getNextHop("device-B"))
-        assertEquals("endpoint-2", table.getNextHop("device-C"))
+        assertNull(table.getNextHop("device-C")) // Path to C was through B
     }
 
     @Test
-    fun `removeRoutesFor on unknown endpoint does not throw`() {
-        table.addRoute("device-A", "endpoint-1")
-        table.removeRoutesFor("endpoint-nonexistent")
-        assertEquals("endpoint-1", table.getNextHop("device-A"))
-    }
-
-    @Test
-    fun `knownDestinations returns all added destinations`() {
-        table.addRoute("device-A", "endpoint-1")
-        table.addRoute("device-B", "endpoint-2")
+    fun `knownDestinations returns all nodes in graph`() {
+        table.addLink(myDeviceId, "device-A")
+        table.updateLinks("device-A", listOf("device-B", "device-C"), 100)
+        
         val known = table.knownDestinations()
+        assertTrue(known.contains(myDeviceId))
         assertTrue(known.contains("device-A"))
         assertTrue(known.contains("device-B"))
-    }
-
-    @Test
-    fun `knownDestinations is empty initially`() {
-        assertTrue(table.knownDestinations().isEmpty())
-    }
-
-    @Test
-    fun `multiple devices route to different endpoints independently`() {
-        table.addRoute("device-A", "ep-1")
-        table.addRoute("device-B", "ep-2")
-        table.addRoute("device-C", "ep-3")
-
-        assertEquals("ep-1", table.getNextHop("device-A"))
-        assertEquals("ep-2", table.getNextHop("device-B"))
-        assertEquals("ep-3", table.getNextHop("device-C"))
+        assertTrue(known.contains("device-C"))
     }
 }

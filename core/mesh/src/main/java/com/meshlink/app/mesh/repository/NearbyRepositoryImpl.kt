@@ -156,8 +156,7 @@ class NearbyRepositoryImpl @Inject constructor(
                 delay(30_000L) // Broadcast heartbeat every 30 seconds
                 if (getConnectedPeers().isNotEmpty()) {
                     val battery = batteryMonitor.getBatteryLevel()
-                    val payload = """{"battery":$battery}"""
-                    val result = meshRouter.buildHeartbeat(payload, getConnectedPeers())
+                    val result = meshRouter.buildHeartbeat(battery, getConnectedPeers())
                     if (result is RoutingResult.Processed) {
                         result.forwardTargets.forEach { dispatchToNearby(it) }
                     }
@@ -245,8 +244,10 @@ class NearbyRepositoryImpl @Inject constructor(
             Timber.d("Disconnected from $endpointId")
             _connectionStates.update { it + (endpointId to ConnectionState.DISCONNECTED) }
             handshakeManager.clearSession(endpointId)
-            endpointIdToDeviceId.remove(endpointId)
-            routingTable.removeRoutesFor(endpointId)  // Phase 4: invalidate stale routes
+            val deviceId = endpointIdToDeviceId.remove(endpointId)
+            if (deviceId != null) {
+                routingTable.removeRoutesFor(deviceId)  // Phase 4: invalidate stale routes
+            }
             isAdvertising = false
             isDiscovering = false
             scheduleRestart()
@@ -298,7 +299,7 @@ class NearbyRepositoryImpl @Inject constructor(
                 Timber.d("Identity mapped: $endpointId → ${packet.senderId}")
 
                 // 2. Update routing table: direct 1-hop route
-                routingTable.addRoute(packet.senderId, endpointId)
+                routingTable.addLink(localDeviceId, packet.senderId)
 
                 // 3. Mark CONNECTED — UI send button activates
                 _connectionStates.update { it + (endpointId to ConnectionState.CONNECTED) }

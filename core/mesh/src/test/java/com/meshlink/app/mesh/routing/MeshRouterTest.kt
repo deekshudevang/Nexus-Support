@@ -22,7 +22,7 @@ import android.app.NotificationManager
 class MeshRouterTest {
 
     private lateinit var meshRouter: MeshRouter
-    private val routingTable: RoutingTable = RoutingTable()
+    private val routingTable: RoutingTable = RoutingTable("DEVICE_A")
     private val seenMessageCache: SeenMessageCache = SeenMessageCache()
     private val encryptionService: EncryptionService = mockk()
     private val eciesService: EciesService = mockk()
