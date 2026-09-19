@@ -53,7 +53,13 @@ fun MeshMapScreen(
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
-        Configuration.getInstance().load(context, context.getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
+        val config = Configuration.getInstance()
+        config.load(context, context.getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
+        
+        // Performance & Battery Tuning: Map rendering limits
+        config.tileFileSystemCacheMaxBytes = 50L * 1024 * 1024 // Limit cache to 50MB
+        config.tileFileSystemCacheTrimBytes = 40L * 1024 * 1024 // Trim to 40MB when limit reached
+        config.osmdroidTileCache = File(context.cacheDir, "osmdroid_tiles")
     }
 
     Scaffold(

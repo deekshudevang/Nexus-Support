@@ -45,14 +45,27 @@ class LocationTracker @Inject constructor(
 
     /**
      * Emits a continuous stream of location updates.
-     * Uses balanced battery optimization (PRIORITY_BALANCED_POWER_ACCURACY)
-     * Request interval is 5 minutes, fastest is 1 minute, minimum displacement 50 meters.
+     * Uses battery optimization (dynamically checks battery level).
      */
     @SuppressLint("MissingPermission")
     fun getLocationFlow(): Flow<Location> = callbackFlow {
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 5 * 60 * 1000L)
-            .setMinUpdateIntervalMillis(60 * 1000L)
-            .setMinUpdateDistanceMeters(50f)
+        // Battery Tuning check
+        val batteryStatus = context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+        val level = batteryStatus?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = batteryStatus?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1) ?: -1
+        val batteryPct = if (scale > 0) level * 100 / scale.toFloat() else 100f
+        
+        val isLowBattery = batteryPct < 20f
+        
+        // Duty cycle adjustments based on battery
+        val priority = if (isLowBattery) Priority.PRIORITY_LOW_POWER else Priority.PRIORITY_BALANCED_POWER_ACCURACY
+        val intervalMs = if (isLowBattery) 15 * 60 * 1000L else 5 * 60 * 1000L
+        val minIntervalMs = if (isLowBattery) 5 * 60 * 1000L else 60 * 1000L
+        val minDistanceM = if (isLowBattery) 200f else 50f
+
+        val locationRequest = LocationRequest.Builder(priority, intervalMs)
+            .setMinUpdateIntervalMillis(minIntervalMs)
+            .setMinUpdateDistanceMeters(minDistanceM)
             .build()
 
         val locationCallback = object : LocationCallback() {
