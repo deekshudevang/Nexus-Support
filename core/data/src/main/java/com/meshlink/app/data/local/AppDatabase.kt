@@ -161,6 +161,8 @@ abstract class AppDatabase : RoomDatabase() {
                     """.trimIndent()
                 )
             }
+        }
+
         /**
          * v11 → v12: adds publicKey column to location_events for cryptographic verification
          */
