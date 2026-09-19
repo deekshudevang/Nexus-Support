@@ -39,5 +39,11 @@ object DatabaseModule {
     fun provideDeviceDao(db: AppDatabase): DeviceDao = db.deviceDao()
 
     @Provides
-    fun providePendingMessageDao(db: AppDatabase): PendingMessageDao = db.pendingMessageDao()
+    fun providePendingMessageDao(appDatabase: AppDatabase): PendingMessageDao = appDatabase.pendingMessageDao()
+
+    @Provides
+    fun provideLocationEventDao(appDatabase: AppDatabase): com.meshlink.app.data.local.dao.LocationEventDao = appDatabase.locationEventDao()
+
+    @Provides
+    fun provideLocationSyncQueueDao(appDatabase: AppDatabase): com.meshlink.app.data.local.dao.LocationSyncQueueDao = appDatabase.locationSyncQueueDao()
 }

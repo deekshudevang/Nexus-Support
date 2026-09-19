@@ -28,6 +28,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
     abstract fun deviceDao(): DeviceDao
     abstract fun pendingMessageDao(): PendingMessageDao
+    abstract fun locationEventDao(): com.meshlink.app.data.local.dao.LocationEventDao
+    abstract fun locationSyncQueueDao(): com.meshlink.app.data.local.dao.LocationSyncQueueDao
 
     companion object {
         /**
