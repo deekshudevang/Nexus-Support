@@ -162,7 +162,7 @@ class LocationSyncManagerImpl @Inject constructor(
             val result = meshRouter.buildLocationSync(payload, peers)
             if (result is com.meshlink.app.mesh.routing.RoutingResult.Processed) {
                 result.forwardTargets.forEach { target ->
-                    nearbyRepository.get().dispatchToNearby(target)
+                    nearbyRepository.get().dispatchRawPacket(target.endpointId, target.packet)
                 }
             }
         }
@@ -179,7 +179,7 @@ class LocationSyncManagerImpl @Inject constructor(
             val result = meshRouter.buildLocationSync(payload, mapOf(targetEndpoint to peerDeviceId))
             if (result is com.meshlink.app.mesh.routing.RoutingResult.Processed) {
                 result.forwardTargets.forEach { target ->
-                    nearbyRepository.get().dispatchToNearby(target)
+                    nearbyRepository.get().dispatchRawPacket(target.endpointId, target.packet)
                 }
             }
         }
