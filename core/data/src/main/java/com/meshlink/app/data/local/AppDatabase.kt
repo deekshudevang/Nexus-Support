@@ -169,6 +169,7 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_11_12 = object : Migration(11, 12) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE location_events ADD COLUMN publicKey TEXT NOT NULL DEFAULT ''")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_location_sync_queue_eventId` ON `location_sync_queue` (`eventId`)")
             }
         }
     }
