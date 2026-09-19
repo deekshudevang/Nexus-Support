@@ -3,7 +3,7 @@ package com.meshlink.app.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,15 +14,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Circular avatar showing the first 1–2 initials of [name] on a deterministic
- * color background tuned for MeshLink's dark theme.
- *
- * Used across Home, Discovery, and Chat screens.
+ * Avatar showing the first 1–2 initials of [name] on a deterministic
+ * color background tuned for the new SaaS theme.
  */
 @Composable
 fun MeshAvatar(
@@ -36,7 +35,7 @@ fun MeshAvatar(
     Box(
         modifier = modifier
             .size(size)
-            .clip(CircleShape)
+            .clip(RoundedCornerShape(12.dp))
             .background(bgColor)
             .semantics { contentDescription = "Avatar for $name" },
         contentAlignment = Alignment.Center
@@ -45,8 +44,9 @@ fun MeshAvatar(
             text  = initials,
             color = Color.White,
             style = MaterialTheme.typography.labelLarge.copy(
-                fontSize   = (size.value * 0.33f).sp,
-                letterSpacing = 0.5.sp
+                fontSize   = (size.value * 0.35f).sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.sp
             )
         )
     }
@@ -62,17 +62,16 @@ private fun extractInitials(name: String): String {
     }
 }
 
-// Dark-theme friendly avatar palette — vibrant but not harsh on #080D1A background
+// Deep, vibrant palette for SaaS aesthetic
 private val avatarPalette = listOf(
-    Color(0xFF00897B), // Teal
-    Color(0xFF1976D2), // Blue
-    Color(0xFF7B1FA2), // Purple
-    Color(0xFFAD1457), // Pink
-    Color(0xFF2E7D32), // Green
-    Color(0xFF00838F), // Cyan
-    Color(0xFFE65100), // Deep Orange
-    Color(0xFF4527A0), // Deep Purple
-    Color(0xFF558B2F)  // Light Green
+    Color(0xFF2979FF), // Electric Blue
+    Color(0xFF8E24AA), // Vibrant Purple
+    Color(0xFF00B0FF), // Light Blue
+    Color(0xFF00E676), // Neon Green
+    Color(0xFFFF3D00), // Orange/Red
+    Color(0xFF651FFF), // Deep Purple
+    Color(0xFFF50057), // Pink
+    Color(0xFF00B8D4)  // Cyan
 )
 
 private fun avatarColor(name: String): Color {
