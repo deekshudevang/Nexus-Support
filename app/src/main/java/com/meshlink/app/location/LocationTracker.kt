@@ -25,6 +25,12 @@ class LocationTracker @Inject constructor(
     private val fusedLocationClient: FusedLocationProviderClient =
         LocationServices.getFusedLocationProviderClient(context)
 
+    private val isManuallyPaused = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    fun setManualPause(paused: Boolean) {
+        isManuallyPaused.value = paused
+    }
+
     /**
      * Tries to get the current location. If it takes longer than [timeoutMs],
      * falls back to the last known location, or returns null if unavailable.
@@ -70,6 +76,7 @@ class LocationTracker @Inject constructor(
 
         val locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
+                if (isManuallyPaused.value) return
                 result.lastLocation?.let { location ->
                     trySend(location)
                 }

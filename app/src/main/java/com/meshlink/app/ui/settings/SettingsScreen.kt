@@ -12,15 +12,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+import androidx.hilt.navigation.compose.hiltViewModel
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onBackClick: () -> Unit,
-    onDiagnosticsClick: () -> Unit
+    onDiagnosticsClick: () -> Unit,
+    viewModel: SettingsViewModel = hiltViewModel()
 ) {
     // Note: In a real app we would persist these settings to SharedPreferences or DataStore.
     var useMeshtastic by remember { mutableStateOf(false) }
     var useNearby by remember { mutableStateOf(true) }
+    
+    val isMasterPaused by viewModel.isMasterScanningPaused.collectAsState()
 
     Scaffold(
         topBar = {
@@ -138,6 +143,32 @@ fun SettingsScreen(
                     Switch(
                         checked = batteryOptimization,
                         onCheckedChange = { batteryOptimization = it }
+                    )
+                }
+            }
+            NexusCard(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Pause Mesh & Location Scanning",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Master toggle to pause all background network discovery and location tracking.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = isMasterPaused,
+                        onCheckedChange = { viewModel.toggleMasterScanning(it) }
                     )
                 }
             }
