@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.MyLocation
 import kotlin.math.roundToInt
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -40,6 +41,8 @@ import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import androidx.core.content.ContextCompat
+import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
+import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,9 +55,12 @@ fun MeshMapScreen(
     var selectedNode by remember { mutableStateOf<com.meshlink.app.ui.map.MeshNode?>(null) }
     val context = LocalContext.current
 
+    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
+
     LaunchedEffect(Unit) {
         val config = Configuration.getInstance()
         config.load(context, context.getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
+        config.userAgentValue = context.packageName // Important for Mapnik to not reject tile requests
         
         // Performance & Battery Tuning: Map rendering limits
         config.tileFileSystemCacheMaxBytes = 50L * 1024 * 1024 // Limit cache to 50MB
@@ -96,6 +102,7 @@ fun MeshMapScreen(
                 AndroidView(
                     factory = { ctx ->
                         MapView(ctx).apply {
+                            mapViewRef = this
                             // Check if local mapsforge file exists (simulated location)
                             val mapFile = File(ctx.getExternalFilesDir(null), "offline_map.map")
                             if (mapFile.exists()) {
@@ -176,10 +183,41 @@ fun MeshMapScreen(
                             mapView.controller.setCenter(nodePoints[validNodes.first().id])
                         }
                         
+                        
+                        // Add MyLocation overlay
+                        val myLocationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(mapView.context), mapView)
+                        myLocationOverlay.enableMyLocation()
+                        mapView.overlays.add(myLocationOverlay)
+                        
+                        // Store the overlay in tag so we can use it from FAB if needed
+                        mapView.tag = myLocationOverlay
+                        
                         mapView.invalidate()
                     },
                     modifier = Modifier.fillMaxSize()
                 )
+                
+                // My Location FAB
+                FloatingActionButton(
+                    onClick = { 
+                        val overlay = mapViewRef?.tag as? MyLocationNewOverlay
+                        val location = overlay?.myLocation
+                        if (location != null) {
+                            mapViewRef?.controller?.animateTo(location)
+                            mapViewRef?.controller?.setZoom(17.0)
+                        } else {
+                            // If location isn't ready yet, we can enable follow location
+                            overlay?.enableFollowLocation()
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ) {
+                    Icon(Icons.Default.MyLocation, contentDescription = "My Location")
+                }
                 
                 // Stats overlay
                 NexusCard(
