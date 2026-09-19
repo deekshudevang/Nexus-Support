@@ -4,8 +4,10 @@ import android.app.Application
 import androidx.work.Configuration
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.meshlink.app.worker.CloudSyncWorker
 import com.meshlink.app.worker.MeshCleanupWorker
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
@@ -29,6 +31,7 @@ class MeshLinkApp : Application(), Configuration.Provider {
             Timber.plant(Timber.DebugTree())
         }
         scheduleCleanupWork()
+        scheduleCloudSyncWork()
     }
 
     /**
@@ -49,5 +52,24 @@ class MeshLinkApp : Application(), Configuration.Provider {
             request
         )
         Timber.d("MeshCleanupWorker scheduled (every 6h)")
+    }
+
+    /**
+     * Schedules [CloudSyncWorker] to run every 15 minutes whenever the device has an unmetered
+     * or active internet connection.
+     */
+    private fun scheduleCloudSyncWork() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+        val request = PeriodicWorkRequestBuilder<CloudSyncWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(constraints)
+            .build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "cloud_sync",
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
+        Timber.d("CloudSyncWorker scheduled (every 15m when connected)")
     }
 }
