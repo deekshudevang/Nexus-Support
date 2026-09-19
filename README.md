@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp" alt="MeshLink Logo" width="100"/>
+<img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp" alt="Nexus Support Logo" width="100"/>
 
-# MeshLink — Offline Mesh Messaging
+# Nexus Support — Offline Emergency Mesh Communication Platform
 
 **Peer-to-peer encrypted chat that works without internet or cellular signal.**  
 Built with Android Nearby Connections API, Jetpack Compose, and Clean Architecture.
@@ -11,7 +11,7 @@ Built with Android Nearby Connections API, Jetpack Compose, and Clean Architectu
 [![Kotlin](https://img.shields.io/badge/Language-Kotlin-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![GitHub last commit](https://img.shields.io/github/last-commit/BariaHarshh/Meshlink--Offline-messaging)](https://github.com/BariaHarshh/Meshlink--Offline-messaging/commits/main)
+[![GitHub last commit](https://img.shields.io/github/last-commit/deekshudevang/Nexus-Support)](https://github.com/deekshudevang/Nexus-Support/commits/master)
 
 </div>
 
@@ -34,9 +34,9 @@ Built with Android Nearby Connections API, Jetpack Compose, and Clean Architectu
 
 ## 🌐 About
 
-**MeshLink** is an offline-first Android application that enables real-time peer-to-peer messaging between nearby devices using **Wi-Fi Direct** and **Bluetooth** — no internet, no SIM card required.
+**Nexus Support** is an offline-first Android application that enables real-time peer-to-peer messaging between nearby devices using the **Google Nearby Connections API** — no internet, no SIM card required.
 
-It is designed for situations where traditional communication infrastructure is unavailable: disaster zones, remote areas, protests, or campus environments. Messages hop across multiple devices to extend reach beyond direct Bluetooth/Wi-Fi range, forming a true **mesh network**.
+It is designed for situations where traditional communication infrastructure is unavailable: disaster zones, remote areas, protests, or campus environments. Messages hop across multiple devices to extend reach beyond direct range, forming a true **mesh network**.
 
 ---
 
@@ -48,7 +48,7 @@ It is designed for situations where traditional communication infrastructure is 
 | 🔒 **End-to-End Encryption** | ECIES-based encryption per session via the `crypto` module |
 | 💬 **Offline Chat** | Real-time messaging with zero internet dependency |
 | 📢 **Broadcast** | Send a message to all nearby devices simultaneously |
-| 🔍 **Device Discovery** | Auto-discover nearby MeshLink peers via Nearby Connections |
+| 🔍 **Device Discovery** | Auto-discover nearby peers via Nearby Connections |
 | 🚨 **SOS Mode** | Emergency broadcast with medical profile info |
 | 🏥 **Medical Profile** | Store and share emergency health details locally |
 | 🔋 **Adaptive Scanning** | Battery-aware scan controller reduces drain when idle |
@@ -59,7 +59,7 @@ It is designed for situations where traditional communication infrastructure is 
 
 ## 🏛️ Architecture
 
-MeshLink follows **Clean Architecture** with a strict separation of concerns across 5 Gradle modules:
+Nexus Support follows **Clean Architecture** with a strict separation of concerns across 5 Gradle modules:
 
 ```
 ┌──────────────────────────────────────────┐
@@ -145,11 +145,11 @@ MeshLink/
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/BariaHarshh/Meshlink--Offline-messaging.git
-cd Meshlink--Offline-messaging
+git clone https://github.com/deekshudevang/Nexus-Support.git
+cd Nexus-Support
 
 # 2. Open in Android Studio
-# File → Open → select the MeshLink folder
+# File → Open → select the Nexus-Support folder
 
 # 3. Sync Gradle
 # Android Studio will auto-sync. If not: File → Sync Project with Gradle Files
@@ -161,7 +161,7 @@ cd Meshlink--Offline-messaging
 
 ### Permissions Required
 
-MeshLink requires the following permissions (declared in `AndroidManifest.xml`):
+Nexus Support requires the following permissions (declared in `AndroidManifest.xml`):
 
 ```
 ACCESS_FINE_LOCATION
@@ -201,7 +201,7 @@ Contributions are welcome! Please read [CONTRIBUTING.md](.github/CONTRIBUTING.md
 ```
 MIT License
 
-Copyright (c) 2026 Harsh Baria
+Copyright (c) 2026 Nexus Support Contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
