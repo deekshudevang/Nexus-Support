@@ -170,7 +170,7 @@ class NearbyService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("MeshLink")
             .setContentText(contentText)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setSilent(true)
