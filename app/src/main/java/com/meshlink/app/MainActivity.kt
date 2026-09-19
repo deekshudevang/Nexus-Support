@@ -39,6 +39,7 @@ import com.meshlink.app.ui.navigation.Screen
 import com.meshlink.app.ui.navigation.bottomNavItems
 import com.meshlink.app.ui.theme.MeshLinkTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
