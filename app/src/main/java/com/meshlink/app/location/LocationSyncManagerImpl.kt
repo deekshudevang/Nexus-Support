@@ -6,6 +6,7 @@ import com.meshlink.app.data.local.dao.LocationSyncQueueDao
 import com.meshlink.app.data.local.entity.LocationEventEntity
 import com.meshlink.app.data.local.entity.LocationSyncQueueEntity
 import com.meshlink.app.mesh.routing.MeshRouter
+import com.meshlink.app.domain.model.MeshPacket
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -127,7 +128,7 @@ class LocationSyncManagerImpl @Inject constructor(
                     val result = meshRouter.buildLocationSync(floodPayload, peers)
                     if (result is com.meshlink.app.mesh.routing.RoutingResult.Processed) {
                         result.forwardTargets.forEach { target ->
-                            nearbyRepository.get().dispatchToNearby(target)
+                            nearbyRepository.get().dispatchRawPacket(target.endpointId, target.packet)
                         }
                     }
                 }

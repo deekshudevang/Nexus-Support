@@ -49,7 +49,7 @@ fun MeshMapScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showFilterModal by remember { mutableStateOf(false) }
-    var selectedNode by remember { mutableStateOf<com.meshlink.app.ui.map.MeshMapViewModel.MeshNode?>(null) }
+    var selectedNode by remember { mutableStateOf<com.meshlink.app.ui.map.MeshNode?>(null) }
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
@@ -103,7 +103,7 @@ fun MeshMapScreen(
                                     val map = MapFile(mapFile)
                                     val forge = MapsForgeTileSource.createFromFiles(arrayOf(mapFile))
                                     val provider = MapsForgeTileProvider(
-                                        org.osmdroid.tileprovider.IRegisterReceiver { _, _ -> null },
+                                        org.osmdroid.tileprovider.util.SimpleRegisterReceiver(ctx),
                                         forge,
                                         null
                                     )
@@ -129,7 +129,7 @@ fun MeshMapScreen(
                         val nodePoints = mutableMapOf<String, GeoPoint>()
                         
                         // Create a RadiusMarkerClusterer
-                        val clusterer = RadiusMarkerClusterer(ctx)
+                        val clusterer = RadiusMarkerClusterer(mapView.context)
                         // Create a default cluster icon (blue circle)
                         val clusterIcon = Bitmap.createBitmap(80, 80, Bitmap.Config.ARGB_8888)
                         val canvas = Canvas(clusterIcon)
@@ -281,7 +281,8 @@ fun MeshMapScreen(
         }
         
         // Node Details Bottom Sheet
-        if (selectedNode != null) {
+        val activeNode = selectedNode
+        if (activeNode != null) {
             val sheetState = rememberModalBottomSheetState()
             ModalBottomSheet(
                 onDismissRequest = { selectedNode = null },
@@ -305,14 +306,14 @@ fun MeshMapScreen(
                         Spacer(modifier = Modifier.width(16.dp))
                         Column {
                             Text(
-                                text = selectedNode!!.name,
+                                text = activeNode.name,
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = if (selectedNode!!.isDirect) "Direct Connection" else "${selectedNode!!.hopCount} Hops Away",
+                                text = if (activeNode.isDirect) "Direct Connection" else "${activeNode.hopCount} Hops Away",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = if (selectedNode!!.isDirect) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (activeNode.isDirect) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -325,7 +326,7 @@ fun MeshMapScreen(
                             
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Battery Level:", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("${selectedNode!!.batteryLevel}%", fontWeight = FontWeight.Bold)
+                                Text("${activeNode.batteryLevel}%", fontWeight = FontWeight.Bold)
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -335,7 +336,7 @@ fun MeshMapScreen(
                             Spacer(modifier = Modifier.height(4.dp))
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Coordinates:", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("${String.format("%.4f", selectedNode!!.latitude)}, ${String.format("%.4f", selectedNode!!.longitude)}", fontWeight = FontWeight.Bold)
+                                Text("${String.format("%.4f", activeNode.latitude)}, ${String.format("%.4f", activeNode.longitude)}", fontWeight = FontWeight.Bold)
                             }
                         }
                     }

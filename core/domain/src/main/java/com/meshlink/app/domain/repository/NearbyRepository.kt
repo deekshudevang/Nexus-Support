@@ -38,6 +38,9 @@ interface NearbyRepository {
 
     fun sendPacket(endpointId: String, packet: MeshPacket)
 
+    /** Dispatches a pre-encrypted/routed packet directly to Nearby Connections. */
+    fun dispatchRawPacket(endpointId: String, packet: MeshPacket)
+
     fun disconnect(endpointId: String)
 
     /**

@@ -625,6 +625,10 @@ class NearbyRepositoryImpl @Inject constructor(
             }
     }
 
+    override fun dispatchRawPacket(endpointId: String, packet: MeshPacket) {
+        dispatchToNearby(ForwardTarget(endpointId, packet))
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     /**
