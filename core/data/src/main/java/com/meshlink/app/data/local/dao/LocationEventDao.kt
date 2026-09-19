@@ -29,4 +29,10 @@ interface LocationEventDao {
 
     @Query("SELECT IFNULL(MAX(sequenceNumber), 0) FROM location_events WHERE peerId = :peerId")
     suspend fun getHighestSequenceNumber(peerId: String): Int
+
+    @Query("SELECT peerId, MAX(sequenceNumber) as sequenceNumber FROM location_events GROUP BY peerId")
+    suspend fun getVectorClock(): List<com.meshlink.app.domain.model.VectorClock>
+
+    @Query("SELECT * FROM location_events WHERE peerId = :peerId AND sequenceNumber > :sequenceNumber ORDER BY sequenceNumber ASC")
+    suspend fun getEventsAfterSequence(peerId: String, sequenceNumber: Int): List<LocationEventEntity>
 }

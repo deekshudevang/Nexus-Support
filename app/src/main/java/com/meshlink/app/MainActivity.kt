@@ -76,7 +76,6 @@ class MainActivity : ComponentActivity() {
         }
         if (permissionsGranted) {
             NearbyService.start(this)
-            downloadMapIfNeeded(this)
         }
 
         setContent {
@@ -161,27 +160,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun downloadMapIfNeeded(context: android.content.Context) {
-        val mapFile = java.io.File(context.getExternalFilesDir(null), "offline_map.map")
-        if (mapFile.exists()) return
-
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-            try {
-                // Replace with an actual Mapsforge .map file URL hosted on your servers or S3 bucket
-                val mapUrl = "https://raw.githubusercontent.com/mapsforge/mapsforge/master/mapsforge-map-reader/src/test/resources/berlin.map" 
-                val url = java.net.URL(mapUrl)
-                val connection = url.openConnection()
-                connection.connect()
-                val input = connection.getInputStream()
-                val output = java.io.FileOutputStream(mapFile)
-                input.copyTo(output)
-                output.close()
-                input.close()
-                timber.log.Timber.i("Offline map downloaded successfully to $mapFile")
-            } catch (e: Exception) {
-                timber.log.Timber.e(e, "Failed to download offline map")
-                if (mapFile.exists()) mapFile.delete()
-            }
-        }
-    }
 }

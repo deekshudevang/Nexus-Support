@@ -60,7 +60,16 @@ fun MeshLinkNavHost(
 
         // ── MAP tab ───────────────────────────────────────────────────────────
         composable(Screen.Map.route) {
-            com.meshlink.app.ui.map.MeshMapScreen()
+            com.meshlink.app.ui.map.MeshMapScreen(
+                onNavigateToDownloads = { navController.navigate(Screen.MapDownload.route) }
+            )
+        }
+
+        // ── Map Download (full-screen, no bottom bar) ─────────────────────────
+        composable(Screen.MapDownload.route) {
+            com.meshlink.app.ui.map.MapDownloadScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
         // ── Medical Profile (full-screen, no bottom bar) ──────────────────────
@@ -74,7 +83,8 @@ fun MeshLinkNavHost(
         composable("settings") {
             SettingsScreen(
                 onBackClick = { navController.popBackStack() },
-                onDiagnosticsClick = { navController.navigate(Screen.Diagnostics.route) }
+                onDiagnosticsClick = { navController.navigate(Screen.Diagnostics.route) },
+                onDebugDashboardClick = { navController.navigate(Screen.DebugDashboard.route) }
             )
         }
 
@@ -89,6 +99,13 @@ fun MeshLinkNavHost(
         composable(Screen.Diagnostics.route) {
             com.meshlink.app.ui.diagnostics.DiagnosticsScreen(
                 onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        // ── Debug Dashboard (full-screen, no bottom bar) ──────────────────────
+        composable(Screen.DebugDashboard.route) {
+            com.meshlink.app.ui.debug.DebugDashboardScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

@@ -28,7 +28,9 @@ object DatabaseModule {
                 AppDatabase.MIGRATION_4_5,
                 AppDatabase.MIGRATION_5_6,
                 AppDatabase.MIGRATION_8_9,
-                AppDatabase.MIGRATION_9_10
+                AppDatabase.MIGRATION_9_10,
+                AppDatabase.MIGRATION_10_11,
+                AppDatabase.MIGRATION_11_12
             ).fallbackToDestructiveMigration()
             .build()
 
@@ -46,4 +48,7 @@ object DatabaseModule {
 
     @Provides
     fun provideLocationSyncQueueDao(appDatabase: AppDatabase): com.meshlink.app.data.local.dao.LocationSyncQueueDao = appDatabase.locationSyncQueueDao()
+
+    @Provides
+    fun provideProcessedEventDao(appDatabase: AppDatabase): com.meshlink.app.data.local.dao.ProcessedEventDao = appDatabase.processedEventDao()
 }

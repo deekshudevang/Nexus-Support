@@ -12,6 +12,7 @@ import com.meshlink.app.data.local.entity.LocationEventEntity
 import com.meshlink.app.data.local.entity.LocationSyncQueueEntity
 import com.meshlink.app.data.local.entity.MessageEntity
 import com.meshlink.app.data.local.entity.PendingMessageEntity
+import com.meshlink.app.data.local.entity.ProcessedEventEntity
 
 @Database(
     entities = [
@@ -19,9 +20,10 @@ import com.meshlink.app.data.local.entity.PendingMessageEntity
         MessageEntity::class,
         PendingMessageEntity::class,
         LocationEventEntity::class,
-        LocationSyncQueueEntity::class
+        LocationSyncQueueEntity::class,
+        ProcessedEventEntity::class
     ],
-    version = 10,
+    version = 12,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -30,6 +32,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun pendingMessageDao(): PendingMessageDao
     abstract fun locationEventDao(): com.meshlink.app.data.local.dao.LocationEventDao
     abstract fun locationSyncQueueDao(): com.meshlink.app.data.local.dao.LocationSyncQueueDao
+    abstract fun processedEventDao(): com.meshlink.app.data.local.dao.ProcessedEventDao
 
     companion object {
         /**
@@ -141,6 +144,29 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
+            }
+        }
+
+        /**
+         * v10 → v11: adds processed_events table for deduplication
+         */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS processed_events (
+                        eventId TEXT NOT NULL PRIMARY KEY,
+                        timestamp INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+            }
+        /**
+         * v11 → v12: adds publicKey column to location_events for cryptographic verification
+         */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE location_events ADD COLUMN publicKey TEXT NOT NULL DEFAULT ''")
             }
         }
     }

@@ -104,9 +104,11 @@ fun MeshMapScreen(
                         MapView(ctx).apply {
                             mapViewRef = this
                             // Check if local mapsforge file exists (simulated location)
-                            val mapFile = File(ctx.getExternalFilesDir(null), "offline_map.map")
-                            if (mapFile.exists()) {
+                            val mapDir = File(ctx.filesDir, "offline_maps")
+                            val mapFiles = mapDir.listFiles { _, name -> name.endsWith(".map") }
+                            if (mapFiles != null && mapFiles.isNotEmpty()) {
                                 try {
+                                    val mapFile = mapFiles[0] // Load the first available regional map for now
                                     val map = MapFile(mapFile)
                                     val forge = MapsForgeTileSource.createFromFiles(arrayOf(mapFile))
                                     val provider = MapsForgeTileProvider(
@@ -172,8 +174,8 @@ fun MeshMapScreen(
                                 val line = Polyline(mapView)
                                 line.addPoint(startPoint)
                                 line.addPoint(endPoint)
-                                line.color = AndroidColor.argb(128, 255, 69, 0) // Semi-transparent Neon Orange
-                                line.width = 5f
+                                line.outlinePaint.color = AndroidColor.argb(128, 255, 69, 0) // Semi-transparent Neon Orange
+                                line.outlinePaint.strokeWidth = 5f
                                 mapView.overlays.add(line)
                             }
                         }

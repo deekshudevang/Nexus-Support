@@ -13,7 +13,8 @@ import androidx.room.PrimaryKey
             childColumns = ["eventId"],
             onDelete = ForeignKey.CASCADE
         )
-    ]
+    ],
+    indices = [androidx.room.Index("eventId")]
 )
 data class LocationSyncQueueEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

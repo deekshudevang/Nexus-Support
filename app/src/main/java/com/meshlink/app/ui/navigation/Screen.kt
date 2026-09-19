@@ -22,6 +22,12 @@ sealed class Screen(val route: String) {
     data object Broadcast : Screen("broadcast")
 
     object Diagnostics : Screen("diagnostics")
+    
+    /** Full-screen: Debug Dashboard for QA testers */
+    object DebugDashboard : Screen("debug_dashboard")
+    
+    /** Full-screen: Map Download UI */
+    object MapDownload : Screen("map_download")
 
     /** Full-screen: Individual chat */
     data object Chat : Screen("chat/{deviceId}/{deviceName}") {

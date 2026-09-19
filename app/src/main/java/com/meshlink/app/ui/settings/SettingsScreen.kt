@@ -19,6 +19,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun SettingsScreen(
     onBackClick: () -> Unit,
     onDiagnosticsClick: () -> Unit,
+    onDebugDashboardClick: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     // Note: In a real app we would persist these settings to SharedPreferences or DataStore.
@@ -188,6 +189,16 @@ fun SettingsScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
             ) {
                 Text("View Diagnostics Dashboard", fontWeight = FontWeight.Bold)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Button(
+                onClick = onDebugDashboardClick,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) {
+                Text("View QA Debug Dashboard", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onError)
             }
         }
     }

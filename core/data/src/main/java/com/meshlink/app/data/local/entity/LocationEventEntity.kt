@@ -13,5 +13,6 @@ data class LocationEventEntity(
     val timestamp: Long,
     val sequenceNumber: Int,
     val signature: String,
+    val publicKey: String,
     val syncStatus: Int = 0 // 0 = PENDING, 1 = UPLOADED
 )
