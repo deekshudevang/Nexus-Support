@@ -25,6 +25,7 @@ protobufPlugin = "0.9.4"
 protobufLite = "4.26.1"
 mapsforge = "0.20.0"
 retrofit = "2.11.0"
+sqlcipher = "4.6.0"
 
 [libraries]
 # Compose
@@ -88,6 +89,7 @@ mapsforge-themes = { group = "org.mapsforge", name = "mapsforge-themes", version
 protobuf-javalite = { group = "com.google.protobuf", name = "protobuf-javalite", version.ref = "protobufLite" }
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 retrofit-converter-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "retrofit" }
+sqlcipher-android = { group = "net.zetetic", name = "android-database-sqlcipher", version.ref = "sqlcipher" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

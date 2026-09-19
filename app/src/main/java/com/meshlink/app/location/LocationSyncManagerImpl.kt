@@ -132,8 +132,15 @@ class LocationSyncManagerImpl @Inject constructor(
             val accuracy = obj.getDouble("accuracy").toFloat()
             val timestamp = obj.getLong("timestamp")
 
+            // Replay attack / bounds check: reject events > 24h old or in the future
+            val now = System.currentTimeMillis()
+            if (timestamp > now + 60000 || timestamp < now - (24 * 60 * 60 * 1000L)) {
+                Timber.w("LocationSyncManager: Event $eventId from $peerId has out-of-bounds timestamp. Dropping.")
+                continue
+            }
+
             // Verify the signature
-            val payloadToVerify = "$peerId:$latitude:$longitude:$accuracy:$timestamp:$sequenceNumber".toByteArray(Charsets.UTF_8)
+            val payloadToVerify = "$eventId:$peerId:$latitude:$longitude:$accuracy:$timestamp:$sequenceNumber".toByteArray(Charsets.UTF_8)
             val isValid = cryptoManager.verify(payloadToVerify, signature, publicKey)
             if (!isValid) {
                 Timber.w("LocationSyncManager: Invalid signature for event $eventId from $peerId. Dropping.")
@@ -197,7 +204,7 @@ class LocationSyncManagerImpl @Inject constructor(
             val sequenceNumber = highestKnown + 1
             val timestamp = System.currentTimeMillis()
             
-            val payloadToSign = "$localDeviceId:$lat:$lon:$accuracy:$timestamp:$sequenceNumber".toByteArray(Charsets.UTF_8)
+            val payloadToSign = "$eventId:$localDeviceId:$lat:$lon:$accuracy:$timestamp:$sequenceNumber".toByteArray(Charsets.UTF_8)
             val signature = cryptoManager.sign(payloadToSign)
             val publicKey = cryptoManager.getPublicKeyBase64()
 

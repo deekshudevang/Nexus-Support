@@ -29,16 +29,28 @@ class CryptoManager @Inject constructor() {
         val keyPairGenerator = KeyPairGenerator.getInstance(
             KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore"
         )
-        val parameterSpec = KeyGenParameterSpec.Builder(
+        val parameterSpecBuilder = KeyGenParameterSpec.Builder(
             KEY_ALIAS,
             KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
-        ).run {
+        ).apply {
             setDigests(KeyProperties.DIGEST_SHA256)
             setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
             setUserAuthenticationRequired(false)
-            build()
         }
-        keyPairGenerator.initialize(parameterSpec)
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            try {
+                parameterSpecBuilder.setIsStrongBoxBacked(true)
+                keyPairGenerator.initialize(parameterSpecBuilder.build())
+                keyPairGenerator.generateKeyPair()
+                return
+            } catch (e: Exception) {
+                // Fallback to non-StrongBox if not supported
+                parameterSpecBuilder.setIsStrongBoxBacked(false)
+            }
+        }
+
+        keyPairGenerator.initialize(parameterSpecBuilder.build())
         keyPairGenerator.generateKeyPair()
     }
 

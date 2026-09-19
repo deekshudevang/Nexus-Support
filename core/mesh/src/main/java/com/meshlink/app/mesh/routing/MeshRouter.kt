@@ -67,7 +67,12 @@ class MeshRouter @Inject constructor(
     }
     companion object {
         private const val PENDING_TTL_MS = 48 * 60 * 60 * 1_000L  // 48 hours
+        /** Minimum interval between accepted heartbeats from any single peer (anti-flood). */
+        private const val HEARTBEAT_MIN_INTERVAL_MS = 5_000L
     }
+
+    /** Rate-limit table: peerDeviceId → timestamp of last accepted heartbeat. */
+    private val heartbeatLastSeen = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     // ── Incoming packet routing ───────────────────────────────────────────────
 
@@ -498,6 +503,14 @@ class MeshRouter @Inject constructor(
 
             PacketType.HEARTBEAT -> {
                 try {
+                    val now = System.currentTimeMillis()
+                    val lastSeen = heartbeatLastSeen[packet.originId] ?: 0L
+                    if (now - lastSeen < HEARTBEAT_MIN_INTERVAL_MS) {
+                        Timber.w("MeshRouter: Rate-limiting HEARTBEAT flood from ${packet.originId}")
+                        return@withContext RoutingResult.Drop
+                    }
+                    heartbeatLastSeen[packet.originId] = now
+
                     val j = org.json.JSONObject(packet.content)
                     val battery = j.optInt("battery", 100)
                     val nArr = j.optJSONArray("neighbors")
@@ -510,7 +523,7 @@ class MeshRouter @Inject constructor(
                 } catch (e: Exception) {
                     Timber.w(e, "Failed to parse heartbeat payload")
                 }
-                return null
+                return@withContext RoutingResult.Drop
             }
 
             PacketType.LOCATION_SYNC -> {
