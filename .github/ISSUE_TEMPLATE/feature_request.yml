@@ -1,0 +1,45 @@
+name: "✨ Feature Request"
+description: Propose a new feature, protocol optimization, or enhancement
+title: "[FEATURE]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea for Nexus Support? We'd love to hear it! Please provide as much detail as possible.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Use Case
+      description: Is your feature request related to a specific emergency/offline communication challenge?
+      placeholder: In large dense disaster rescue zones, routing overhead...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution / Enhancement
+      description: Describe the solution you'd like to see implemented.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative designs or trade-offs you've considered.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Target Subsystem
+      options:
+        - "Mesh Routing & Protocols"
+        - "Cryptography & KeyStore"
+        - "Offline Maps & GPS"
+        - "Compose UI / UX"
+        - "Cloud Synchronization"
+    validations:
+      required: true

@@ -1,0 +1,70 @@
+name: "🐛 Bug Report"
+description: File a bug report or crash in Nexus Support
+title: "[BUG]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a problem. Please make sure to check existing issues before filing a new one.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise explanation of what the bug is.
+      placeholder: When attempting to send a multi-hop routed message...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step guide to reproduce the issue.
+      placeholder: |
+        1. Start 3 physical devices (A, B, C)
+        2. Disconnect direct link between A and C
+        3. Send message from A to C through B
+        4. Observe behavior...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: input
+    id: devices
+    attributes:
+      label: Device Models & Android Versions
+      description: e.g., Google Pixel 7 (Android 14) & Samsung Galaxy S23 (Android 14)
+      placeholder: Pixel 7 (API 34), Galaxy S22 (API 33)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: connection_type
+    attributes:
+      label: Connection Mode Under Test
+      options:
+        - "Nearby Connections (P2P Mesh)"
+        - "Offline Maps & Location Sync"
+        - "Store-and-Forward Reconnect"
+        - "SOS Broadcast"
+        - "Database / Crypto / KeyStore"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logcat / Stack Trace
+      description: Paste relevant logcat outputs or stack traces here.
+      render: shell
+      placeholder: |
+        adb logcat -s MeshRouter NearbyRepo

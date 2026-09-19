@@ -1,196 +1,200 @@
 <div align="center">
 
-<img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp" alt="Nexus Support Logo" width="100"/>
+# ⚡ Nexus Support
+### Decentralized, Zero-Internet Emergency Mesh Communication & Geospatial Intelligence
 
-# Nexus Support — Offline Emergency Mesh Communication Platform
-
-**Peer-to-peer encrypted mesh chat and location sharing that works without internet or cellular signal.**  
-Built with Android Nearby Connections API, Jetpack Compose, and Clean Architecture.
-
-[![Android](https://img.shields.io/badge/Platform-Android%2026+-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
-[![Kotlin](https://img.shields.io/badge/Language-Kotlin-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![CI Pipeline](https://github.com/deekshudevang/Nexus-Support/actions/workflows/ci.yml/badge.svg)](https://github.com/deekshudevang/Nexus-Support/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/deekshudevang/Nexus-Support/actions/workflows/codeql.yml/badge.svg)](https://github.com/deekshudevang/Nexus-Support/actions/workflows/codeql.yml)
+[![Android](https://img.shields.io/badge/Platform-Android%208.0%2B%20%28API%2026%2B%29-3DDC84?style=flat&logo=android&logoColor=white)](https://developer.android.com)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.0.0-7F52FF?style=flat&logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?style=flat&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![Architecture](https://img.shields.io/badge/Architecture-Clean%20%2B%20MVI%2FMVVM-orange?style=flat)](docs/ARCHITECTURE.md)
+[![Security](https://img.shields.io/badge/Security-StrongBox%20%2B%20ECIES%20%2B%20SQLCipher-red?style=flat)](docs/SECURITY_SPEC.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.0.0-brightgreen)](https://github.com/deekshudevang/Nexus-Support/releases)
-[![GitHub last commit](https://img.shields.io/github/last-commit/deekshudevang/Nexus-Support)](https://github.com/deekshudevang/Nexus-Support/commits/master)
+
+<p align="center">
+  <b>A production-grade, zero-trust, multi-hop mesh network designed for disaster relief, off-grid operations, and tactical field deployments.</b>
+  <br />
+  Operates completely independent of cellular towers, satellite uplinks, or centralized servers.
+</p>
+
+[Key Features](#-key-features) • [Architecture](#-system-architecture) • [Mesh Protocol](#-mesh-routing-protocol) • [Security](#-cryptographic-security) • [Documentation](#-deep-dive-documentation) • [Getting Started](#-getting-started) • [Testing](#-verification--simulation)
+
+---
 
 </div>
 
----
+## 📖 Overview
 
-## 📖 Table of Contents
+**Nexus Support** turns commodity Android smartphones into autonomous nodes in an ad-hoc, multi-hop mesh network. Using a hybrid combination of **Bluetooth Low Energy (BLE)** and **Wi-Fi Direct** via Google Nearby Connections, devices dynamically discover peers, establish encrypted links, and route emergency messages and GPS coordinates across up to **7 hops**.
 
-- [About](#-about)
-- [Features](#-features)
-- [Security Architecture](#-security-architecture)
-- [Architecture](#-architecture)
-- [Module Structure](#-module-structure)
-- [Tech Stack](#-tech-stack)
-- [Getting Started](#-getting-started)
-- [Testing](#-testing)
-- [License](#-license)
-
----
-
-## 🌐 About
-
-**Nexus Support** is an offline-first Android application that enables real-time peer-to-peer messaging and geospatial location sharing between nearby devices using the **Google Nearby Connections API** — no internet, no SIM card required.
-
-It is designed for situations where traditional communication infrastructure is unavailable: disaster zones, remote areas, large events, or campus emergencies. Messages and location events hop across multiple devices to extend reach beyond direct range, forming a true **multi-hop mesh network**.
-
-This project proves that a genuine offline-first, multi-hop, store-and-forward emergency mesh is buildable on commodity Android hardware.
-
----
-
-## ✨ Features
-
-| Category | Feature |
-|---|---|
-| **Mesh Networking** | Multi-hop routing (up to 7 hops) via Dijkstra shortest-path |
-| **Messaging** | AES-256-GCM encrypted direct chat; ECIES multi-hop routed chat |
-| **Location** | HIGH_ACCURACY GPS; CRDT/Vector Clock location sync across mesh |
-| **Store & Forward** | Messages queued up to 48h and delivered when peers reconnect |
-| **Offline Maps** | Mapsforge vector tiles downloadable for fully offline map rendering |
-| **Medical Profile** | User-editable emergency contacts, blood group, allergies, medications |
-| **SOS** | High-priority emergency flood broadcast across entire mesh |
-| **Cloud Sync** | WorkManager syncs pending events when internet returns |
-
----
-
-## 🔐 Security Architecture
-
-Nexus Support implements a layered security model suitable for emergency deployments:
-
-### Cryptographic Identity
-- **EC P-256 key pair** generated in Android KeyStore on first launch
-- **StrongBox hardware module** used automatically on supported devices (Pixel 3+)
-- Keys are **never exported** from the KeyStore
-
-### Packet Signing & Replay Prevention
-- Every location event is signed: `ECDSA(SHA-256, eventId:peerId:lat:lon:accuracy:timestamp:seq)`
-- `eventId` is bound to the signature — prevents replay of valid signatures on different payloads
-- Events with timestamps **>24 hours old or >60 seconds in the future** are rejected
-
-### Routing Hardening
-- **Heartbeat rate-limiting**: max 1 heartbeat per peer per 5 seconds — blocks Sinkhole/Sybil flooding
-- **Split-horizon forwarding**: packets never echoed back to the endpoint they arrived from
-- **SeenMessageCache**: cryptographic deduplication prevents broadcast loops
-
-### Data at Rest
-- **SQLCipher AES-256**: entire Room database encrypted at rest
-- Passphrase derived from a hardware-backed 256-bit AES key stored in AndroidKeyStore
-- `allowBackup=false`: prevents device backup from leaking encrypted DB
-
-### Network
-- **Cleartext HTTP blocked** in release builds via `network_security_config.xml`
-- All cloud sync uses HTTPS only
-
----
-
-## 🏗 Architecture
+When communications infrastructure collapses during natural disasters, search-and-rescue missions, or remote expeditions, Nexus Support provides a resilient lifeline.
 
 ```
-┌────────────────────────────────────────────────────────┐
-│                        App Layer                       │
-│   UI (Compose) → ViewModels → UseCases → Repositories │
-└───────────────────────┬────────────────────────────────┘
-                        │
-          ┌─────────────┼─────────────┐
-          ▼             ▼             ▼
-    core:data      core:mesh     core:crypto
-   (Room/SQLite   (MeshRouter,   (CryptoManager,
-    encrypted)     RoutingTable)  ECIES, AES-GCM)
-                        │
-                        ▼
-               core:domain (models, interfaces)
+       [Field Unit A] 
+             │ (Hop 1: BLE)
+             ▼
+       [Relay Node B] 
+             │ (Hop 2: Wi-Fi Direct)
+             ▼
+       [Relay Node C] 
+             │ (Hop 3: BLE)
+             ▼
+     [Command Post D] ──► (Offline Vector Map + SOS Alert)
 ```
 
 ---
 
-## 📦 Module Structure
+## ⚡ Key Features
 
-| Module | Responsibility |
+| Capability | Technical Details |
 |---|---|
-| `app` | UI, ViewModels, Navigation, WorkManager scheduling |
-| `core:domain` | Entities, repository interfaces, use cases |
-| `core:data` | Room (SQLCipher), DAOs, Retrofit cloud sync |
-| `core:mesh` | MeshRouter, RoutingTable, SeenMessageCache, BatteryMonitor |
-| `core:crypto` | CryptoManager (KeyStore), EncryptionService (AES-GCM), EciesService |
+| **Multi-Hop Routing** | Dynamic Dijkstra shortest-path pathfinding across ad-hoc graphs (up to 7 hops). |
+| **Zero-Internet Maps** | 100% offline Mapsforge vector tile engine rendering topo & street maps directly on-device. |
+| **High-Precision GPS** | Sub-meter location tracking synchronized via **Vector Clocks & CRDTs** for eventual consistency. |
+| **Store & Forward** | Persistent message buffer (48h TTL) delivering packets automatically when disconnected peers rejoin. |
+| **Hardware KeyStore** | EC P-256 identity key generation isolated within **StrongBox Keymaster HSM** / TEE enclaves. |
+| **End-to-End Encryption** | Direct **AES-256-GCM** sessions + multi-hop **ECIES** (Ephemeral ECDH + HKDF SHA-256). |
+| **Tamper Proofing** | ECDSA SHA-256 signatures bound to packet UUIDs with a 24h temporal validity window. |
+| **At-Rest Encryption** | Entire Room SQLite database encrypted at rest via **SQLCipher AES-256-CBC**. |
+| **Battery Intelligence** | Adaptive scan cycle adjusting discovery intervals based on battery level and movement. |
+| **Opportunistic Sync** | Background WorkManager syncing pending telemetry to cloud backends if internet restores. |
 
 ---
 
-## 🛠 Tech Stack
+## 🏗️ System Architecture
 
-| Layer | Technology |
-|---|---|
-| Language | Kotlin 2.0 |
-| UI | Jetpack Compose + Material 3 |
-| DI | Hilt 2.51 |
-| Database | Room 2.8 + SQLCipher 4.6 (AES-256 encrypted) |
-| Background | WorkManager 2.10 (cleanup + cloud sync) |
-| Networking | Google Nearby Connections 19.3 |
-| Maps | OsmDroid 6.1 + Mapsforge 0.20 (fully offline) |
-| Location | Google Play Services Location (HIGH_ACCURACY) |
-| Cryptography | Android KeyStore + EC P-256 + AES-256-GCM + ECIES |
-| Build | Gradle 8.14 + R8 (minification + shrinking enabled) |
+Nexus Support is engineered following strict **Clean Architecture** principles, enforcing separation of concerns and high testability:
+
+```mermaid
+graph TD
+    subgraph UI_Layer [Presentation Layer (:app)]
+        UI[Jetpack Compose Screens & Material 3]
+        VM[StateFlow ViewModels & Navigation]
+        Workers[WorkManager Sync & Maintenance]
+        UI --> VM
+        VM --> Workers
+    end
+
+    subgraph Domain_Layer [Business Domain (:core:domain)]
+        Models[Domain Models: MeshPacket, VectorClock, KnownDevice]
+        Repos[Repository Interfaces & UseCases]
+    end
+
+    subgraph Engine_Layer [Core Engine Modules]
+        Mesh[":core:mesh (MeshRouter, Dijkstra, SeenCache, Battery)"]
+        Crypto[":core:crypto (KeyStore, ECIES, AES-GCM, Signatures)"]
+        Data[":core:data (SQLCipher, Room DAOs, Retrofit)"]
+    end
+
+    UI_Layer --> Domain_Layer
+    Engine_Layer --> Domain_Layer
+    UI_Layer --> Engine_Layer
+```
+
+---
+
+## 📡 Mesh Routing Protocol
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant NodeA as Source (Node A)
+    participant NodeB as Relay (Node B)
+    participant NodeC as Destination (Node C)
+
+    Note over NodeA: 1. Generate Ephemeral ECDH Key<br/>2. Encrypt with Node C PubKey (ECIES)<br/>3. Sign payload with Node A PrivKey
+    NodeA->>NodeB: Send MeshPacket (hop_count=0, max_hops=7)
+    Note over NodeB: 4. Check SeenMessageCache (Drop duplicates)<br/>5. Split-Horizon Check (Prevent echo to A)<br/>6. Dijkstra Next-Hop Lookup (Find route to C)<br/>7. Increment hop_count=1
+    NodeB->>NodeC: Relay MeshPacket (hop_count=1)
+    Note over NodeC: 8. Verify Node A Signature<br/>9. Decrypt payload using Node C PrivKey<br/>10. Merge into Vector Clock CRDT DB
+```
+
+---
+
+## 🔐 Cryptographic Security
+
+Nexus Support treats every radio link as an insecure medium:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        Wire Packet Security                            │
+├──────────────────────────┬─────────────────────────────────────────────┤
+│ Identity                 │ NIST P-256 (secp256r1) EC KeyPair           │
+│ Hardware Module          │ Android StrongBox HSM / Hardware TEE        │
+│ Direct Link Encryption   │ AES-256-GCM (96-bit Nonce, 128-bit Tag)     │
+│ Multi-Hop Routing        │ ECIES (Ephemeral ECDH + HKDF-SHA256)        │
+│ Replay Defense           │ ECDSA(SHA-256, eventId ∥ peerId ∥ payload)  │
+│ Database at Rest         │ SQLCipher AES-256-CBC (KeyStore-derived)    │
+│ Production R8 / ProGuard │ Stripped debug logs, minified & obfuscated  │
+└──────────────────────────┴─────────────────────────────────────────────┘
+```
+
+---
+
+## 📚 Deep-Dive Documentation
+
+Detailed technical design specifications are available in the [`docs/`](docs/) directory:
+
+- 🏛️ [**System Architecture & Submodules**](docs/ARCHITECTURE.md) — Comprehensive breakdown of layers, reactive state flow, and dependency injection.
+- 📡 [**Mesh Routing & Protocol Specification**](docs/MESH_PROTOCOL.md) — Wire format, Dijkstra cost heuristics, split-horizon, and Vector Clock CRDT mechanics.
+- 🔐 [**Cryptographic Security Specification**](docs/SECURITY_SPEC.md) — Key generation, hardware enclaves, ECIES math, and anti-replay windows.
+- 🗺️ [**Offline Maps & GPS Engine**](docs/OFFLINE_MAPS.md) — Mapsforge vector tile pipelines, zero-internet geospatial tracking, and coordinate rendering.
 
 ---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Android Studio Meerkat or later
-- Android device/emulator running **API 26+**
-- Two or more physical devices for mesh testing (Nearby Connections requires real hardware)
+- **JDK 17+** (e.g., OpenJDK / Eclipse Temurin 17 or 21)
+- **Android Studio** (Meerkat, Ladybug, or newer)
+- **Physical Devices**: 2 or more Android devices (API 26+) for hardware radio testing (Nearby Connections requires physical Bluetooth/Wi-Fi chips)
 
-### Build
+### Clone & Build
 
 ```bash
+# Clone the repository
 git clone https://github.com/deekshudevang/Nexus-Support.git
 cd Nexus-Support
+
+# Build debug APK
 ./gradlew assembleDebug
-```
 
-### Release Build
-
-```bash
+# Build release APK (R8 minification + SQLCipher enabled)
 ./gradlew assembleRelease
 ```
 
-R8 minification, resource shrinking, and SQLCipher are all active in release.
+---
+
+## 🧪 Verification & Simulation
+
+Nexus Support includes an extensive JVM-based multi-node simulation suite that validates mesh algorithms under stress without needing dozens of physical test devices:
+
+```bash
+# Execute the full JVM unit test suite
+./gradlew test
+
+# Run the 20-node mesh simulation suite
+./gradlew :core:mesh:test --tests "com.meshlink.app.mesh.routing.LargeScaleMeshSimTest"
+```
+
+### Simulated Test Scenarios
+1. **20-Node Linear Chain** — Validates multi-hop packet propagation across max hop limits.
+2. **20-Node Dense Mesh** — Tests `SeenMessageCache` deduplication under dense flooding conditions.
+3. **Partition & Reconnect** — Verifies store-and-forward queueing when subgraphs disconnect and rejoin.
+4. **Dynamic Node Churn** — Evaluates routing table convergence as nodes continuously drop and reconnect.
+5. **Heartbeat Flood Attack** — Proves rate-limiters block Sybil / Sinkhole denial-of-service attempts.
+6. **TTL Boundary Wall** — Confirms packets terminate precisely at `maxHops` to prevent endless loops.
+7. **Split-Horizon Verification** — Guarantees packets are never bounced back to the receiving link.
 
 ---
 
-## 🧪 Testing
+## 🤝 Contributing
 
-### Unit Tests
-
-```bash
-# All mesh routing tests (runs on JVM, no device needed)
-./gradlew :core:mesh:test
-
-# Large-scale 20-node mesh simulation (7 scenarios)
-./gradlew :core:mesh:test --tests "com.meshlink.app.mesh.routing.LargeScaleMeshSimTest"
-
-# CRDT/Vector Clock tests
-./gradlew :app:test --tests "com.meshlink.app.location.LocationSyncManagerTest"
-```
-
-### Test Scenarios Covered
-
-| Scenario | What it validates |
-|---|---|
-| 20-node linear chain | End-to-end broadcast within TTL |
-| 20-node fully connected | SeenMessageCache deduplication under dense flooding |
-| Partition + reconnect | Store-and-forward delivery on link restoration |
-| 10 churn join/leave | Routing table convergence under peer instability |
-| 1000 heartbeat flood | Rate-limiter blocks Sinkhole/Sybil attacks |
-| TTL wall | Packet dies exactly at `maxHops` boundary |
-| Split-horizon | No echo back to source endpoint |
-| CRDT out-of-order delivery | Vector Clock handles non-contiguous sequences |
+We welcome contributions from the open-source community! Please review [CONTRIBUTING.md](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md) before submitting pull requests.
 
 ---
 
 ## 📄 License
 
-MIT License — see [LICENSE](LICENSE) for details.
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
