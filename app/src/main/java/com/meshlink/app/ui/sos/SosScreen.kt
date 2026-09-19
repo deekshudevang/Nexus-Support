@@ -29,10 +29,10 @@ fun SosScreen(viewModel: SosViewModel) {
     val includeMedical by viewModel.includeMedical.collectAsState()
     val nextOrb by viewModel.nextOrbitalWindowSeconds.collectAsState()
 
-    val darkBg = Color(0xFF0B0F17)
-    val panelBg = Color(0xFF111827)
-    val cyan = Color(0xFF00F0FF)
-    val crimson = Color(0xFFEF4444)
+    val darkBg = MaterialTheme.colorScheme.background
+    val panelBg = MaterialTheme.colorScheme.surfaceVariant
+    val cyan = MaterialTheme.colorScheme.secondary
+    val crimson = MaterialTheme.colorScheme.primary
 
     Column(
         modifier = Modifier

@@ -73,13 +73,21 @@ fun MeshLinkNavHost(
         // ── Settings (full-screen, no bottom bar) ─────────────────────────────
         composable("settings") {
             SettingsScreen(
-                onBackClick = { navController.popBackStack() }
+                onBackClick = { navController.popBackStack() },
+                onDiagnosticsClick = { navController.navigate(Screen.Diagnostics.route) }
             )
         }
 
         // ── Broadcast (full-screen, no bottom bar) ────────────────────────────
         composable(Screen.Broadcast.route) {
             BroadcastScreen(
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        // ── Diagnostics (full-screen, no bottom bar) ──────────────────────────
+        composable(Screen.Diagnostics.route) {
+            com.meshlink.app.ui.diagnostics.DiagnosticsScreen(
                 onBackClick = { navController.popBackStack() }
             )
         }

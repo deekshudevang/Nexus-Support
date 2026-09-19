@@ -47,20 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.meshlink.app.domain.model.EmergencyContact
-import com.meshlink.app.ui.theme.BloodGroupSelected
-import com.meshlink.app.ui.theme.BloodGroupUnselected
-import com.meshlink.app.ui.theme.ContactAvatarSalmon
-import com.meshlink.app.ui.theme.EmergencyGreen
-import com.meshlink.app.ui.theme.EmergencyRed
-import com.meshlink.app.ui.theme.LightBackground
-import com.meshlink.app.ui.theme.LightBorder
-import com.meshlink.app.ui.theme.LightSurface
-import com.meshlink.app.ui.theme.LightSurfaceVariant
 import com.meshlink.app.ui.theme.MeshLinkLightTheme
-import com.meshlink.app.ui.theme.MeshReadyGreen
-import com.meshlink.app.ui.theme.TextMuted
-import com.meshlink.app.ui.theme.TextPrimary
-import com.meshlink.app.ui.theme.TextSecondary
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -81,7 +68,7 @@ fun MedicalProfileScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(LightBackground)
+                .background(MaterialTheme.colorScheme.background)
         ) {
             // ── Top bar ────────────────────────────────────────────────────────
             MedicalTopBar(onBackClick = onBackClick)
@@ -148,7 +135,7 @@ fun MedicalProfileScreen(
                         Text(
                             text  = "EMERGENCY CONTACTS",
                             style = MaterialTheme.typography.labelLarge,
-                            color = EmergencyRed,
+                            color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
                         )
@@ -160,13 +147,13 @@ fun MedicalProfileScreen(
                             Icon(
                                 Icons.Default.AddCircleOutline,
                                 contentDescription = "Add contact",
-                                tint     = EmergencyRed,
+                                tint     = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
                                 text  = "Add Contact",
                                 style = MaterialTheme.typography.labelLarge,
-                                color = EmergencyRed
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
@@ -195,7 +182,7 @@ private fun MedicalTopBar(onBackClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(LightSurface)
+            .background(MaterialTheme.colorScheme.surface)
             .statusBarsPadding()
             .padding(horizontal = 4.dp, vertical = 8.dp),
         verticalAlignment     = Alignment.CenterVertically,
@@ -205,24 +192,24 @@ private fun MedicalTopBar(onBackClick: () -> Unit) {
             Icon(
                 Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
-                tint = EmergencyRed
+                tint = MaterialTheme.colorScheme.primary
             )
         }
         Text(
             text       = "Medical Profile",
             style      = MaterialTheme.typography.titleLarge,
-            color      = EmergencyRed,
+            color      = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold
         )
         IconButton(onClick = { }) {
             Icon(
                 Icons.Default.Settings,
                 contentDescription = "Settings",
-                tint = TextSecondary
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
-    Box(Modifier.fillMaxWidth().height(1.dp).background(LightBorder))
+    Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
 }
 
 // ── Section label ─────────────────────────────────────────────────────────────
@@ -232,7 +219,7 @@ private fun SectionLabel(text: String) {
     Text(
         text     = text,
         style    = MaterialTheme.typography.labelLarge,
-        color    = EmergencyRed,
+        color    = MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.Bold,
         letterSpacing = 1.sp,
         modifier = Modifier.padding(start = 20.dp, top = 24.dp, bottom = 10.dp)
@@ -249,32 +236,32 @@ private fun IdentityCard(name: String, onChange: (String) -> Unit) {
             .padding(horizontal = 20.dp)
             .shadow(2.dp, RoundedCornerShape(16.dp)),
         shape         = RoundedCornerShape(16.dp),
-        color         = LightSurface
+        color         = MaterialTheme.colorScheme.surface
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
-                    .background(LightSurfaceVariant)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(horizontal = 16.dp, vertical = 14.dp)
             ) {
                 if (name.isEmpty()) {
                     Text(
                         text  = "Your full name",
                         style = MaterialTheme.typography.titleLarge,
-                        color = TextMuted
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 BasicTextField(
                     value         = name,
                     onValueChange = onChange,
                     textStyle     = MaterialTheme.typography.titleLarge.copy(
-                        color      = TextPrimary,
+                        color      = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize   = 22.sp
                     ),
-                    cursorBrush   = SolidColor(EmergencyRed),
+                    cursorBrush   = SolidColor(MaterialTheme.colorScheme.primary),
                     modifier      = Modifier.fillMaxWidth()
                 )
             }
@@ -286,13 +273,13 @@ private fun IdentityCard(name: String, onChange: (String) -> Unit) {
                 Icon(
                     Icons.Default.Security,
                     contentDescription = null,
-                    tint     = TextSecondary,
+                    tint     = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(14.dp)
                 )
                 Text(
                     text  = "Ensure this matches your official identification for responders.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -309,7 +296,7 @@ private fun BloodGroupGrid(selected: String, onSelected: (String) -> Unit) {
             .padding(horizontal = 20.dp)
             .shadow(2.dp, RoundedCornerShape(16.dp)),
         shape    = RoundedCornerShape(16.dp),
-        color    = LightSurface
+        color    = MaterialTheme.colorScheme.surface
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val rows = bloodGroups.chunked(4)
@@ -324,10 +311,10 @@ private fun BloodGroupGrid(selected: String, onSelected: (String) -> Unit) {
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) BloodGroupSelected else BloodGroupUnselected)
+                                .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                                 .border(
                                     width = if (isSelected) 0.dp else 1.dp,
-                                    color = if (isSelected) Color.Transparent else LightBorder,
+                                    color = if (isSelected) Color.Transparent else MaterialTheme.colorScheme.outlineVariant,
                                     shape = RoundedCornerShape(10.dp)
                                 )
                                 .clickable { onSelected(group) }
@@ -338,7 +325,7 @@ private fun BloodGroupGrid(selected: String, onSelected: (String) -> Unit) {
                                 text       = group,
                                 style      = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color      = if (isSelected) Color.White else TextPrimary
+                                color      = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -359,7 +346,7 @@ private fun MeshReadyCard() {
             .padding(top = 20.dp)
             .shadow(4.dp, RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
-        color = MeshReadyGreen
+        color = MaterialTheme.colorScheme.primaryContainer
     ) {
         Row(
             modifier              = Modifier.padding(16.dp),
@@ -369,20 +356,20 @@ private fun MeshReadyCard() {
             Icon(
                 Icons.Default.Security,
                 contentDescription = null,
-                tint     = Color.White,
+                tint     = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.size(28.dp)
             )
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text       = "Mesh Ready",
                     style      = MaterialTheme.typography.titleMedium,
-                    color      = Color.White,
+                    color      = MaterialTheme.colorScheme.onPrimaryContainer,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text  = "Your medical data is encrypted and stored locally. It will only be shared during active SOS signals.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.85f)
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
                 )
             }
         }
@@ -404,7 +391,7 @@ private fun ProfileInputField(
             .padding(horizontal = 20.dp)
             .shadow(2.dp, RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
-        color = LightSurface
+        color = MaterialTheme.colorScheme.surface
     ) {
         Box(
             modifier = Modifier
@@ -415,15 +402,15 @@ private fun ProfileInputField(
                 Text(
                     text      = placeholder,
                     style     = MaterialTheme.typography.bodyMedium,
-                    color     = TextMuted,
+                    color     = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Start
                 )
             }
             BasicTextField(
                 value         = value,
                 onValueChange = onChange,
-                textStyle     = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary),
-                cursorBrush   = SolidColor(EmergencyRed),
+                textStyle     = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                cursorBrush   = SolidColor(MaterialTheme.colorScheme.primary),
                 minLines      = minLines,
                 modifier      = Modifier.fillMaxWidth()
             )
@@ -441,7 +428,7 @@ private fun ContactRow(contact: EmergencyContact) {
             .padding(horizontal = 20.dp, vertical = 4.dp)
             .shadow(1.dp, RoundedCornerShape(12.dp)),
         shape = RoundedCornerShape(12.dp),
-        color = LightSurface
+        color = MaterialTheme.colorScheme.surface
     ) {
         Row(
             modifier              = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -455,12 +442,12 @@ private fun ContactRow(contact: EmergencyContact) {
                 modifier         = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(ContactAvatarSalmon),
+                    .background(MaterialTheme.colorScheme.secondary),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text       = initials,
-                    color      = Color.White,
+                    color      = MaterialTheme.colorScheme.onSecondary,
                     style      = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
                 )

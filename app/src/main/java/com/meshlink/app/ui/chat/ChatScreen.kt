@@ -26,10 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.meshlink.app.domain.model.ConnectionState
 import com.meshlink.app.domain.model.Message
 
-val Obsidian = Color(0xFF121212)
-val TranslucentPanel = Color(0xFF1E1E1E).copy(alpha = 0.95f)
-val NeonOrange = Color(0xFFFF4500)
-val Crimson = Color(0xFFEF4444)
+
 
 @Composable
 fun ChatScreen(
@@ -56,14 +53,14 @@ fun ChatScreen(
     }
     
     val txColor by androidx.compose.animation.animateColorAsState(
-        targetValue = if (connState == ConnectionState.CONNECTED) NeonOrange else Color.Gray,
+        targetValue = if (connState == ConnectionState.CONNECTED) MaterialTheme.colorScheme.primary else Color.Gray,
         label = "txColor"
     )
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Obsidian)
+            .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .navigationBarsPadding()
             .imePadding()
@@ -175,7 +172,7 @@ fun ChatScreen(
                         .clickable(enabled = connState == ConnectionState.CONNECTED) { viewModel.onSendClick() }
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    Text("TX", color = Obsidian, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text("TX", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                 }
             }
             

@@ -21,6 +21,8 @@ sealed class Screen(val route: String) {
     /** Full-screen: Broadcast message to all peers */
     data object Broadcast : Screen("broadcast")
 
+    object Diagnostics : Screen("diagnostics")
+
     /** Full-screen: Individual chat */
     data object Chat : Screen("chat/{deviceId}/{deviceName}") {
         fun createRoute(deviceId: String, deviceName: String): String {

@@ -13,7 +13,8 @@ import androidx.compose.ui.unit.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onDiagnosticsClick: () -> Unit
 ) {
     // Note: In a real app we would persist these settings to SharedPreferences or DataStore.
     var useMeshtastic by remember { mutableStateOf(false) }
