@@ -1,5 +1,8 @@
 package com.meshlink.app.ui.map
 
+import com.meshlink.app.ui.components.MetricBadge
+import com.meshlink.app.ui.components.NexusCard
+
 import android.content.Context
 import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.background
@@ -70,7 +73,7 @@ fun MeshMapScreen(
                     factory = { ctx ->
                         MapView(ctx).apply {
                             setTileSource(TileSourceFactory.MAPNIK)
-                            setUseDataConnection(false) // Force offline mode
+                            setUseDataConnection(true) // Allow loading online map tiles
                             setMultiTouchControls(true)
                             controller.setZoom(15.0)
                         }
@@ -117,30 +120,26 @@ fun MeshMapScreen(
                 )
                 
                 // Stats overlay
-                Column(
+                NexusCard(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(16.dp)
+                        .padding(bottom = 32.dp),
+                    elevation = 4.dp
                 ) {
-                    Text(
-                        "Peers: ${uiState.nodes.size}",
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                        modifier = Modifier
-                            .background(Color(0xFF1E1E1E).copy(alpha = 0.85f), shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    MetricBadge(
+                        text = "Peers: ${uiState.nodes.size}",
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "Pending Messages: ${uiState.pendingMessagesCount}",
-                        color = MaterialTheme.colorScheme.secondary,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                        modifier = Modifier
-                            .background(Color(0xFF1E1E1E).copy(alpha = 0.85f), shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                            .border(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                    if (uiState.pendingMessagesCount > 0) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        MetricBadge(
+                            text = "Pending: ${uiState.pendingMessagesCount}",
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
                 }
             }
         }
@@ -155,26 +154,30 @@ fun MeshMapScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
+                        .padding(24.dp)
                 ) {
                     Text(
-                        text = "RF Hop Limit Filter",
+                        text = "Topology Filter",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                    Text(
-                        text = "Showing peers up to ${uiState.currentHopLimit} hops away",
-                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
-                    Slider(
-                        value = uiState.currentHopLimit.toFloat(),
-                        onValueChange = { viewModel.setHopLimit(it.roundToInt()) },
-                        valueRange = 1f..7f,
-                        steps = 5,
-                        modifier = Modifier.fillMaxWidth()
+                    Text(
+                        text = "Displaying nodes up to ${uiState.currentHopLimit} RF hops away.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 16.dp)
                     )
+                    NexusCard(elevation = 0.dp) {
+                        Slider(
+                            value = uiState.currentHopLimit.toFloat(),
+                            onValueChange = { viewModel.setHopLimit(it.roundToInt()) },
+                            valueRange = 1f..7f,
+                            steps = 5,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     Spacer(modifier = Modifier.height(32.dp))
                 }
             }
