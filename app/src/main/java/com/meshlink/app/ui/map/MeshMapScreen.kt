@@ -187,6 +187,15 @@ fun MeshMapScreen(
                         // Add MyLocation overlay
                         val myLocationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(mapView.context), mapView)
                         myLocationOverlay.enableMyLocation()
+                        
+                        // Automatically center on user when location is first found
+                        myLocationOverlay.runOnFirstFix {
+                            mapView.post {
+                                mapView.controller.animateTo(myLocationOverlay.myLocation)
+                                mapView.controller.setZoom(17.0)
+                            }
+                        }
+                        
                         mapView.overlays.add(myLocationOverlay)
                         
                         // Store the overlay in tag so we can use it from FAB if needed
