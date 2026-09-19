@@ -8,6 +8,8 @@ import com.meshlink.app.data.local.dao.DeviceDao
 import com.meshlink.app.data.local.dao.MessageDao
 import com.meshlink.app.data.local.dao.PendingMessageDao
 import com.meshlink.app.data.local.entity.KnownDeviceEntity
+import com.meshlink.app.data.local.entity.LocationEventEntity
+import com.meshlink.app.data.local.entity.LocationSyncQueueEntity
 import com.meshlink.app.data.local.entity.MessageEntity
 import com.meshlink.app.data.local.entity.PendingMessageEntity
 
@@ -15,9 +17,11 @@ import com.meshlink.app.data.local.entity.PendingMessageEntity
     entities = [
         KnownDeviceEntity::class,
         MessageEntity::class,
-        PendingMessageEntity::class
+        PendingMessageEntity::class,
+        LocationEventEntity::class,
+        LocationSyncQueueEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -100,6 +104,41 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE known_devices ADD COLUMN lastLatitude REAL")
                 db.execSQL("ALTER TABLE known_devices ADD COLUMN lastLongitude REAL")
+            }
+        }
+
+        /**
+         * v9 → v10: adds location_events and location_sync_queue tables
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS location_events (
+                        eventId TEXT NOT NULL PRIMARY KEY,
+                        peerId TEXT NOT NULL,
+                        latitude REAL NOT NULL,
+                        longitude REAL NOT NULL,
+                        accuracy REAL NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        sequenceNumber INTEGER NOT NULL,
+                        signature TEXT NOT NULL,
+                        syncStatus INTEGER NOT NULL DEFAULT 0
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS location_sync_queue (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        eventId TEXT NOT NULL,
+                        targetPeerId TEXT NOT NULL,
+                        ttl INTEGER NOT NULL,
+                        status INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY(eventId) REFERENCES location_events(eventId) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
             }
         }
     }

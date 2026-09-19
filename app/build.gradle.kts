@@ -87,6 +87,10 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.osmdroid.android)
+    implementation(libs.osmdroid.mapsforge)
+    implementation(libs.mapsforge.map.android)
+    implementation(libs.mapsforge.map.reader)
+    implementation(libs.mapsforge.themes)
 
     // Testing — unit tests
     testImplementation(libs.junit)

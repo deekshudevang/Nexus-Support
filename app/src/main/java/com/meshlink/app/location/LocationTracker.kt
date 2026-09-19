@@ -4,9 +4,15 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Location
 import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
@@ -34,6 +40,39 @@ class LocationTracker @Inject constructor(
             } ?: fusedLocationClient.lastLocation.await()
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /**
+     * Emits a continuous stream of location updates.
+     * Uses balanced battery optimization (PRIORITY_BALANCED_POWER_ACCURACY)
+     * Request interval is 5 minutes, fastest is 1 minute, minimum displacement 50 meters.
+     */
+    @SuppressLint("MissingPermission")
+    fun getLocationFlow(): Flow<Location> = callbackFlow {
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 5 * 60 * 1000L)
+            .setMinUpdateIntervalMillis(60 * 1000L)
+            .setMinUpdateDistanceMeters(50f)
+            .build()
+
+        val locationCallback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                result.lastLocation?.let { location ->
+                    trySend(location)
+                }
+            }
+        }
+
+        fusedLocationClient.requestLocationUpdates(
+            locationRequest,
+            locationCallback,
+            android.os.Looper.getMainLooper()
+        ).addOnFailureListener { e ->
+            close(e)
+        }
+
+        awaitClose {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
         }
     }
 
