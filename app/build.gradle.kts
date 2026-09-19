@@ -91,6 +91,7 @@ dependencies {
     implementation(libs.mapsforge.map.android)
     implementation(libs.mapsforge.map.reader)
     implementation(libs.mapsforge.themes)
+implementation(libs.osmbonuspack)
 
     // Testing — unit tests
     testImplementation(libs.junit)

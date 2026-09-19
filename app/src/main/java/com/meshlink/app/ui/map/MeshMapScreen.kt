@@ -21,6 +21,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Person
 import kotlin.math.roundToInt
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -31,8 +33,13 @@ import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.mapsforge.MapsForgeTileSource
 import org.osmdroid.mapsforge.MapsForgeTileProvider
 import org.mapsforge.map.reader.MapFile
+import org.osmdroid.bonuspack.clustering.RadiusMarkerClusterer
 import java.io.File
-import androidx.compose.material.icons.filled.Download
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
+import androidx.core.content.ContextCompat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,6 +49,7 @@ fun MeshMapScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showFilterModal by remember { mutableStateOf(false) }
+    var selectedNode by remember { mutableStateOf<com.meshlink.app.ui.map.MeshMapViewModel.MeshNode?>(null) }
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
@@ -114,6 +122,18 @@ fun MeshMapScreen(
                         val validNodes = uiState.nodes.filter { it.latitude != null && it.longitude != null }
                         val nodePoints = mutableMapOf<String, GeoPoint>()
                         
+                        // Create a RadiusMarkerClusterer
+                        val clusterer = RadiusMarkerClusterer(ctx)
+                        // Create a default cluster icon (blue circle)
+                        val clusterIcon = Bitmap.createBitmap(80, 80, Bitmap.Config.ARGB_8888)
+                        val canvas = Canvas(clusterIcon)
+                        val paint = android.graphics.Paint().apply {
+                            color = AndroidColor.argb(200, 33, 150, 243)
+                            isAntiAlias = true
+                        }
+                        canvas.drawCircle(40f, 40f, 40f, paint)
+                        clusterer.setIcon(clusterIcon)
+                        
                         for (node in validNodes) {
                             val point = GeoPoint(node.latitude!!, node.longitude!!)
                             nodePoints[node.id] = point
@@ -122,8 +142,14 @@ fun MeshMapScreen(
                             marker.position = point
                             marker.title = node.name
                             marker.snippet = "Battery: ${node.batteryLevel}% | Hops: ${node.hopCount}"
-                            mapView.overlays.add(marker)
+                            marker.setOnMarkerClickListener { m, _ ->
+                                selectedNode = node
+                                true
+                            }
+                            clusterer.add(marker)
                         }
+                        
+                        mapView.overlays.add(clusterer)
                         
                         // Draw edges
                         for (edge in uiState.edges) {
@@ -242,6 +268,70 @@ fun MeshMapScreen(
                             steps = 5,
                             modifier = Modifier.fillMaxWidth()
                         )
+                    }
+                    Spacer(modifier = Modifier.height(32.dp))
+                }
+            }
+        }
+        
+        // Node Details Bottom Sheet
+        if (selectedNode != null) {
+            val sheetState = rememberModalBottomSheetState()
+            ModalBottomSheet(
+                onDismissRequest = { selectedNode = null },
+                sheetState = sheetState,
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Person, contentDescription = "Peer", tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(
+                                text = selectedNode!!.name,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (selectedNode!!.isDirect) "Direct Connection" else "${selectedNode!!.hopCount} Hops Away",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (selectedNode!!.isDirect) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    NexusCard(elevation = 0.dp, modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Details", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Battery Level:", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${selectedNode!!.batteryLevel}%", fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Last Seen:", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Just now", fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Coordinates:", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${String.format("%.4f", selectedNode!!.latitude)}, ${String.format("%.4f", selectedNode!!.longitude)}", fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                     Spacer(modifier = Modifier.height(32.dp))
                 }
