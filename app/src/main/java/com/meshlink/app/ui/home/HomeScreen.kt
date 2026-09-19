@@ -1,5 +1,9 @@
 package com.meshlink.app.ui.home
 
+import androidx.compose.material.icons.filled.Info
+import com.meshlink.app.ui.components.EmptyStateView
+import com.meshlink.app.ui.components.NexusCard
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -96,16 +100,12 @@ fun HomeScreen(
 
             if (conversations.isEmpty()) {
                 item {
-                    Box(
-                        modifier         = Modifier.fillMaxWidth().height(120.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text  = "No active channels yet",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    EmptyStateView(
+                        icon = Icons.Default.Info,
+                        title = "No active channels",
+                        message = "Connected peers will appear here when they send messages.",
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
                 }
             } else {
                 items(conversations.drop(1).ifEmpty { conversations }, key = { it.deviceId }) { conv ->
@@ -270,11 +270,10 @@ private fun EmptyBroadcastCard() {
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
-        Text(
-            text     = "No broadcasts yet",
-            style    = MaterialTheme.typography.bodyMedium,
-            color    = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(16.dp)
+        EmptyStateView(
+            icon = Icons.Default.Info,
+            title = "No Broadcasts",
+            message = "Global network alerts will appear here."
         )
     }
 }
@@ -286,10 +285,9 @@ private fun NetworkStatusSection(
     scanStrategy: com.meshlink.app.domain.model.ScanStrategy,
     onResumeClick: () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp)
+    NexusCard(
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+        elevation = 0.dp
     ) {
         Text(
             text          = "NETWORK STATUS",

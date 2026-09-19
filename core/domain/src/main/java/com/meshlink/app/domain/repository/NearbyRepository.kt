@@ -88,6 +88,7 @@ interface NearbyRepository {
      * Always resets to fast-scan mode (adaptive backoff reset).
      */
     fun resumeScanning()
+    fun onUserActive()
 
     /**
      * Send an emergency broadcast to ALL currently connected peers and their reachable neighbors.

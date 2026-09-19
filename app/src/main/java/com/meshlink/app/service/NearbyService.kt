@@ -58,11 +58,10 @@ class NearbyService : Service() {
 
                     if (percent < BATTERY_PAUSE_THRESHOLD && !isCharging) {
                         Timber.w("Battery low ($percent%) — pausing scanning")
-                        nearbyRepository.pauseScanning()
                         updateNotification("Battery low — discovery paused")
                     } else if (isCharging) {
                         Timber.i("Charging — resuming scanning")
-                        nearbyRepository.resumeScanning()
+                        nearbyRepository.onUserActive()
                         updateNotification("Looking for people nearby…")
                     }
                 }
@@ -74,7 +73,7 @@ class NearbyService : Service() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == Intent.ACTION_SCREEN_ON) {
                 Timber.d("Screen ON — reset to fast scan")
-                nearbyRepository.resumeScanning()
+                nearbyRepository.onUserActive()
             }
         }
     }

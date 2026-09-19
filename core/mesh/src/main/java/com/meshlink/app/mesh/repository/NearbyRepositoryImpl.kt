@@ -654,6 +654,14 @@ class NearbyRepositoryImpl @Inject constructor(
         Timber.i("AdaptiveScan: scanning RESUMED")
     }
 
+    override fun onUserActive() {
+        adaptiveScanController.onUserActive()
+        if (adaptiveScanController.scanStrategy.value != com.meshlink.app.domain.model.ScanStrategy.PAUSED) {
+            startAdvertisingInternal()
+            startDiscoveryInternal()
+        }
+    }
+
     private fun scheduleRestart() {
         scope.launch {
             adaptiveScanController.onRestartComplete()  // update backoff
