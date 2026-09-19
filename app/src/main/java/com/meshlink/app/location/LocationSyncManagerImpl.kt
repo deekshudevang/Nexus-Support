@@ -52,14 +52,14 @@ class LocationSyncManagerImpl @Inject constructor(
         }
     }
 
-    override suspend fun processIncomingSync(payload: String) {
+    override suspend fun processIncomingSync(payload: String, sourcePeerId: String?) {
         withContext(Dispatchers.IO) {
             try {
                 if (payload.startsWith("{") && JSONObject(payload).optString("type") == "vector_clock") {
-                    handleVectorClockRequest(payload)
+                    handleVectorClockRequest(payload, sourcePeerId)
                 } else if (payload.startsWith("[")) {
                     // Legacy array or standard events payload
-                    handleEventsPayload(payload)
+                    handleEventsPayload(payload, sourcePeerId)
                 }
             } catch (e: Exception) {
                 Timber.e(e, "LocationSyncManager: Failed to process incoming sync payload")
@@ -67,7 +67,7 @@ class LocationSyncManagerImpl @Inject constructor(
         }
     }
 
-    private suspend fun handleVectorClockRequest(payload: String) {
+    private suspend fun handleVectorClockRequest(payload: String, sourcePeerId: String?) {
         val obj = JSONObject(payload)
         val clocksArray = obj.getJSONArray("clocks")
         val peerState = mutableMapOf<String, Int>()
@@ -92,12 +92,14 @@ class LocationSyncManagerImpl @Inject constructor(
 
         if (missingEvents.isNotEmpty()) {
             Timber.i("LocationSyncManager: Sending ${missingEvents.size} missing delta events to peer.")
-            val sourcePeerDeviceId = obj.optString("sourceDeviceId") // Assume we pass it, or we just broadcast back?
-            // Since we receive this over MeshRouter, we don't know exactly who sent it without the packet senderId. 
-            // For MVP, we can just broadcast the missing events, TTL will limit it.
+            // Implement split-horizon: don't send missing events back to the node that just requested them if it's not the target? 
+            // Wait, if they sent the vector clock request, they ARE the target. We DO want to send it to them!
+            // But we should ONLY send to them to save bandwidth, not broadcast to everyone.
             val eventsPayload = buildEventsPayload(missingEvents, decrementTtl = false)
             val peers = nearbyRepository.get().getConnectedPeers()
-            val result = meshRouter.buildLocationSync(eventsPayload, peers)
+            // Send specifically to the source if known, otherwise broadcast
+            val targetPeers = if (sourcePeerId != null) peers.filterValues { it == sourcePeerId } else peers
+            val result = meshRouter.buildLocationSync(eventsPayload, targetPeers)
             if (result is com.meshlink.app.mesh.routing.RoutingResult.Processed) {
                 result.forwardTargets.forEach { target ->
                     nearbyRepository.get().dispatchRawPacket(target.endpointId, target.packet)
@@ -106,7 +108,7 @@ class LocationSyncManagerImpl @Inject constructor(
         }
     }
 
-    private suspend fun handleEventsPayload(payload: String) {
+    private suspend fun handleEventsPayload(payload: String, sourcePeerId: String?) {
         val jsonArray = JSONArray(payload)
         val newEvents = mutableListOf<LocationEventEntity>()
         val eventsToForward = mutableListOf<LocationEventEntity>()
@@ -120,8 +122,8 @@ class LocationSyncManagerImpl @Inject constructor(
             val peerId = obj.getString("peerId")
             val sequenceNumber = obj.getInt("sequenceNumber")
             
-            val highestKnown = locationEventDao.getHighestSequenceNumber(peerId)
-            if (sequenceNumber <= highestKnown) continue
+            // REMOVED: sequenceNumber <= highestKnown check. We rely on isProcessed to avoid duplicates.
+            // This fixes the out-of-order drop bug.
 
             val signature = obj.optString("signature", "")
             val publicKey = obj.optString("publicKey", "")
@@ -175,11 +177,14 @@ class LocationSyncManagerImpl @Inject constructor(
         if (eventsToForward.isNotEmpty()) {
             Timber.i("LocationSyncManager: Flooding ${eventsToForward.size} events with remaining TTL.")
             val floodPayload = buildEventsPayload(eventsToForward, decrementTtl = true)
-            val peers = nearbyRepository.get().getConnectedPeers()
-            val result = meshRouter.buildLocationSync(floodPayload, peers)
-            if (result is com.meshlink.app.mesh.routing.RoutingResult.Processed) {
-                result.forwardTargets.forEach { target ->
-                    nearbyRepository.get().dispatchRawPacket(target.endpointId, target.packet)
+            // Implement split-horizon: Do not broadcast back to the node that sent it to us
+            val peers = nearbyRepository.get().getConnectedPeers().filterValues { it != sourcePeerId }
+            if (peers.isNotEmpty()) {
+                val result = meshRouter.buildLocationSync(floodPayload, peers)
+                if (result is com.meshlink.app.mesh.routing.RoutingResult.Processed) {
+                    result.forwardTargets.forEach { target ->
+                        nearbyRepository.get().dispatchRawPacket(target.endpointId, target.packet)
+                    }
                 }
             }
         }

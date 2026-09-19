@@ -203,7 +203,7 @@ class NearbyRepositoryImpl @Inject constructor(
                 MeshPacket.PacketType.LOCATION_SYNC -> {
                     // Send to MeshRouter to forward (if TTL > 0), then process locally
                     handleRoutedPacket(endpointId, packet)
-                    scope.launch { locationSyncManager.processIncomingSync(packet.content) }
+                    scope.launch { locationSyncManager.processIncomingSync(packet.content, establishedConnections[endpointId]) }
                 }
             }
         }

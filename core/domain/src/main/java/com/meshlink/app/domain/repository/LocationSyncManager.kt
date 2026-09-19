@@ -9,7 +9,7 @@ interface LocationSyncManager {
     /**
      * Processes an incoming LOCATION_SYNC JSON payload.
      */
-    suspend fun processIncomingSync(payload: String)
+    suspend fun processIncomingSync(payload: String, sourcePeerId: String? = null)
 
     /**
      * Broadcasts a new location event to all connected peers.
