@@ -57,10 +57,10 @@ class MeshMapViewModel @Inject constructor(
 
     val uiState: StateFlow<MeshMapUiState> = combine(
         nearbyRepository.connectionStates,
-        nearbyRepository.routesFlow,
+        nearbyRepository.graphFlow,
         _hopLimit,
         pendingMessageRepository.getPendingCountFlow()
-    ) { connStates, routes, hopLimit, pendingCount ->
+    ) { connStates, graph, hopLimit, pendingCount ->
         
         val nodes = mutableListOf<MeshNode>()
         val edges = mutableListOf<MeshEdge>()
@@ -69,43 +69,43 @@ class MeshMapViewModel @Inject constructor(
         val connectedEndpoints = connStates.filterValues { it == ConnectionState.CONNECTED }.keys
         val directDeviceIds = mutableSetOf<String>()
         
-        // Direct nodes have hopCount = 1
-        if (hopLimit >= 1) {
-            for (ep in connectedEndpoints) {
-                val peerDeviceId = nearbyRepository.peerDeviceIdForEndpoint(ep) ?: continue
-                directDeviceIds.add(peerDeviceId)
-                val device = deviceRepository.getDeviceById(peerDeviceId)
-                val name = device?.displayName ?: "Unknown"
-                
-                // For battery, we can look up the route entry if we have one, else default to 100
-                val route = routes[peerDeviceId]?.firstOrNull { it.nextHopEndpointId == ep }
-                val battery = route?.batteryLevel ?: 100
-                
-                nodes.add(MeshNode(peerDeviceId, name, battery, isDirect = true, hopCount = 1, latitude = device?.lastLatitude, longitude = device?.lastLongitude))
-                
-                // Edge from Me -> Direct Neighbor
-                edges.add(MeshEdge(myDeviceId, peerDeviceId))
-            }
+        for (ep in connectedEndpoints) {
+            val peerDeviceId = nearbyRepository.peerDeviceIdForEndpoint(ep) ?: continue
+            directDeviceIds.add(peerDeviceId)
+            val device = deviceRepository.getDeviceById(peerDeviceId)
+            val name = device?.displayName ?: "Unknown"
+            
+            val link = graph[myDeviceId]?.get(peerDeviceId)
+            val battery = link?.battery ?: 100
+            
+            nodes.add(MeshNode(peerDeviceId, name, battery, isDirect = true, hopCount = 1, latitude = device?.lastLatitude, longitude = device?.lastLongitude))
+            edges.add(MeshEdge(myDeviceId, peerDeviceId))
         }
 
-        // Add multi-hop nodes from routes flow
-        for ((destId, routeEntries) in routes) {
+        // Add multi-hop nodes and all edges from the graph
+        val allNodesInGraph = graph.keys + graph.values.flatMap { it.keys }
+        for (destId in allNodesInGraph.distinct()) {
             if (destId == myDeviceId) continue
             if (directDeviceIds.contains(destId)) continue
             
-            val bestRoute = routeEntries.maxByOrNull { it.batteryLevel - (it.hopCount * 10) }
-                ?: continue
-                
-            if (bestRoute.hopCount > hopLimit) continue
-                
             val device = deviceRepository.getDeviceById(destId)
             val name = device?.displayName ?: "Unknown"
-            nodes.add(MeshNode(destId, name, bestRoute.batteryLevel, isDirect = false, hopCount = bestRoute.hopCount, latitude = device?.lastLatitude, longitude = device?.lastLongitude))
             
-            // To figure out the actual relay, we need the stable deviceId of the nextHopEndpointId
-            val relayDeviceId = nearbyRepository.peerDeviceIdForEndpoint(bestRoute.nextHopEndpointId)
-            if (relayDeviceId != null) {
-                edges.add(MeshEdge(relayDeviceId, destId))
+            // We don't have hopCount directly in graphFlow, so we'll just show it as > 1 
+            // and use an average battery if available.
+            val inboundLinks = graph.values.mapNotNull { it[destId] }
+            if (inboundLinks.isNotEmpty()) {
+                val battery = inboundLinks.maxOf { it.battery }
+                nodes.add(MeshNode(destId, name, battery, isDirect = false, hopCount = 2, latitude = device?.lastLatitude, longitude = device?.lastLongitude))
+            }
+        }
+        
+        // Add all edges found in the graph
+        for ((sourceId, links) in graph) {
+            for ((targetId, _) in links) {
+                // To avoid duplicate bidirectional edges, we can enforce order, 
+                // but MapView can draw multiple lines. We'll just add them.
+                edges.add(MeshEdge(sourceId, targetId))
             }
         }
 

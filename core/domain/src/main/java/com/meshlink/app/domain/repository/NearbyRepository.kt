@@ -17,8 +17,8 @@ interface NearbyRepository {
     /** Emits every packet received from any connected endpoint. */
     val incomingPackets: SharedFlow<MeshPacket>
 
-    /** Current routing table state for visualization (destinationDeviceId -> List of RouteEntries). */
-    val routesFlow: StateFlow<Map<String, List<com.meshlink.app.domain.model.DomainRouteEntry>>>
+    /** Current routing table state for visualization (sourceDeviceId -> (targetDeviceId -> DomainLink)). */
+    val graphFlow: StateFlow<Map<String, Map<String, com.meshlink.app.domain.model.DomainLink>>>
 
     /** Current battery optimization scan strategy (e.g. PAUSED). */
     val scanStrategy: StateFlow<com.meshlink.app.domain.model.ScanStrategy>

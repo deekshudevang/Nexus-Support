@@ -96,41 +96,14 @@ class NearbyRepositoryImpl @Inject constructor(
 
     override val scanStrategy = adaptiveScanController.scanStrategy
 
-    override val routesFlow = routingTable.routesFlow
+    override val graphFlow = routingTable.graphFlow
         .map { map ->
-            // Phase 7: Start Meshtastic BLE Scanner
-            meshtasticTransport.startScanning()
-            
-            // Listen to Meshtastic packets
-            scope.launch {
-                meshtasticTransport.receivedPackets.collect { packet ->
-                    val domainPacket = MeshPacket(
-                        senderId = packet.from.toString(),
-                        receiverId = packet.to.toString(),
-                        content = if (packet.hasDecoded()) packet.decoded.payload.toStringUtf8() else "",
-                        timestamp = packet.rxTime * 1000L,
-                        type = MeshPacket.PacketType.ROUTED_CHAT,
-                        messageId = packet.id.toString(),
-                        originId = packet.from.toString(),
-                        finalDestId = packet.to.toString(),
-                        hopCount = 0,
-                        maxHops = packet.hopLimit,
-                        priority = packet.priority
-                    )
-                    
-                    val result = meshRouter.route("meshtastic", domainPacket, _connectionStates.value.mapValues { it.key })
-                    handleRoutingResult(result, domainPacket, "meshtastic")
-                    _incomingPackets.emit(domainPacket)
-                }
-            }
-
-            map.mapValues { (_, entries) ->
-                entries.map {
-                    com.meshlink.app.domain.model.DomainRouteEntry(
-                        nextHopEndpointId = it.nextHopEndpointId,
-                        batteryLevel = it.batteryLevel,
-                        hopCount = it.hopCount,
-                        addedAt = it.addedAt
+            map.mapValues { (_, links) ->
+                links.mapValues { (_, link) ->
+                    com.meshlink.app.domain.model.DomainLink(
+                        source = link.source,
+                        target = link.target,
+                        battery = link.battery
                     )
                 }
             }
@@ -190,6 +163,32 @@ class NearbyRepositoryImpl @Inject constructor(
                         }
                     }
                 }
+            }
+        }
+
+        // Phase 7: Start Meshtastic BLE Scanner
+        meshtasticTransport.startScanning()
+        
+        // Listen to Meshtastic packets
+        scope.launch {
+            meshtasticTransport.receivedPackets.collect { packet ->
+                val domainPacket = MeshPacket(
+                    senderId = packet.from.toString(),
+                    receiverId = packet.to.toString(),
+                    content = if (packet.hasDecoded()) packet.decoded.payload.toStringUtf8() else "",
+                    timestamp = packet.rxTime * 1000L,
+                    type = MeshPacket.PacketType.ROUTED_CHAT,
+                    messageId = packet.id.toString(),
+                    originId = packet.from.toString(),
+                    finalDestId = packet.to.toString(),
+                    hopCount = 0,
+                    maxHops = packet.hopLimit,
+                    priority = packet.priority
+                )
+                
+                val result = meshRouter.route("meshtastic", domainPacket, _connectionStates.value.mapValues { it.key })
+                handleRoutingResult(result, domainPacket, "meshtastic")
+                _incomingPackets.emit(domainPacket)
             }
         }
     }
