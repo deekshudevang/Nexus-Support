@@ -85,7 +85,6 @@ class NearbyRepositoryImpl @Inject constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    // ── State ─────────────────────────────────────────────────────────────────
 
     private val _discoveredDevices = MutableStateFlow<List<DiscoveredDevice>>(emptyList())
     override val discoveredDevices: StateFlow<List<DiscoveredDevice>> = _discoveredDevices.asStateFlow()
@@ -125,7 +124,6 @@ class NearbyRepositoryImpl @Inject constructor(
     private val endpointIdToDeviceId = ConcurrentHashMap<String, String>()
 
 
-    // ── Nearby callbacks ──────────────────────────────────────────────────────
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
@@ -298,7 +296,6 @@ class NearbyRepositoryImpl @Inject constructor(
         }
     }
 
-    // ── Handshake ─────────────────────────────────────────────────────────────
 
     private fun sendHandshakePacket(endpointId: String) {
         val packet  = handshakeManager.createHandshakePacket(localDeviceId, endpointId)
@@ -351,7 +348,6 @@ class NearbyRepositoryImpl @Inject constructor(
         }
     }
 
-    // ── Phase 4: incoming routed packet ──────────────────────────────────────
 
     /**
      * All CHAT / ROUTED_CHAT / BROADCAST packets come here.
@@ -443,7 +439,6 @@ class NearbyRepositoryImpl @Inject constructor(
         _incomingPackets.emit(packet.copy(content = plaintextStr))
     }
 
-    // ── Public API ────────────────────────────────────────────────────────────
 
     override fun startAdvertisingAndDiscovery() {
         startAdvertisingInternal()
@@ -612,7 +607,6 @@ class NearbyRepositoryImpl @Inject constructor(
             .toMap()
     }
 
-    // ── Transport dispatch ────────────────────────────────────────────────────
 
     /**
      * Sends a [ForwardTarget]'s packet over Nearby Connections.
@@ -640,7 +634,6 @@ class NearbyRepositoryImpl @Inject constructor(
         dispatchToNearby(ForwardTarget(endpointId, packet))
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
 
     /**
      * Find the best endpoint to route an ACK back to [originDeviceId].

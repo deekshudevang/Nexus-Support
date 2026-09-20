@@ -90,7 +90,6 @@ private fun deviceIcon(index: Int): ImageVector = when (index % 3) {
     else -> Icons.Default.SignalCellularAlt
 }
 
-// ── Screen ────────────────────────────────────────────────────────────────────
 
 @Composable
 fun DiscoveryScreen(
@@ -112,13 +111,10 @@ fun DiscoveryScreen(
             .fillMaxSize()
             .background(DarkBackground)
     ) {
-        // ── Header (dark) ──────────────────────────────────────────────────────
         DeviceListHeader(onSettingsClick = onSettingsClick)
 
-        // ── Network status card ────────────────────────────────────────────────
         NetworkStatusCard(deviceCount = devices.size)
 
-        // ── Peers in range section ─────────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -136,7 +132,6 @@ fun DiscoveryScreen(
             ScanningBadge()
         }
 
-        // ── Device list ────────────────────────────────────────────────────────
         if (devices.isEmpty()) {
             Box(
                 modifier         = Modifier.weight(1f).fillMaxWidth(),
@@ -185,7 +180,6 @@ fun DiscoveryScreen(
     }
 }
 
-// ── Header ────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun DeviceListHeader(onSettingsClick: () -> Unit) {
@@ -227,7 +221,6 @@ private fun DeviceListHeader(onSettingsClick: () -> Unit) {
     }
 }
 
-// ── Network status card ───────────────────────────────────────────────────────
 
 @Composable
 private fun NetworkStatusCard(deviceCount: Int) {
@@ -287,7 +280,6 @@ private fun NetworkStatusCard(deviceCount: Int) {
     }
 }
 
-// ── Scanning badge ────────────────────────────────────────────────────────────
 
 @Composable
 private fun ScanningBadge() {
@@ -311,7 +303,6 @@ private fun ScanningBadge() {
     }
 }
 
-// ── Device card ───────────────────────────────────────────────────────────────
 
 @Composable
 private fun DeviceCard(

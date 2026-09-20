@@ -68,10 +68,8 @@ fun BroadcastScreen(
             .fillMaxSize()
             .background(LightBackground)
     ) {
-        // ── Top bar ──────────────────────────────────────────────────────────
         BroadcastTopBar(onBackClick = onBackClick)
 
-        // ── Content ──────────────────────────────────────────────────────────
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -117,7 +115,6 @@ fun BroadcastScreen(
 
             Spacer(Modifier.height(32.dp))
 
-            // ── Message input ────────────────────────────────────────────────
             Text(
                 text = "MESSAGE",
                 style = MaterialTheme.typography.labelLarge,
@@ -160,7 +157,6 @@ fun BroadcastScreen(
                 }
             }
 
-            // ── Error message ────────────────────────────────────────────────
             state.error?.let { error ->
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -173,7 +169,6 @@ fun BroadcastScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            // ── Character count ──────────────────────────────────────────────
             Text(
                 text = "${state.message.length} characters",
                 style = MaterialTheme.typography.labelSmall,
@@ -183,7 +178,6 @@ fun BroadcastScreen(
 
             Spacer(Modifier.weight(1f))
 
-            // ── Success feedback ─────────────────────────────────────────────
             AnimatedVisibility(
                 visible = state.isSent,
                 enter = fadeIn() + scaleIn(
@@ -199,7 +193,6 @@ fun BroadcastScreen(
             Spacer(Modifier.height(16.dp))
         }
 
-        // ── Send button ──────────────────────────────────────────────────────
         BroadcastSendButton(
             isSending = state.isSending,
             isSent = state.isSent,
@@ -208,7 +201,6 @@ fun BroadcastScreen(
     }
 }
 
-// ── Top bar ──────────────────────────────────────────────────────────────────
 
 @Composable
 private fun BroadcastTopBar(onBackClick: () -> Unit) {
@@ -241,7 +233,6 @@ private fun BroadcastTopBar(onBackClick: () -> Unit) {
     Box(Modifier.fillMaxWidth().height(1.dp).background(LightBorder))
 }
 
-// ── Success card ─────────────────────────────────────────────────────────────
 
 @Composable
 private fun SuccessCard() {
@@ -289,7 +280,6 @@ private fun SuccessCard() {
     }
 }
 
-// ── Send button ──────────────────────────────────────────────────────────────
 
 @Composable
 private fun BroadcastSendButton(

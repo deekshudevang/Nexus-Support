@@ -27,7 +27,6 @@ fun MeshLinkNavHost(
         startDestination = Screen.Home.route,
         modifier         = modifier
     ) {
-        // ── CHATS tab ─────────────────────────────────────────────────────────
         composable(Screen.Home.route) {
             HomeScreen(
                 onConversationClick = { deviceId, deviceName ->
@@ -42,7 +41,6 @@ fun MeshLinkNavHost(
             )
         }
 
-        // ── DISCOVER tab ──────────────────────────────────────────────────────
         composable(Screen.Discovery.route) {
             DiscoveryScreen(
                 onDeviceClick = { endpointId, deviceName ->
@@ -54,7 +52,6 @@ fun MeshLinkNavHost(
             )
         }
 
-        // ── SOS tab ───────────────────────────────────────────────────────────
         composable(Screen.Sos.route) {
             val viewModel: com.meshlink.app.ui.sos.SosViewModel = androidx.hilt.navigation.compose.hiltViewModel()
             SosScreen(
@@ -64,28 +61,24 @@ fun MeshLinkNavHost(
             )
         }
 
-        // ── MAP tab ───────────────────────────────────────────────────────────
         composable(Screen.Map.route) {
             com.meshlink.app.ui.map.MeshMapScreen(
                 onNavigateToDownloads = { navController.navigate(Screen.MapDownload.route) }
             )
         }
 
-        // ── Map Download (full-screen, no bottom bar) ─────────────────────────
         composable(Screen.MapDownload.route) {
             com.meshlink.app.ui.map.MapDownloadScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
 
-        // ── Medical Profile (full-screen, no bottom bar) ──────────────────────
         composable(Screen.MedicalProfile.route) {
             MedicalProfileScreen(
                 onBackClick = { navController.popBackStack() }
             )
         }
 
-        // ── Settings (full-screen, no bottom bar) ─────────────────────────────
         composable("settings") {
             SettingsScreen(
                 onBackClick = { navController.popBackStack() },
@@ -94,28 +87,24 @@ fun MeshLinkNavHost(
             )
         }
 
-        // ── Broadcast (full-screen, no bottom bar) ────────────────────────────
         composable(Screen.Broadcast.route) {
             BroadcastScreen(
                 onBackClick = { navController.popBackStack() }
             )
         }
 
-        // ── Diagnostics (full-screen, no bottom bar) ──────────────────────────
         composable(Screen.Diagnostics.route) {
             com.meshlink.app.ui.diagnostics.DiagnosticsScreen(
                 onBackClick = { navController.popBackStack() }
             )
         }
 
-        // ── Debug Dashboard (full-screen, no bottom bar) ──────────────────────
         composable(Screen.DebugDashboard.route) {
             com.meshlink.app.ui.debug.DebugDashboardScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
 
-        // ── Emergency Guide (full-screen) ─────────────────────────────────────
         composable(Screen.EmergencyGuide.route) {
             EmergencyGuideScreen(
                 onNavigateBack = { navController.popBackStack() },
@@ -123,21 +112,18 @@ fun MeshLinkNavHost(
             )
         }
 
-        // ── Node Dashboard (full-screen) ──────────────────────────────────────
         composable(Screen.NodeDashboard.route) {
             NodeDashboardScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
 
-        // ── AI Assistant (full-screen) ────────────────────────────────────────
         composable(Screen.AiAssistant.route) {
             com.meshlink.app.ai.AiAssistantScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
 
-        // ── Chat (full-screen, no bottom bar) ─────────────────────────────────
         composable(
             route     = Screen.Chat.route,
             arguments = listOf(

@@ -39,7 +39,6 @@ class SessionKeyStore @Inject constructor() {
         }
     )
 
-    // ── Session key lifecycle ─────────────────────────────────────────────────
 
     fun storeSessionKey(endpointId: String, key: SecretKey) {
         sessionKeys[endpointId] = key
@@ -60,7 +59,6 @@ class SessionKeyStore @Inject constructor() {
         Timber.d("SessionKeyStore: cleared session for $endpointId")
     }
 
-    // ── Replay prevention ─────────────────────────────────────────────────────
 
     /**
      * Returns true and records [messageId] if it is new (first time seen).

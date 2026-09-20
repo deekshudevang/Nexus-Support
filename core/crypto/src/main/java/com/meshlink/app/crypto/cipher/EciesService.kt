@@ -151,7 +151,6 @@ class EciesService @Inject constructor(
     fun decryptFromBase64(base64Content: String): ByteArray? =
         decrypt(Base64.decode(base64Content, Base64.NO_WRAP))
 
-    // ── HKDF-SHA256 (RFC 5869) — same implementation as HandshakeManager ─────
 
     private fun hkdf(
         inputKeyMaterial: ByteArray,

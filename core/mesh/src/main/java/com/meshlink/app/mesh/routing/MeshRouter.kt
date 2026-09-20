@@ -75,7 +75,6 @@ class MeshRouter @Inject constructor(
     /** Rate-limit table: peerDeviceId → timestamp of last accepted heartbeat. */
     private val heartbeatLastSeen = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
-    // ── Incoming packet routing ───────────────────────────────────────────────
 
     /**
      * Process an incoming [packet] received from [fromEndpointId].
@@ -94,7 +93,8 @@ class MeshRouter @Inject constructor(
     ): RoutingResult = withContext(Dispatchers.IO) {
 
         // 1. Deduplication — drop packets we've already seen (loop prevention)
-        if (seenMessageCache.isAlreadySeen(packet.messageId)) {
+        // NOTE: Relying strictly on messageId for dedup. A malicious node could pre-flood fake messageIds to suppress delivery of real messages later.
+        if (seenMessageCache.isSeen(packet.messageId)) {
             Timber.d("MeshRouter: DROP duplicate messageId=${packet.messageId}")
             return@withContext RoutingResult.Drop
         }
@@ -155,7 +155,6 @@ class MeshRouter @Inject constructor(
         )
     }
 
-    // ── Outgoing message routing ──────────────────────────────────────────────
 
     /**
      * Encrypt and route an outgoing message from the local device.
@@ -179,7 +178,6 @@ class MeshRouter @Inject constructor(
         val messageId         = UUID.randomUUID().toString()
         val localDisplayName  = userProfileManager.getDisplayName()
 
-        // ── Direct connection path (CHAT) ─────────────────────────────────────
         val directEndpoint = connectedPeers.entries
             .firstOrNull { it.value == finalDestDeviceId }?.key
 
@@ -225,7 +223,6 @@ class MeshRouter @Inject constructor(
             }
         }
 
-        // ── Multi-hop path (ROUTED_CHAT via ECIES) ────────────────────────────
         val destDevice = deviceRepository.getDeviceById(finalDestDeviceId)
 
         if (destDevice != null) {
@@ -283,12 +280,10 @@ class MeshRouter @Inject constructor(
             )
         }
 
-        // ── Unknown destination ───────────────────────────────────────────────
         Timber.w("MeshRouter: unknown destination $finalDestDeviceId — no public key stored")
         RoutingResult.UnknownDestination(finalDestDeviceId)
     }
 
-    // ── Broadcast ─────────────────────────────────────────────────────────────
 
     /**
      * Build a [PacketType.BROADCAST] packet originating from this device and flood it.
@@ -452,7 +447,6 @@ class MeshRouter @Inject constructor(
         return RoutingResult.Processed(localMessage = null, forwardTargets = targets)
     }
 
-    // ── Pending queue flushing ────────────────────────────────────────────────
 
     /**
      * Called when a new peer connects. Returns [ForwardTarget]s for any queued messages
@@ -494,7 +488,6 @@ class MeshRouter @Inject constructor(
         targets
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
 
     private suspend fun decryptAndPersist(packet: MeshPacket): Message? {
         return when (packet.type) {
@@ -704,6 +697,7 @@ class MeshRouter @Inject constructor(
     }
 
     private suspend fun enqueuePending(packet: MeshPacket, targetDeviceId: String, now: Long) {
+        // HACK: Hardcoding TTL to 48 hours for now. Should really be a node-configurable policy based on battery/storage limits.
         pendingMessageRepository.enqueue(
             PendingMessage(
                 id             = UUID.randomUUID().toString(),
@@ -717,7 +711,6 @@ class MeshRouter @Inject constructor(
     }
 }
 
-// ── Routing result ────────────────────────────────────────────────────────────
 
 /** Represents what [NearbyRepositoryImpl] should do after [MeshRouter] processes a packet. */
 sealed class RoutingResult {
@@ -742,7 +735,6 @@ data class ForwardTarget(
     val packet: MeshPacket
 )
 
-// ── Serialization helpers (extension functions) ────────────────────────────
 
 private fun MeshPacket.toJson(): String {
     val sb = StringBuilder()

@@ -41,7 +41,6 @@ class HandshakeManager @Inject constructor(
         private const val SESSION_KEY_BYTES = 32   // AES-256
     }
 
-    // ── Outbound handshake ────────────────────────────────────────────────────
 
     /**
      * Creates the HANDSHAKE packet this device should send immediately after
@@ -57,7 +56,6 @@ class HandshakeManager @Inject constructor(
             messageId  = UUID.randomUUID().toString()
         )
 
-    // ── Inbound handshake ─────────────────────────────────────────────────────
 
     /**
      * Processes a HANDSHAKE packet received from [endpointId].
@@ -70,6 +68,8 @@ class HandshakeManager @Inject constructor(
             val peerPubKeyBytes = Base64.decode(peerPublicKeyBase64, Base64.NO_WRAP)
             
             // TOFU pinning
+            // NOTE: TOFU pinning is inherently vulnerable to first-contact MITM. 
+            // SAS UI verification (computeSAS) must be completed by the user to actually close this gap.
             val existingDevice = deviceRepository.getDeviceById(peerDeviceId)
             if (existingDevice != null && !existingDevice.publicKey.contentEquals(peerPubKeyBytes)) {
                 Timber.e("MITM alert: Key mismatch for device $peerDeviceId at endpoint $endpointId!")
@@ -107,14 +107,12 @@ class HandshakeManager @Inject constructor(
         }
     }
 
-    // ── Convenience delegations ───────────────────────────────────────────────
 
     fun isHandshakeComplete(endpointId: String): Boolean =
         sessionKeyStore.isHandshakeComplete(endpointId)
 
     fun clearSession(endpointId: String) = sessionKeyStore.clearSession(endpointId)
 
-    // ── HKDF-SHA256 ───────────────────────────────────────────────────────────
 
     /**
      * RFC 5869 HKDF using HMAC-SHA256.
@@ -148,7 +146,6 @@ class HandshakeManager @Inject constructor(
         return output.toByteArray().copyOfRange(0, length)
     }
 
-    // ── SAS Computation ───────────────────────────────────────────────────────
 
     /**
      * Computes a Short Authentication String (SAS) from the two public keys.
@@ -170,7 +167,6 @@ class HandshakeManager @Inject constructor(
         return String.format("%06d", positiveNum % 1000000)
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     /**
      * Lexicographic sort: ensures HKDF salt is identical on both devices,

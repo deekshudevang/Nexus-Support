@@ -30,7 +30,6 @@ data class MeshPacket(
     val type: PacketType = PacketType.CHAT,
     val messageId: String = UUID.randomUUID().toString(),
 
-    // ── Phase 4 routing metadata ──────────────────────────────────────────────
     /** Original author — immutable across all hops. Same as senderId for first hop. */
     val originId: String = senderId,
     /** Ultimate destination deviceId. BROADCAST_DEST means flood to all reachable nodes. */
@@ -44,7 +43,6 @@ data class MeshPacket(
     /** Ordered list of relaying deviceIds (not including origin or final destination). */
     val routeHistory: List<String> = emptyList(),
 
-    // ── User identity ─────────────────────────────────────────────────────────
     /** Human-readable display name of the original sender. Travels with the packet. */
     val senderName: String = ""
 ) {

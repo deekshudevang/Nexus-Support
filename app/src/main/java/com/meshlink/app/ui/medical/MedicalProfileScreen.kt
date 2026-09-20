@@ -58,7 +58,6 @@ import com.meshlink.app.ui.theme.TextPrimary
 import com.meshlink.app.ui.theme.TextSecondary
 import com.meshlink.app.ui.theme.MeshLinkLightTheme
 
-// ── Screen ────────────────────────────────────────────────────────────────────
 
 @Composable
 fun MedicalProfileScreen(
@@ -79,14 +78,12 @@ fun MedicalProfileScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // ── Top bar ────────────────────────────────────────────────────────
             MedicalTopBar(onBackClick = onBackClick)
 
             LazyColumn(
                 modifier      = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
-                // ── Full Identity ──────────────────────────────────────────────
                 item {
                     SectionLabel("FULL IDENTITY")
                     IdentityCard(
@@ -95,7 +92,6 @@ fun MedicalProfileScreen(
                     )
                 }
 
-                // ── Blood Group ────────────────────────────────────────────────
                 item {
                     SectionLabel("BLOOD GROUP")
                     BloodGroupGrid(
@@ -104,12 +100,10 @@ fun MedicalProfileScreen(
                     )
                 }
 
-                // ── Mesh Ready card ────────────────────────────────────────────
                 item {
                     MeshReadyCard()
                 }
 
-                // ── Critical Allergies ─────────────────────────────────────────
                 item {
                     SectionLabel("CRITICAL ALLERGIES")
                     ProfileInputField(
@@ -120,7 +114,6 @@ fun MedicalProfileScreen(
                     )
                 }
 
-                // ── Current Medications ────────────────────────────────────────
                 item {
                     SectionLabel("CURRENT MEDICATIONS")
                     ProfileInputField(
@@ -131,7 +124,6 @@ fun MedicalProfileScreen(
                     )
                 }
 
-                // ── Emergency Contacts ─────────────────────────────────────────
                 item {
                     Row(
                         modifier = Modifier
@@ -175,7 +167,6 @@ fun MedicalProfileScreen(
                 item { Spacer(Modifier.height(100.dp)) }  // bottom padding for Save button
             }
 
-            // ── Save Profile button ────────────────────────────────────────────
             SaveProfileButton(
                 isSaved = state.isSaved,
                 onClick = viewModel::saveProfile
@@ -184,7 +175,6 @@ fun MedicalProfileScreen(
     }
 }
 
-// ── Top bar ───────────────────────────────────────────────────────────────────
 
 @Composable
 private fun MedicalTopBar(onBackClick: () -> Unit) {
@@ -221,7 +211,6 @@ private fun MedicalTopBar(onBackClick: () -> Unit) {
     Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
 }
 
-// ── Section label ─────────────────────────────────────────────────────────────
 
 @Composable
 private fun SectionLabel(text: String) {
@@ -235,7 +224,6 @@ private fun SectionLabel(text: String) {
     )
 }
 
-// ── Identity card ─────────────────────────────────────────────────────────────
 
 @Composable
 private fun IdentityCard(name: String, onChange: (String) -> Unit) {
@@ -291,7 +279,6 @@ private fun IdentityCard(name: String, onChange: (String) -> Unit) {
     }
 }
 
-// ── Blood group grid ──────────────────────────────────────────────────────────
 
 @Composable
 private fun BloodGroupGrid(selected: String, onSelected: (String) -> Unit) {
@@ -340,7 +327,6 @@ private fun BloodGroupGrid(selected: String, onSelected: (String) -> Unit) {
     }
 }
 
-// ── Mesh Ready card ───────────────────────────────────────────────────────────
 
 @Composable
 private fun MeshReadyCard() {
@@ -381,7 +367,6 @@ private fun MeshReadyCard() {
     }
 }
 
-// ── Profile input field ───────────────────────────────────────────────────────
 
 @Composable
 private fun ProfileInputField(
@@ -419,7 +404,6 @@ private fun ProfileInputField(
     }
 }
 
-// ── Emergency contact row ─────────────────────────────────────────────────────
 
 @Composable
 private fun ContactRow(contact: EmergencyContact) {
@@ -480,7 +464,6 @@ private fun ContactRow(contact: EmergencyContact) {
     }
 }
 
-// ── Save profile button ───────────────────────────────────────────────────────
 
 @Composable
 private fun SaveProfileButton(isSaved: Boolean, onClick: () -> Unit) {

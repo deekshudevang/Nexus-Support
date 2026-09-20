@@ -6,7 +6,6 @@ import androidx.compose.ui.graphics.Color
 //  Startup SaaS Design System — MeshLink
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ── Core Palette ─────────────────────────────────────────────────────────────
 val Primary            = Color(0xFF00E5FF)   // Neon Cyan / Electric Blue
 val PrimaryDark        = Color(0xFF00B2CC)   // Deeper cyan
 val PrimaryLight       = Color(0x3300E5FF)   // Light tint for containers (20% opacity)
@@ -24,39 +23,32 @@ val TertiaryContainer  = Color(0x4D00FFA3)   // Green container
 
 val Neutral            = Color(0xFFFFFFFF)   // Near-white — primary text on dark
 
-// ── Backgrounds & Surfaces (DARK MODE) ───────────────────────────────────────
 val AppBackground      = Color(0xFF000000)   // True OLED Black
 val CardSurface        = Color(0xFF0F0F13)   // Elevated sleek surface for cards
 val SurfaceVariant     = Color(0xFF16161A)   // Input fields, secondary surfaces
 val SurfaceBright      = Color(0xFF1F1F24)   // Elevated bright surface
 
-// ── Text Colors ──────────────────────────────────────────────────────────────
 val TextPrimary        = Color(0xFFF0F0F0)   // Primary text (Soft White)
 val TextSecondary      = Color(0xFFA0A0A5)   // Secondary / body text
 val TextMuted          = Color(0xFF6B6B70)   // Placeholder, disabled text
 val TextOnPrimary      = Color(0xFFFFFFFF)   // White text on primary buttons
 val TextOnPrimaryWhite = Color(0xFFFFFFFF)   // White text on primary buttons
 
-// ── Borders & Dividers ───────────────────────────────────────────────────────
 val Outline            = Color(0xFF2C2C32)   // Dividers, card borders
 val OutlineVariant     = Color(0xFF1F1F24)   // Subtle dividers
 
-// ── Status Colors ────────────────────────────────────────────────────────────
 val StatusConnected    = Tertiary             // Green — connected
 val StatusConnecting   = Secondary            // Purple — connecting
 val StatusOffline      = Color(0xFF5A5A60)    // Gray — offline
 val StatusError        = Color(0xFFFF3B30)    // iOS Red — error / disconnected
 
-// ── Distance Badges ──────────────────────────────────────────────────────────
 val BadgeNear          = Tertiary             // Green
 val BadgeFar           = Primary              // Blue
 val BadgeVeryFar       = Color(0xFF5A5A60)    // Gray
 
-// ── Chat Bubbles ─────────────────────────────────────────────────────────────
 val BubbleSent         = Primary              // Primary sent bubble
 val BubbleReceived     = SurfaceVariant       // Dark gray received bubble
 
-// ── Legacy Aliases (backward compat — maps old names to Figma system) ────────
 val EmergencyRed          = StatusError
 val EmergencyRedDark      = Color(0xFFD32F2F)
 val EmergencyRedSurface   = StatusError

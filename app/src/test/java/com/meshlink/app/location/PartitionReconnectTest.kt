@@ -158,7 +158,6 @@ class PartitionReconnectTest {
         }
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private fun fakeEvent(peerId: String, seq: Int) = LocationEventEntity(
         eventId = "evt-$seq",

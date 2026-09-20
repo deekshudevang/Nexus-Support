@@ -191,7 +191,6 @@ class RoutingTable @Inject constructor(
         publishState()
     }
 
-    // ── Node Status / Resource Coordination (Phase 5) ─────────────────────────
 
     private val nodeStatusMap = HashMap<String, NodeStatus>()
 

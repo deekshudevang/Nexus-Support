@@ -78,7 +78,6 @@ class NearbyService : Service() {
         }
     }
 
-    // ── Lifecycle ────────────────────────────────────────────────────────────
 
     override fun onCreate() {
         super.onCreate()
@@ -112,7 +111,6 @@ class NearbyService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private fun registerReceivers() {
         // Android 14+ (API 34) requires RECEIVER_EXPORTED / RECEIVER_NOT_EXPORTED flag.

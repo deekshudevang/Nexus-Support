@@ -38,7 +38,6 @@ import java.util.UUID
  */
 class LargeScaleMeshSimTest {
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private fun buildRouter(
         deviceId: String,
@@ -92,7 +91,6 @@ class LargeScaleMeshSimTest {
         messageId = UUID.randomUUID().toString() // unique per packet so SeenCache doesn't block them
     )
 
-    // ── Test 1: 20-node linear chain ─────────────────────────────────────────
 
     @Test
     fun `broadcast travels across 20-node linear chain within TTL`() = runTest {
@@ -126,7 +124,6 @@ class LargeScaleMeshSimTest {
         assertEquals("All 20 nodes must process the broadcast", n, delivered)
     }
 
-    // ── Test 2: Flood reaches every node exactly once in dense mesh ──────────
 
     @Test
     fun `broadcast in 20-node fully-connected graph processes each node exactly once`() = runTest {
@@ -166,7 +163,6 @@ class LargeScaleMeshSimTest {
         assertEquals("19 duplicate deliveries must be dropped", 19, droppedCount)
     }
 
-    // ── Test 3: Network partition + reconnect ─────────────────────────────────
 
     @Test
     fun `packet is stored-and-forwarded across a partition then delivered on reconnect`() = runTest {
@@ -197,7 +193,6 @@ class LargeScaleMeshSimTest {
         assertTrue("ForwardTargets must include PART_B endpoint", processed!!.forwardTargets.isNotEmpty())
     }
 
-    // ── Test 4: Routing table convergence after 10 churn events ──────────────
 
     @Test
     fun `routing table converges after 10 rapid join-leave events`() = runTest {
@@ -219,7 +214,6 @@ class LargeScaleMeshSimTest {
         }
     }
 
-    // ── Test 5: Heartbeat rate-limit under heavy flood ────────────────────────
 
     @Test
     fun `1000 heartbeats from same peer within rate-limit window are all dropped after first`() = runTest {
@@ -237,7 +231,6 @@ class LargeScaleMeshSimTest {
         assertEquals("No additional heartbeats should be accepted past the rate limit", 0, acceptedCount)
     }
 
-    // ── Test 6: TTL wall ──────────────────────────────────────────────────────
 
     @Test
     fun `packet with maxHops=3 dies before crossing a 4-hop chain`() = runTest {
@@ -264,7 +257,6 @@ class LargeScaleMeshSimTest {
         assertTrue("Packet must die at or before hop 3 (0-indexed)", survivedUntil < 3)
     }
 
-    // ── Test 7: Split-horizon — no echo back to sender ───────────────────────
 
     @Test
     fun `broadcast is NOT forwarded back to the endpoint it arrived from`() = runTest {

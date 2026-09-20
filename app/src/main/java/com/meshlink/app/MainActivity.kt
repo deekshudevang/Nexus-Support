@@ -119,7 +119,6 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 } else {
-                    // ── Permission gate screen ────────────────────────────────
                     Scaffold(containerColor = MaterialTheme.colorScheme.background) { innerPadding ->
                         Column(
                             modifier = Modifier
