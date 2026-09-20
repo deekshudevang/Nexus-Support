@@ -2,20 +2,20 @@
 
 This matrix tracks the validation of mesh capabilities on physical hardware across different network scales. All simulation-based testing is explicitly labeled or marked as UNVALIDATED in the context of real-device behavior.
 
-| Scenario | 2 Nodes | 3 Nodes | 10 Nodes | 20 Nodes |
+| Scenario | 2 Nodes | 3 Nodes | 10 Nodes (Simulated) | 20 Nodes (Simulated) |
 |---|---|---|---|---|
-| **Discovery (BLE / Wi-Fi Direct)** | VALIDATED (Field Test) | UNVALIDATED | UNVALIDATED | UNVALIDATED |
-| **Direct Messaging** | VALIDATED (Field Test) | UNVALIDATED | UNVALIDATED | UNVALIDATED |
-| **Multi-Hop Messaging** | UNVALIDATED | VALIDATED (Field Test) | UNVALIDATED | UNVALIDATED |
-| **Message Deduplication** | UNVALIDATED | UNVALIDATED | UNVALIDATED | UNVALIDATED |
-| **TTL Expiry (Max Hops)** | UNVALIDATED | UNVALIDATED | UNVALIDATED | UNVALIDATED |
-| **Store & Forward (48h Queue)** | UNVALIDATED | UNVALIDATED | UNVALIDATED | UNVALIDATED |
-| **Network Partitions** | UNVALIDATED | UNVALIDATED | UNVALIDATED | UNVALIDATED |
-| **Partition Reconnect & Sync** | UNVALIDATED | UNVALIDATED | UNVALIDATED | UNVALIDATED |
-| **SOS Propagation** | UNVALIDATED | UNVALIDATED | UNVALIDATED | UNVALIDATED |
-| **Packet Flooding Resilience** | UNVALIDATED | UNVALIDATED | UNVALIDATED | UNVALIDATED |
-| **Battery Impact / Hour** | UNVALIDATED | UNVALIDATED | UNVALIDATED | UNVALIDATED |
-| **Long Duration Run (>24h)** | UNVALIDATED | UNVALIDATED | UNVALIDATED | UNVALIDATED |
+| **Discovery (BLE / Wi-Fi Direct)** | VALIDATED (Field Test) | UNVALIDATED | [SIMULATOR] N/A | [SIMULATOR] N/A |
+| **Direct Messaging** | VALIDATED (Field Test) | UNVALIDATED | [SIMULATOR] N/A | [SIMULATOR] N/A |
+| **Multi-Hop Messaging** | UNVALIDATED | VALIDATED (Field Test) | [SIMULATOR] `LargeScaleMeshSimTest.broadcast travels across 20-node linear chain` | [SIMULATOR] `LargeScaleMeshSimTest.broadcast travels across 20-node linear chain` |
+| **Message Deduplication** | UNVALIDATED | UNVALIDATED | [SIMULATOR] `LargeScaleMeshSimTest.cache evicts oldest entry` | [SIMULATOR] `LargeScaleMeshSimTest.cache evicts oldest entry` |
+| **TTL Expiry (Max Hops)** | UNVALIDATED | UNVALIDATED | [SIMULATOR] `LargeScaleMeshSimTest.packet dies before crossing a 4-hop chain` | [SIMULATOR] `LargeScaleMeshSimTest.packet dies before crossing a 4-hop chain` |
+| **Store & Forward (48h Queue)** | UNVALIDATED | UNVALIDATED | [SIMULATOR] `LargeScaleMeshSimTest.packet is stored as pending when next hop disappears` | [SIMULATOR] `LargeScaleMeshSimTest.packet is stored as pending when next hop disappears` |
+| **Network Partitions** | UNVALIDATED | UNVALIDATED | [SIMULATOR] `LargeScaleMeshSimTest.packet is stored-and-forwarded across a partition` | [SIMULATOR] `LargeScaleMeshSimTest.packet is stored-and-forwarded across a partition` |
+| **Partition Reconnect & Sync** | UNVALIDATED | UNVALIDATED | [SIMULATOR] `LargeScaleMeshSimTest.routing table converges after 10 rapid join-leave events` | [SIMULATOR] `LargeScaleMeshSimTest.routing table converges after 10 rapid join-leave events` |
+| **SOS Propagation** | UNVALIDATED | UNVALIDATED | [SIMULATOR] N/A | [SIMULATOR] N/A |
+| **Packet Flooding Resilience** | UNVALIDATED | UNVALIDATED | [SIMULATOR] `LargeScaleMeshSimTest.broadcast in 20-node fully-connected graph` | [SIMULATOR] `LargeScaleMeshSimTest.broadcast in 20-node fully-connected graph` |
+| **Battery Impact / Hour** | UNVALIDATED | UNVALIDATED | [SIMULATOR] N/A | [SIMULATOR] N/A |
+| **Long Duration Run (>24h)** | UNVALIDATED | UNVALIDATED | [SIMULATOR] N/A | [SIMULATOR] N/A |
 
 ---
 **Field Test Specifications:**
