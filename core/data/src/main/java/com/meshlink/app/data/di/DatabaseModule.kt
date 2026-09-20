@@ -60,13 +60,13 @@ object DatabaseModule {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
 
-        val passKey = "db_passphrase"
-        var passphrase = sharedPrefs.getString(passKey, null)
+        val PREF_KEY_DB_PASSPHRASE = "db_passphrase"
+        var passphrase = sharedPrefs.getString(PREF_KEY_DB_PASSPHRASE, null)
         if (passphrase == null) {
             val bytes = ByteArray(32)
             java.security.SecureRandom().nextBytes(bytes)
             passphrase = bytes.joinToString("") { "%02x".format(it) }
-            sharedPrefs.edit().putString(passKey, passphrase).apply()
+            sharedPrefs.edit().putString(PREF_KEY_DB_PASSPHRASE, passphrase).apply()
         }
         return passphrase.toCharArray()
     }
