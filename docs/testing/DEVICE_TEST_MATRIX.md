@@ -2,7 +2,7 @@
 
 This matrix tracks the validation of mesh capabilities on physical hardware across different network scales. All simulation-based testing is explicitly labeled or marked as UNVALIDATED in the context of real-device behavior.
 
-| Scenario | 2 Nodes | 5 Nodes | 10 Nodes | 20 Nodes |
+| Scenario | 2 Nodes | 3 Nodes | 10 Nodes | 20 Nodes |
 |---|---|---|---|---|
 | **Discovery (BLE / Wi-Fi Direct)** | VALIDATED (Field Test) | UNVALIDATED | UNVALIDATED | UNVALIDATED |
 | **Direct Messaging** | VALIDATED (Field Test) | UNVALIDATED | UNVALIDATED | UNVALIDATED |

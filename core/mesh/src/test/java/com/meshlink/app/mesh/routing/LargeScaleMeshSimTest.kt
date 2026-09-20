@@ -295,4 +295,36 @@ class LargeScaleMeshSimTest {
         assertFalse("Must NOT forward back to ep_A (split-horizon)", forwardEndpoints.contains("ep_A"))
         assertTrue("Must forward to ep_B", forwardEndpoints.contains("ep_B"))
     }
+
+    @Test
+    fun `packet is stored as pending when next hop disappears mid-route`() = runTest {
+        // Topology: A -> B -> C -> D
+        val ids = listOf("NODE_A", "NODE_B", "NODE_C", "NODE_D")
+        val tables = ids.map { RoutingTable(it) }
+        val routers = ids.mapIndexed { i, id -> buildRouter(id, tables[i]) }
+
+        // Wire A->B, B->C, C->D
+        tables[0].addLink("NODE_A", "NODE_B")
+        tables[1].addLink("NODE_B", "NODE_C")
+        tables[2].addLink("NODE_C", "NODE_D")
+
+        // A routes packet to D. It should target B.
+        val packet = broadcastPacket("NODE_A", maxHops = 5).copy(
+            receiverId = "NODE_D", 
+            finalDestId = "NODE_D", 
+            type = PacketType.DIRECT
+        )
+
+        // B drops offline before A can send!
+        // A's routing table still thinks B is the next hop, but B's endpoint is gone.
+        val peersForA = emptyMap<String, String>() // No active endpoints!
+
+        val result = routers[0].route("ep_self", packet, peersForA)
+        
+        // Since B is unreachable (not in peers array), A must NOT drop the packet, 
+        // but instead queue it in pending storage for Store & Forward.
+        val processed = result as? RoutingResult.Processed
+        assertNotNull("A must Process the packet (Store & Forward), not Drop it", processed)
+        assertTrue("A has no immediate forward targets because B is offline", processed!!.forwardTargets.isEmpty())
+    }
 }

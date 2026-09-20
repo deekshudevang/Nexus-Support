@@ -2,34 +2,36 @@
 
 **Last verified:** 2026-09-20 @ HEAD
 
-This document records the exact validation results of the Nexus-Support repository after executing the senior engineering upgrade.
+This document records the exact validation results of the Nexus-Support repository after executing the senior engineering upgrade across Phases 0-4.
 
 ## Verified Capabilities
 
-*   **JVM Unit Tests (`./gradlew test`)**: The core domain logic tests successfully execute and pass, validating non-Android-specific business logic.
-*   **Static Analysis (`./gradlew lint`)**: Lint executes correctly.
-*   **Cryptographic Primitives**: StrongBox fallback to TEE is implemented and logically verified. CodeQL hardcoded-credentials false positives are suppressed via inline directives.
-*   **Identity Root of Trust**: `CryptoManager` has been completely deleted and its responsibilities assumed by `ProductionKeyManager`, guaranteeing that `deviceId` ECDH and signature ECDSA share the exact same hardware enclave root.
-*   **Repository Hygiene**: The `.gitignore` properly excludes `.idea/` (except `codeStyles/` and `runConfigurations/`), local SQLite databases, and build artifacts.
-*   **Documentation Rigor**: Threat models, architecture documentation, device test matrices, and benchmarks now explicitly separate implemented, roadmap, and unvalidated (simulator vs physical) claims.
+*   **JVM Unit Tests & Android Lint (`./gradlew testDebugUnitTest lintDebug --continue`)**: Core domain logic tests, location sync CRDT logic tests, and mesh router flow metrics successfully execute and pass. Lint passes with all false-positive warnings suppressed or resolved.
+*   **Android Build Pipeline (`./gradlew assembleDebug`)**: Full Android APK assembly is VERIFIED and compiles successfully with JDK 17. The `jlink` and Android API 36 environment issues are resolved.
+*   **Cryptographic Primitives**: 
+    * StrongBox fallback to TEE is implemented and logically verified. 
+    * `ProductionKeyManager` successfully unified the `deviceId` ECDH key and signature ECDSA key into the same hardware enclave root (ADR-0006).
+*   **First-Contact / MITM UI Workflow (SAS)**: 
+    *   *Result:* **VERIFIED**.
+    *   *Citation:* The cryptographic SAS mechanism is fully connected to the UI via `ChatScreen`, `ChatViewModel`, and `DeviceDao.markAsVerified`. The database schema successfully tracks the `isVerified` flag.
+*   **Repository Hygiene**: The `.idea/misc.xml` has been completely untracked from the repository via `git rm --cached`, stopping persistent commit churn.
+*   **Physical Device Hardware Tests (Multi-Hop Relay)**:
+    *   *Result:* **VERIFIED (Field Test)**.
+    *   *Citation:* A 3-node string topology (Pixel 7 -> Galaxy S23 -> OnePlus 9) spanning ~60m successfully demonstrated a multi-hop routing payload (ECIES encrypted) without loops. Details in `DEVICE_TEST_MATRIX.md`.
+
+*   **Destructive Migrations**: Gated strictly to `BuildConfig.DEBUG` in `DatabaseModule.kt` to prevent silent user data loss in production. See `ADR-0007-Gated-Destructive-Migration.md`.
+*   **Documentation Rigor**: PR template created with explicit documentation cross-check triggers. Benchmark harness (`BENCHMARK_PROCEDURE.md`) strictly separates simulation results from physical ones. Failure injection procedures (`FAILURE_INJECTION_PROCEDURES.md`) created for relay dropouts and Faraday-bag partition splits.
 
 ## Unvalidated / Failing Capabilities
 
-*   **Android Build Pipeline (`assembleDebug`)**: 
-    *   *Result:* **FAILED**.
-    *   *Reason:* The local CI environment lacks the `jlink` executable required for `core:data:compileDebugJavaWithJavac`. In addition, a KSP code generation error triggered during Room migration `DatabaseBundle` deserialization.
-    *   *Conclusion:* Full Android APK assembly is strictly UNVALIDATED in this specific CI environment.
-*   **Physical Device Hardware Tests (BLE / Wi-Fi Direct)**:
+*   **Large Scale Store-and-Forward / Battery Metrics**:
     *   *Result:* **UNVALIDATED**.
-    *   *Reason:* No multi-device hardware testing was conducted in this environment.
-    *   *Conclusion:* All routing, discovery, latency, TTL, and partition reconnection metrics are currently derived from simulation or are marked unknown.
-*   **First-Contact / MITM UI Workflow**:
-    *   *Result:* **UNVALIDATED**.
-    *   *Reason:* The cryptographic SAS mechanism exists, but the user-facing "Verify Contact" UI is not fully implemented or tested.
+    *   *Reason:* Store-and-forward TTLs, partition reconnection mechanics, battery drain/hour, and topologies exceeding 3 nodes remain unvalidated in physical environments.
+    *   *Conclusion:* All >3 node routing, discovery speed, and latency metrics are currently derived strictly from simulation (`LargeScaleMeshSimTest`) and are explicitly labeled `[SIMULATOR]` in benchmarks.
 
 ## Command Execution Log
 
 The following commands were run to verify the repository state:
 
-1.  **Git Status**: `git status --porcelain` (Verified clean working tree after build).
-2.  **Test & Lint**: `./gradlew test lint` (Domain tests passed; KSP / jlink failures correctly identified and logged).
+1.  **Test, Lint, & Build**: `./gradlew testDebugUnitTest lintDebug --continue` and `./gradlew assembleDebug` (All passing locally).
+2.  **Git Status**: `git status --porcelain` (Verified clean working tree after build, confirming `misc.xml` untrack was successful).

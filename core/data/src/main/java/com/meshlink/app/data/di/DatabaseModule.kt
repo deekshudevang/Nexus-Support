@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.meshlink.app.data.BuildConfig
 import com.meshlink.app.data.local.AppDatabase
 import com.meshlink.app.data.local.dao.DeviceDao
 import com.meshlink.app.data.local.dao.MessageDao
@@ -42,8 +43,11 @@ object DatabaseModule {
                 AppDatabase.MIGRATION_11_12,
                 AppDatabase.MIGRATION_12_13,
                 AppDatabase.MIGRATION_13_14
-            ).fallbackToDestructiveMigration(dropAllTables = true)
-            .build()
+            ).apply {
+                if (BuildConfig.DEBUG) {
+                    fallbackToDestructiveMigration(dropAllTables = true)
+                }
+            }.build()
     }
 
     /**

@@ -86,11 +86,14 @@ cd Nexus-Support
 ## 🧪 Testing
 
 ```bash
-# Run JVM unit tests
-./gradlew test
+# Run JVM unit tests exactly as CI does
+./gradlew testDebugUnitTest --continue
 
-# Run code quality checks
-./gradlew lint
+# Run Android Lint exactly as CI does
+./gradlew lintDebug --continue
+
+# Assemble Debug APK
+./gradlew assembleDebug
 ```
 
 ## 🗺️ Roadmap & Known Issues
