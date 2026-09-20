@@ -12,6 +12,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  docs-consistency:
+    name: Structural Doc-Sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Need full history for merge-base check
+
+      - name: Run verify-docs.sh
+        run: |
+          chmod +x scripts/verify-docs.sh
+          ./scripts/verify-docs.sh
+
   unit-tests:
     name: Unit Tests & Simulations
     runs-on: ubuntu-latest

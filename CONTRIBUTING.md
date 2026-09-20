@@ -29,8 +29,15 @@ If you add a feature, especially in `core/mesh` or `core/crypto`, include unit t
 ### 3. Architecture Decision Records (ADRs)
 If you propose a major architectural change (e.g., swapping SQLCipher for another solution, or changing the routing heuristic), please submit an ADR in `docs/adr/` alongside your PR. This helps us document the *why* behind our decisions.
 
-### 4. Code Style
-We use standard Kotlin conventions. Please do not over-comment your code. Strip redundant KDocs that merely restate function names. Instead, focus on commenting the *why* (e.g., `// HACK:`, `// NOTE:` for pragmatism).
+### 4. Structural Documentation Sync
+Our CI pipeline enforces documentation consistency via the `docs-consistency` job (`scripts/verify-docs.sh`). To prevent your PR from failing:
+1. **Code Change:** Make your logical changes.
+2. **Test:** Run tests and collect evidence.
+3. **Audit Evidence:** If you changed core features, run the physical or simulation procedures.
+4. **Docs Update:** Update `FINAL_AUDIT.md` and `DEVICE_TEST_MATRIX.md` with your new results.
+5. **Stamp the Audit:** Update the `**Last verified:**` line in `FINAL_AUDIT.md` with your exact commit hash so the CI script knows the docs are fresh.
 
----
-**Last verified:** 2026-09-20 @ HEAD
+Manual audit rewrites are the fallback, not the process. Keep the docs tightly coupled to the code.
+
+### 5. Code Style
+We use standard Kotlin conventions. Please do not over-comment your code. Strip redundant KDocs that merely restate function names. Instead, focus on commenting the *why* (e.g., `// HACK:`, `// NOTE:` for pragmatism).
