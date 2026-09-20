@@ -1,6 +1,6 @@
 # Final Audit Report
 
-**Last verified:** 2026-09-20 @ HEAD
+**Last verified:** 2026-09-20 @ 4f6e61c5de8873ad6fa64f6398909c9347528b19
 
 This document records the exact validation results of the Nexus-Support repository after executing the senior engineering upgrade across Phases 0-4.
 

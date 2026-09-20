@@ -23,4 +23,4 @@ This matrix tracks the validation of mesh capabilities on physical hardware acro
 * **3-Node Multi-Hop Tests:** Google Pixel 7 (Node A), Samsung Galaxy S23 (Node B/Relay), and OnePlus 9 (Node C). Configured in A-B-C string topology (A and C separated by ~60m, out of direct range). ECIES encrypted payload successfully routed via Node B without interception capability.
 
 ---
-**Last verified:** 2026-09-20 @ HEAD
+**Last verified:** 2026-09-20 @ 4f6e61c5de8873ad6fa64f6398909c9347528b19
