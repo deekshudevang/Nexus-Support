@@ -3,7 +3,7 @@ package com.meshlink.app.mesh.security
 import android.util.Base64
 import com.meshlink.app.crypto.cipher.EciesService
 import com.meshlink.app.crypto.cipher.EncryptionService
-import com.meshlink.app.crypto.identity.KeyManager
+import com.meshlink.app.crypto.identity.KeyProvider
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -21,7 +21,7 @@ import org.mockito.Mockito.*
 class ThreatModelValidationTest {
 
     private lateinit var eciesService: EciesService
-    private lateinit var keyManager: KeyManager
+    private lateinit var keyManager: KeyProvider
     private lateinit var encryptionService: EncryptionService
     
     private lateinit var recipientPublicKeyBytes: ByteArray
@@ -38,7 +38,7 @@ class ThreatModelValidationTest {
         recipientPublicKeyBytes = recipientKeyPair.public.encoded
         
         // Mock KeyManager to return the recipient's private key for decryption
-        keyManager = mock(KeyManager::class.java)
+        keyManager = mock(KeyProvider::class.java)
         `when`(keyManager.keyPair).thenReturn(recipientKeyPair)
         
         encryptionService = EncryptionService()

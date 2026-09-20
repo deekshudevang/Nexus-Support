@@ -1,7 +1,7 @@
 package com.meshlink.app.crypto.session
 
 import android.util.Base64
-import com.meshlink.app.crypto.identity.KeyManager
+import com.meshlink.app.crypto.identity.KeyProvider
 import com.meshlink.app.domain.model.MeshPacket
 import com.meshlink.app.domain.repository.DeviceRepository
 import timber.log.Timber
@@ -32,7 +32,7 @@ import java.util.UUID
  */
 @Singleton
 class HandshakeManager @Inject constructor(
-    private val keyManager: KeyManager,
+    private val keyManager: KeyProvider,
     private val sessionKeyStore: SessionKeyStore,
     private val deviceRepository: DeviceRepository
 ) {

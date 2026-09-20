@@ -1,6 +1,6 @@
 package com.meshlink.app.crypto.cipher
 
-import com.meshlink.app.crypto.identity.KeyManager
+import com.meshlink.app.crypto.identity.KeyProvider
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.Assert.assertArrayEquals
@@ -15,7 +15,7 @@ class EciesServiceTest {
 
     private lateinit var encryptionService: EncryptionService
     private lateinit var eciesService: EciesService
-    private lateinit var keyManagerMock: KeyManager
+    private lateinit var keyManagerMock: KeyProvider
     
     // Simulates the local device's identity keypair
     private val localKeyPair = KeyPairGenerator.getInstance("EC").apply {

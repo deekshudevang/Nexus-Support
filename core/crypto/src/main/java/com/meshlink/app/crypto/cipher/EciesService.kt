@@ -1,7 +1,7 @@
 package com.meshlink.app.crypto.cipher
 
 import android.util.Base64
-import com.meshlink.app.crypto.identity.KeyManager
+import com.meshlink.app.crypto.identity.KeyProvider
 import timber.log.Timber
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
@@ -38,7 +38,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class EciesService @Inject constructor(
-    private val keyManager: KeyManager,
+    private val keyManager: KeyProvider,
     private val encryptionService: EncryptionService
 ) {
     companion object {
