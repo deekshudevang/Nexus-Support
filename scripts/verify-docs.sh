@@ -47,7 +47,7 @@ if [ ! -f "$MATRIX_FILE" ]; then
 fi
 
 # Look for VALIDATED without Field Test or SIMULATOR context
-INVALID_CLAIMS=$(grep -n "VALIDATED" "$MATRIX_FILE" | grep -v "Field Test" | grep -v "SIMULATOR" || true)
+INVALID_CLAIMS=$(grep -n -w "VALIDATED" "$MATRIX_FILE" | grep -v "Field Test" | grep -v "SIMULATOR" || true)
 
 if [ ! -z "$INVALID_CLAIMS" ]; then
     echo "ERROR: Uncited validation claims found in $MATRIX_FILE:"
