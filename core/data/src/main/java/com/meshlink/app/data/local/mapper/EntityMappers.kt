@@ -37,7 +37,8 @@ fun KnownDeviceEntity.toDomain(): KnownDevice = KnownDevice(
     publicKey = publicKey,
     lastSeen = lastSeen,
     lastLatitude = lastLatitude,
-    lastLongitude = lastLongitude
+    lastLongitude = lastLongitude,
+    isVerified = isVerified
 )
 
 fun KnownDevice.toEntity(): KnownDeviceEntity = KnownDeviceEntity(
@@ -46,5 +47,6 @@ fun KnownDevice.toEntity(): KnownDeviceEntity = KnownDeviceEntity(
     publicKey = publicKey,
     lastSeen = lastSeen,
     lastLatitude = lastLatitude,
-    lastLongitude = lastLongitude
+    lastLongitude = lastLongitude,
+    isVerified = isVerified
 )

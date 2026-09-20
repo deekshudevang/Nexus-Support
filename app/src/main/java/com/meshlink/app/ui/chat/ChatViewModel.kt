@@ -93,6 +93,24 @@ class ChatViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    val isPeerVerified: StateFlow<Boolean> = peerDeviceId
+        .flatMapLatest { peerId ->
+            // Use distinctUntilChanged inside flatMapLatest for reactivity if device updates
+            // Wait, DeviceRepository doesn't expose a flow of single device, we have to map from getAllDevices()
+            // or just fetch once and rely on UI refresh. A better way:
+            deviceRepository.getAllDevices().map { devices ->
+                devices.find { it.deviceId == peerId }?.isVerified ?: false
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun onVerifyContactConfirmed() {
+        val peerId = peerDeviceId.value
+        viewModelScope.launch {
+            deviceRepository.markDeviceAsVerified(peerId)
+        }
+    }
+
     val connectionState: StateFlow<ConnectionState> = nearbyRepository.connectionStates
         .map { states ->
             states[liveEndpointId]

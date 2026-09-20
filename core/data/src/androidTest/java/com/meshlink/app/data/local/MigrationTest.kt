@@ -23,16 +23,16 @@ class MigrationTest {
 
     @Test
     @Throws(IOException::class)
-    fun migrate5To13() {
+    fun migrate5To14() {
         // Create the database in version 5
         helper.createDatabase(TEST_DB, 5).apply {
             close()
         }
 
-        // Run migrations and validate schema reaches version 13
+        // Run migrations and validate schema reaches version 14
         helper.runMigrationsAndValidate(
             TEST_DB,
-            13,
+            14,
             true,
             AppDatabase.MIGRATION_5_6,
             AppDatabase.MIGRATION_6_7,
@@ -41,7 +41,8 @@ class MigrationTest {
             AppDatabase.MIGRATION_9_10,
             AppDatabase.MIGRATION_10_11,
             AppDatabase.MIGRATION_11_12,
-            AppDatabase.MIGRATION_12_13
+            AppDatabase.MIGRATION_12_13,
+            AppDatabase.MIGRATION_13_14
         )
     }
 }

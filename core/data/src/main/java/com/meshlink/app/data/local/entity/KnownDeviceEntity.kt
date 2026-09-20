@@ -10,7 +10,8 @@ data class KnownDeviceEntity(
     val publicKey: ByteArray,
     val lastSeen: Long,
     val lastLatitude: Double? = null,
-    val lastLongitude: Double? = null
+    val lastLongitude: Double? = null,
+    val isVerified: Boolean = false
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

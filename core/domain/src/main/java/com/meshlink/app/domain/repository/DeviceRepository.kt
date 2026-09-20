@@ -14,4 +14,7 @@ interface DeviceRepository {
 
     /** Update the last known geographical location of the device. */
     suspend fun updateLocation(deviceId: String, lat: Double, lon: Double)
+
+    /** Mark a device as cryptographically verified via SAS pairing. */
+    suspend fun markDeviceAsVerified(deviceId: String)
 }

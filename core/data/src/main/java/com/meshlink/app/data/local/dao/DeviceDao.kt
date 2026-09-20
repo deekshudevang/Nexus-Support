@@ -22,4 +22,7 @@ interface DeviceDao {
 
     @Query("UPDATE known_devices SET lastLatitude = :lat, lastLongitude = :lon WHERE deviceId = :deviceId")
     suspend fun updateLocation(deviceId: String, lat: Double, lon: Double)
+
+    @Query("UPDATE known_devices SET isVerified = 1 WHERE deviceId = :deviceId")
+    suspend fun markAsVerified(deviceId: String)
 }

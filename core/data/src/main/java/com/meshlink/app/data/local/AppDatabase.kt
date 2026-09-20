@@ -25,7 +25,7 @@ import com.meshlink.app.data.local.entity.SosPacketEntity
         ProcessedEventEntity::class,
         SosPacketEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -216,6 +216,15 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
+            }
+        }
+
+        /**
+         * v13 → v14: adds isVerified flag to known_devices for SAS verification status
+         */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE known_devices ADD COLUMN isVerified INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

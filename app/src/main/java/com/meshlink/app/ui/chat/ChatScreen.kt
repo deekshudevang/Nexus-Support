@@ -15,6 +15,9 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,7 +42,10 @@ fun ChatScreen(
     val connState by viewModel.connectionState.collectAsState()
     val inputText by viewModel.inputText.collectAsState()
     val sasCode by viewModel.sasCode.collectAsState()
+    val isPeerVerified by viewModel.isPeerVerified.collectAsState()
     val listState = rememberLazyListState()
+
+    var showVerifyDialog by remember { mutableStateOf(false) }
 
     // Mock states from ViewModel
     val snr by viewModel.snr.collectAsState()
@@ -87,26 +93,76 @@ fun ChatScreen(
                         fontSize = 18.sp,
                         fontFamily = FontFamily.Monospace
                     )
-                    androidx.compose.animation.AnimatedContent(targetState = connState, label = "connState") { state ->
-                        Text(
-                            text = if (state == ConnectionState.CONNECTED) "Connected via Mesh" else "Offline",
-                            color = if (state == ConnectionState.CONNECTED) Primary else Color.Gray,
-                            fontSize = 12.sp,
-                            fontFamily = FontFamily.SansSerif
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (isPeerVerified) {
+                            Icon(Icons.Default.VerifiedUser, contentDescription = "Verified", tint = Color(0xFF4CAF50), modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+                        androidx.compose.animation.AnimatedContent(targetState = connState, label = "connState") { state ->
+                            Text(
+                                text = if (state == ConnectionState.CONNECTED) "Connected via Mesh" else "Offline",
+                                color = if (state == ConnectionState.CONNECTED) Primary else Color.Gray,
+                                fontSize = 12.sp,
+                                fontFamily = FontFamily.SansSerif
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.End) {
                     Text(text = "Battery: ${battery}%", color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
                     Text(text = "Encrypted", color = Primary, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
-                    if (sasCode != null) {
-                        Text(text = "Verify: $sasCode", color = Primary, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    if (sasCode != null && !isPeerVerified) {
+                        TextButton(
+                            onClick = { showVerifyDialog = true },
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text(text = "Verify Contact", color = Primary, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                        }
                     }
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
             // Telemetry badges removed for simplicity
+        }
+
+        if (showVerifyDialog && sasCode != null) {
+            AlertDialog(
+                onDismissRequest = { showVerifyDialog = false },
+                title = { Text("Verify Contact", color = Color.White) },
+                text = {
+                    Column {
+                        Text("Compare this security code with the one on ${viewModel.deviceName}'s screen:", color = Color.Gray, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = sasCode ?: "",
+                            color = Primary,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("If the codes match exactly, it is safe to verify. This protects against Man-in-the-Middle attacks.", color = Color.Gray, fontSize = 12.sp)
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.onVerifyContactConfirmed()
+                        showVerifyDialog = false
+                    }) {
+                        Text("Verify", color = Primary)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showVerifyDialog = false }) {
+                        Text("Cancel", color = Color.Gray)
+                    }
+                },
+                containerColor = CardSurface,
+                titleContentColor = Color.White,
+                textContentColor = Color.White
+            )
         }
 
         // Messages List

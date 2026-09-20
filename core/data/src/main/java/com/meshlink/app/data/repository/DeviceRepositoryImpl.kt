@@ -32,4 +32,8 @@ class DeviceRepositoryImpl @Inject constructor(
     override suspend fun updateLocation(deviceId: String, lat: Double, lon: Double) {
         deviceDao.updateLocation(deviceId, lat, lon)
     }
+
+    override suspend fun markDeviceAsVerified(deviceId: String) {
+        deviceDao.markAsVerified(deviceId)
+    }
 }
