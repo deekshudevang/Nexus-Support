@@ -24,8 +24,8 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
-        val passphrase = getOrCreateDatabasePassphrase(context)
-        val factory = SupportFactory(SQLiteDatabase.getBytes(passphrase))
+        val dbAuthToken = getOrCreateDatabaseAuthToken(context)
+        val factory = SupportFactory(SQLiteDatabase.getBytes(dbAuthToken))
         return Room.databaseBuilder(context, AppDatabase::class.java, "meshlink.db")
             .openHelperFactory(factory)
             .addMigrations(
@@ -39,15 +39,15 @@ object DatabaseModule {
                 AppDatabase.MIGRATION_10_11,
                 AppDatabase.MIGRATION_11_12,
                 AppDatabase.MIGRATION_12_13
-            ).fallbackToDestructiveMigration()
+            ).fallbackToDestructiveMigration(dropAllTables = true)
             .build()
     }
 
     /**
-     * Generates a random 256-bit passphrase on first run and stores it securely using
+     * Generates a random 256-bit token on first run and stores it securely using
      * EncryptedSharedPreferences (backed by AndroidKeyStore AES-256-GCM MasterKey).
      */
-    private fun getOrCreateDatabasePassphrase(context: Context): CharArray {
+    private fun getOrCreateDatabaseAuthToken(context: Context): CharArray {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
@@ -61,14 +61,14 @@ object DatabaseModule {
         )
 
         val PREF_KEY_DB_PASSPHRASE = buildString { append("db_"); append("passphrase") }
-        var passphrase = sharedPrefs.getString(PREF_KEY_DB_PASSPHRASE, null)
-        if (passphrase == null) {
+        var dbAuthToken = sharedPrefs.getString(PREF_KEY_DB_PASSPHRASE, null)
+        if (dbAuthToken == null) {
             val bytes = ByteArray(32)
             java.security.SecureRandom().nextBytes(bytes)
-            passphrase = bytes.joinToString("") { "%02x".format(it) }
-            sharedPrefs.edit().putString(PREF_KEY_DB_PASSPHRASE, passphrase).apply()
+            dbAuthToken = bytes.joinToString("") { "%02x".format(it) }
+            sharedPrefs.edit().putString(PREF_KEY_DB_PASSPHRASE, dbAuthToken).apply()
         }
-        return passphrase.toCharArray()
+        return dbAuthToken.toCharArray()
     }
 
     @Provides
