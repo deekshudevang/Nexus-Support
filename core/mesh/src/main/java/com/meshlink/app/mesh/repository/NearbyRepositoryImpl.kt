@@ -311,7 +311,7 @@ class NearbyRepositoryImpl @Inject constructor(
     private fun handleHandshake(endpointId: String, packet: MeshPacket) {
         Timber.d("HANDSHAKE received from $endpointId (peerId=${packet.senderId})")
         scope.launch(Dispatchers.IO) {
-            val success = handshakeManager.processHandshake(endpointId, packet.content)
+            val success = handshakeManager.processHandshake(endpointId, packet.senderId, packet.content)
             if (success) {
                 // 1. Record endpointId → stable peerDeviceId mapping
                 endpointIdToDeviceId[endpointId] = packet.senderId

@@ -26,7 +26,7 @@ import com.meshlink.app.data.local.entity.SosPacketEntity
         SosPacketEntity::class
     ],
     version = 13,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
@@ -100,6 +100,24 @@ abstract class AppDatabase : RoomDatabase() {
          * the missing @ColumnInfo(defaultValue="0") on priority.
          */
         val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // No schema changes required
+            }
+        }
+
+        /**
+         * v6 → v7: Empty migration to fix the missing migration gap.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // No schema changes required
+            }
+        }
+
+        /**
+         * v7 → v8: Empty migration to fix the missing migration gap.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // No schema changes required
             }

@@ -70,3 +70,7 @@ crash.txt
 .claude/
 .gemini/
 scratch/
+
+# Node
+node_modules/
+
