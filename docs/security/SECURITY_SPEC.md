@@ -8,16 +8,9 @@ Nexus Support is architected with a zero-trust threat model. In an offline disas
 
 ### Node Identity KeyPair
 - **Algorithm**: Elliptic Curve Diffie-Hellman / Digital Signature Algorithm (ECDH/ECDSA) over NIST curve **P-256 (secp256r1)**.
-- **Enclave**: Currently uses `EncryptedSharedPreferences` for broad device compatibility.
-- **StrongBox Backing (Roadmap)**:
-  Future updates will generate keys inside the Android KeyStore provider with StrongBox backing:
-  ```kotlin
-  if (context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)) {
-      builder.setIsStrongBoxBacked(true)
-  }
-  ```
-  On devices with dedicated tamper-resistant hardware security modules (HSM) such as Pixel Titan M or Samsung Knox, keys will be isolated from the main application processor.
-- **Exportability**: Keys are meant to be non-exportable once migrated to KeyStore.
+- **Enclave**: Generated inside the Android KeyStore provider.
+- **StrongBox Backing**: Requests StrongBox backing on supported hardware (API 28+). If StrongBox hardware fails generation, gracefully falls back to Trusted Execution Environment (TEE).
+- **Exportability**: Keys are generated as non-exportable and never leave the secure hardware.
 
 ---
 
@@ -58,6 +51,19 @@ To mitigate packet replaying from prior days:
 
 ## 🗄️ Storage Security
 
-- **Database**: Encrypted at rest via **SQLCipher 4.6.0** (256-bit AES in CBC mode with HMAC-SHA512 per page validation).
-- **Passphrase**: Derived from a 256-bit AES master key stored in the hardware-backed Android KeyStore.
-- **Backup Prevention**: Configured with `android:allowBackup="false"` in `AndroidManifest.xml` and restricted via `data_extraction_rules.xml`.
+Local caching of sensitive events is managed via **SQLCipher** (AES-256-CBC). The 256-bit passphrase is pseudo-randomly generated on first launch and stored securely in `EncryptedSharedPreferences`.
+
+---
+
+## 🛑 Threat Model
+
+| Threat | Implemented Mitigation | Validation Test Citation |
+|---|---|---|
+| First-Contact MITM | TOFU pinning + SAS ceremony | UNVALIDATED |
+| Repeat-Contact MITM | TOFU pinning (rejects on key mismatch) | `HandshakeManagerTest` (UNVALIDATED) |
+| Message Replay / Flooding | MeshRouter deduplication (`isAlreadySeen`) | UNVALIDATED |
+| Message Tampering | ECDSA Signature Verification | `LocationSyncManagerTest.test_out_of_order_delivery` (Mockito stubbed - UNVALIDATED device) |
+| Device Theft (At Rest) | SQLCipher with EncryptedSharedPreferences | UNVALIDATED |
+
+---
+**Last verified:** 2026-09-20 @ HEAD

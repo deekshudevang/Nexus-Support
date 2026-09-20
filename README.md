@@ -14,6 +14,31 @@
   Operates completely independent of cellular towers, satellite uplinks, or centralized servers.
 </p>
 
+```text
+       [ Android Device A ]  <-- BLE / Wi-Fi Direct -->  [ Android Device B ]
+       | (UI & ViewModels) |                             | (UI & ViewModels) |
+       |-------------------|                             |-------------------|
+       | :core:mesh Router |                             | :core:mesh Router |
+       |-------------------|                             |-------------------|
+       | SQLCipher / DB    |                             | SQLCipher / DB    |
+       | StrongBox / Keys  |                             | StrongBox / Keys  |
+```
+
+## 🚥 Engineering Status
+
+| Feature / Component | Status | Notes |
+|---|---|---|
+| **P-256 StrongBox Enclave** | Implemented | Falls back to TEE gracefully on unsupported API 28+ devices. |
+| **AES-256-GCM / ECIES** | Implemented | Ephemeral keys generated per hop. Validated in unit tests. |
+| **SQLCipher Storage** | Implemented | AES-256-CBC at rest with auto-generated passphrases. |
+| **Offline Map Rendering** | Implemented | Mapsforge vector engine functioning. |
+| **Mesh Discovery (Nearby)**| Device-dependent | Unvalidated in physical dense environments. |
+| **Cloud Sync / Stub** | Experimental | Backend stubbed via `MockMeshBackendService`. |
+| **Offline LLM Assistant** | Experimental | Currently mocked via `delay()` canned responses. |
+| **Large Scale Mesh** | Unvalidated | Simulation passes, but unvalidated on >5 physical radios. |
+
+*Note: Simulation metrics are never presented as physical field validation.*
+
 </div>
 
 ## 📖 Overview
@@ -33,11 +58,13 @@
 
 Deep technical specs and architectural decisions (ADRs) are maintained in the [`docs/`](docs/) directory:
 
-- 🏛️ [**Architecture & Submodules**](docs/ARCHITECTURE.md)
-- 📡 [**Mesh Routing & Protocol Specification**](docs/MESH_PROTOCOL.md)
-- 🔐 [**Cryptographic Security Specification**](docs/SECURITY_SPEC.md)
-- 🗺️ [**Offline Maps & GPS Engine**](docs/OFFLINE_MAPS.md)
+- 🏛️ [**Architecture & Submodules**](docs/architecture/ARCHITECTURE.md)
+- 📡 [**Mesh Routing & Protocol Specification**](docs/protocol/MESH_PROTOCOL.md)
+- 🔐 [**Cryptographic Security Specification**](docs/security/SECURITY_SPEC.md)
+- 🗺️ [**Offline Maps & GPS Engine**](docs/operations/OFFLINE_MAPS.md)
 - 🏗️ [**Architecture Decision Records (ADRs)**](docs/adr/)
+- 🧪 [**Device Test Matrix**](docs/testing/DEVICE_TEST_MATRIX.md)
+- 📊 [**Benchmarks**](docs/testing/BENCHMARKS.md)
 
 ## 🚀 Getting Started
 
@@ -52,8 +79,9 @@ Deep technical specs and architectural decisions (ADRs) are maintained in the [`
 git clone https://github.com/deekshudevang/Nexus-Support.git
 cd Nexus-Support
 
-# Build debug APK
-./gradlew assembleDebug
+# Note: assembleDebug may fail locally if 'jlink' is not available in your JVM path.
+# Full Android compilation is UNVALIDATED in this specific CI environment.
+./gradlew test lint
 ```
 
 ## 🧪 Testing
@@ -62,8 +90,8 @@ cd Nexus-Support
 # Run JVM unit tests
 ./gradlew test
 
-# Run mesh simulation suite
-./gradlew :core:mesh:test --tests "com.meshlink.app.mesh.routing.LargeScaleMeshSimTest"
+# Run code quality checks
+./gradlew lint
 ```
 
 ## 🗺️ Roadmap & Known Issues
@@ -78,3 +106,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions and guidelines.
 
 ## 📄 License
 This project is licensed under the **MIT License** — see [LICENSE](LICENSE).
+
+---
+**Last verified:** 2026-09-20 @ HEAD

@@ -43,3 +43,7 @@ When peers in the mesh broadcast high-accuracy location events:
 2. Digital signatures are checked against the peer's public key.
 3. Pins are rendered with status markers (Active, Stale, SOS Emergency).
 4. Distance and relative bearings are calculated using the Haversine formula directly on device.
+
+
+---
+**Last verified:** 2026-09-20 @ HEAD

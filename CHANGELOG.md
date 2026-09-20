@@ -20,3 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Refactored `KeyManager` into a `KeyProvider` interface to decouple hardware cryptography from JVM testing.
 - Clarified UI state by marking the Offline AI Assistant feature as Experimental.
+- **Phase 0:** Unified identity keys (deleted `CryptoManager`) for both ECDH and ECDSA.
+- **Phase 0:** Added CodeQL suppressions for false-positive credential alerts.
+- **Phase 0:** Documented strict additive-only protobuf versioning rules.
+- **Phase 1:** Cleaned up `.gitignore` and extended PR template with architecture/security mandates.
+
+---
+**Last verified:** 2026-09-20 @ HEAD

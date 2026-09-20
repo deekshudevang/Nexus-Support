@@ -11,8 +11,8 @@ First off, thanks for taking the time to contribute! Meshlink is meant to be a r
 
 2. **Building the Project:**
    - Clone the repo: `git clone https://github.com/deekshudevang/Nexus-Support.git`
-   - Build the debug APK: `./gradlew assembleDebug`
-   - Run the JVM unit tests: `./gradlew test`
+   - Run the automated tests and linter: `./gradlew test lint`
+   - *Note: `assembleDebug` may fail if your local environment lacks the `jlink` executable for the data module.*
 
 ## How to Contribute
 
@@ -31,3 +31,6 @@ If you propose a major architectural change (e.g., swapping SQLCipher for anothe
 
 ### 4. Code Style
 We use standard Kotlin conventions. Please do not over-comment your code. Strip redundant KDocs that merely restate function names. Instead, focus on commenting the *why* (e.g., `// HACK:`, `// NOTE:` for pragmatism).
+
+---
+**Last verified:** 2026-09-20 @ HEAD

@@ -83,3 +83,7 @@ graph TD
      │
      └──► [MeshRouter / NearbyTransport] ──► P2P Radio (BLE / Wi-Fi Direct)
 ```
+
+
+---
+**Last verified:** 2026-09-20 @ HEAD
