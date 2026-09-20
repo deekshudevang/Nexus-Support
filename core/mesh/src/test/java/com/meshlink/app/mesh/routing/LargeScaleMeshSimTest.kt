@@ -312,7 +312,7 @@ class LargeScaleMeshSimTest {
         val packet = broadcastPacket("NODE_A", maxHops = 5).copy(
             receiverId = "NODE_D", 
             finalDestId = "NODE_D", 
-            type = PacketType.DIRECT
+            type = PacketType.ROUTED_CHAT
         )
 
         // B drops offline before A can send!
