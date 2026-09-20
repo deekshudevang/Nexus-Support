@@ -208,8 +208,8 @@ class LocationSyncManagerImpl @Inject constructor(
             val timestamp = System.currentTimeMillis()
             
             val payloadToSign = "$eventId:$localDeviceId:$lat:$lon:$accuracy:$timestamp:$sequenceNumber".toByteArray(Charsets.UTF_8)
-            val signature = cryptoManager.sign(payloadToSign)
-            val publicKey = cryptoManager.getPublicKeyBase64()
+            val signature = keyProvider.sign(payloadToSign)
+            val publicKey = android.util.Base64.encodeToString(keyProvider.publicKeyBytes, android.util.Base64.NO_WRAP)
 
             val event = LocationEventEntity(
                 eventId = eventId,
