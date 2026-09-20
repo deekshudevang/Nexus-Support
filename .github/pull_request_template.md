@@ -14,13 +14,18 @@
 - [ ] Modifies UI / Jetpack Compose components (`:app`)
 - [ ] Modifies background synchronization or WorkManager jobs (`:app`)
 
+## ⚠️ Breaking Changes
+
+- [ ] Does this PR introduce a breaking change? (e.g., changes to protocol schema, database schema, or public APIs)
+- [ ] If yes, have backward compatibility or migrations been provided?
+
 ## 🧪 Testing & Verification
 
 <!-- Describe how this was tested. Please provide test commands or steps. -->
 
-- [ ] JVM Unit Tests run and pass: `./gradlew test`
-- [ ] Mesh simulation tests pass: `./gradlew :core:mesh:test`
-- [ ] Verified on real hardware / multi-device environment (if radio/transport related)
+- [ ] **Automated Testing:** Tests run and pass: `./gradlew test` (List specific test names added/modified)
+- [ ] **Device Testing:** Verified on real hardware / multi-device environment. (List exact device models and OS versions)
+- [ ] **Simulation Testing:** (Note: Simulation is never presented as field validation)
 
 ## 📷 Screenshots / Artifacts (if applicable)
 

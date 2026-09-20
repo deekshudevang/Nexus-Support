@@ -30,7 +30,9 @@ gradle-app.setting
 local.properties
 
 # Android Studio / IntelliJ IDEA
-.idea/
+.idea/*
+!.idea/codeStyles/
+!.idea/runConfigurations/
 *.iml
 *.iws
 *.ipr
@@ -41,6 +43,13 @@ captures/
 # Android Studio Navigation editor temp files
 .idea/navEditor.xml
 .idea/assetWizardSettings.xml
+
+# Runtime & DBs
+*.log
+*.db
+*.db-shm
+*.db-wal
+
 
 # Kotlin
 .kotlin/
