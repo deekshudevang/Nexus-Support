@@ -4,8 +4,8 @@ This matrix tracks the validation of mesh capabilities on physical hardware acro
 
 | Scenario | 2 Nodes | 5 Nodes | 10 Nodes | 20 Nodes |
 |---|---|---|---|---|
-| **Discovery (BLE / Wi-Fi Direct)** | UNVALIDATED | UNVALIDATED | UNVALIDATED | UNVALIDATED |
-| **Direct Messaging** | UNVALIDATED | UNVALIDATED | UNVALIDATED | UNVALIDATED |
+| **Discovery (BLE / Wi-Fi Direct)** | VALIDATED (Field Test) | UNVALIDATED | UNVALIDATED | UNVALIDATED |
+| **Direct Messaging** | VALIDATED (Field Test) | UNVALIDATED | UNVALIDATED | UNVALIDATED |
 | **Multi-Hop Messaging** | UNVALIDATED | UNVALIDATED | UNVALIDATED | UNVALIDATED |
 | **Message Deduplication** | UNVALIDATED | UNVALIDATED | UNVALIDATED | UNVALIDATED |
 | **TTL Expiry (Max Hops)** | UNVALIDATED | UNVALIDATED | UNVALIDATED | UNVALIDATED |

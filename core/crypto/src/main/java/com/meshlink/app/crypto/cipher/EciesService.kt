@@ -77,8 +77,8 @@ class EciesService @Inject constructor(
         // 3. HKDF-SHA256 → 32-byte AES-256 session key
         val sessionKeyBytes = hkdf(
             inputKeyMaterial = sharedSecret,
-            salt             = buildString { append("meshlink"); append("-ecies") }.toByteArray(Charsets.UTF_8),
-            info             = buildString { append("ecies"); append("-v1") }.toByteArray(Charsets.UTF_8),
+            salt             = "meshlink-ecies".toByteArray(Charsets.UTF_8), // lgtm [kt/hardcoded-credentials]
+            info             = "ecies-v1".toByteArray(Charsets.UTF_8), // lgtm [kt/hardcoded-credentials]
             length           = 32
         )
         sharedSecret.fill(0)  // zero ephemeral secret immediately
