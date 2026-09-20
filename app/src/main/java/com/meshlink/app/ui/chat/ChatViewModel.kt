@@ -8,6 +8,8 @@ import com.meshlink.app.domain.model.Message
 import com.meshlink.app.domain.model.MeshPacket
 import com.meshlink.app.domain.repository.MessageRepository
 import com.meshlink.app.domain.repository.NearbyRepository
+import com.meshlink.app.domain.repository.DeviceRepository
+import com.meshlink.app.crypto.session.HandshakeManager
 import com.meshlink.app.mesh.battery.BatteryMonitor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +33,8 @@ class ChatViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val messageRepository: MessageRepository,
     private val nearbyRepository: NearbyRepository,
+    private val deviceRepository: DeviceRepository,
+    private val handshakeManager: HandshakeManager,
     private val batteryMonitor: BatteryMonitor,
     @Named("localDeviceId") val localDeviceId: String
 ) : ViewModel() {
@@ -77,6 +81,17 @@ class ChatViewModel @Inject constructor(
             messageRepository.getMessagesByConversation(peerId)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Short Authentication String (SAS) for the pairing ceremony.
+     * Computed from the peer's stored public key.
+     */
+    val sasCode: StateFlow<String?> = peerDeviceId
+        .map { peerId ->
+            val device = deviceRepository.getDeviceById(peerId)
+            device?.let { handshakeManager.computeSAS(it.publicKey) }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val connectionState: StateFlow<ConnectionState> = nearbyRepository.connectionStates
         .map { states ->

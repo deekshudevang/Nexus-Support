@@ -20,7 +20,9 @@ android {
     }
 }
 
-
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
 
 dependencies {
     implementation(project(":core:domain"))
@@ -30,6 +32,7 @@ dependencies {
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.timber)

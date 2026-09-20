@@ -38,6 +38,7 @@ fun ChatScreen(
     val messages by viewModel.messages.collectAsState()
     val connState by viewModel.connectionState.collectAsState()
     val inputText by viewModel.inputText.collectAsState()
+    val sasCode by viewModel.sasCode.collectAsState()
     val listState = rememberLazyListState()
 
     // Mock states from ViewModel
@@ -99,6 +100,9 @@ fun ChatScreen(
                 Column(horizontalAlignment = Alignment.End) {
                     Text(text = "Battery: ${battery}%", color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
                     Text(text = "Encrypted", color = Primary, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
+                    if (sasCode != null) {
+                        Text(text = "Verify: $sasCode", color = Primary, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
