@@ -94,7 +94,7 @@ class MeshRouter @Inject constructor(
 
         // 1. Deduplication — drop packets we've already seen (loop prevention)
         // NOTE: Relying strictly on messageId for dedup. A malicious node could pre-flood fake messageIds to suppress delivery of real messages later.
-        if (seenMessageCache.isSeen(packet.messageId)) {
+        if (seenMessageCache.isAlreadySeen(packet.messageId)) {
             Timber.d("MeshRouter: DROP duplicate messageId=${packet.messageId}")
             return@withContext RoutingResult.Drop
         }

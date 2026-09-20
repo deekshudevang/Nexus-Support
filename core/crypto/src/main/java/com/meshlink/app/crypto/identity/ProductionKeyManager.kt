@@ -121,22 +121,30 @@ class ProductionKeyManager @Inject constructor(
             context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
             
         val builder = KeyGenParameterSpec.Builder(
-            KEYSTORE_ALIAS, KeyProperties.PURPOSE_AGREE_KEY or KeyProperties.PURPOSE_SIGN
+            KEYSTORE_ALIAS, KeyProperties.PURPOSE_AGREE_KEY
         )
             .setAlgorithmParameterSpec(ECGenParameterSpec(CURVE))
             .setDigests(KeyProperties.DIGEST_SHA256)
             
-        if (Build.VERSION.SDK_INT >= 28 && hasStrongBox) {
+        if (hasStrongBox) {
             builder.setIsStrongBoxBacked(true)
         }
         
-        val spec = builder.build()
         val generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, ANDROID_KEYSTORE)
-        generator.initialize(spec)
         
-        val kp = generator.generateKeyPair()
-        Timber.d("KeyManager: generated new hardware identity key (StrongBox=$hasStrongBox, deviceId=${sha256Hex(kp.public.encoded).take(16)})")
-        return kp
+        return try {
+            generator.initialize(builder.build())
+            val kp = generator.generateKeyPair()
+            Timber.d("KeyManager: generated new hardware identity key (StrongBox=$hasStrongBox, deviceId=${sha256Hex(kp.public.encoded).take(16)})")
+            kp
+        } catch (e: android.security.keystore.StrongBoxUnavailableException) {
+            Timber.w(e, "KeyManager: StrongBox unavailable despite feature flag. Falling back to TEE.")
+            builder.setIsStrongBoxBacked(false)
+            generator.initialize(builder.build())
+            val kp = generator.generateKeyPair()
+            Timber.d("KeyManager: generated new hardware identity key (StrongBox=false fallback, deviceId=${sha256Hex(kp.public.encoded).take(16)})")
+            kp
+        }
     }
 
     private fun createEncryptedPrefs(): SharedPreferences {

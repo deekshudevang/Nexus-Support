@@ -62,7 +62,7 @@ object DatabaseModule {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
 
-        val PREF_KEY_DB_PASSPHRASE = buildString { append("db_"); append("passphrase") }
+        val PREF_KEY_DB_PASSPHRASE = "db_passphrase"
         var dbAuthToken = sharedPrefs.getString(PREF_KEY_DB_PASSPHRASE, null)
         if (dbAuthToken == null) {
             val bytes = ByteArray(32)
