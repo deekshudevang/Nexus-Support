@@ -22,7 +22,7 @@ The mapping layer is powered by **OsmDroid** and **Mapsforge**:
 [MapDownloadScreen / Worker]
                │
                ▼
-Downloads regional .map tile packages (e.g., California.map, Tokyo.map)
+Downloads regional .map tile packages (e.g., maharashtra.map, karnataka.map)
                │
                ▼
 Stored to /data/user/0/com.meshlink.app/files/maps/

@@ -41,11 +41,36 @@ class MapDataManager @Inject constructor(
     private val _downloadStates = MutableStateFlow<Map<String, DownloadState>>(emptyMap())
     val downloadStates: StateFlow<Map<String, DownloadState>> = _downloadStates.asStateFlow()
 
-    // Sample regions. In a real app, this would be fetched from a server.
+    // Sample regions for India. In a real app, this would be fetched from a server.
     val availableRegions = listOf(
-        MapRegion("berlin", "Berlin, Germany", "https://raw.githubusercontent.com/mapsforge/mapsforge/master/mapsforge-map-reader/src/test/resources/berlin.map", 1500000),
-        MapRegion("california", "California, USA", "https://example.com/california.map", 150000000),
-        MapRegion("london", "London, UK", "https://example.com/london.map", 50000000)
+        MapRegion("andhra_pradesh", "Andhra Pradesh", "https://example.com/india/andhra_pradesh.map", 45000000),
+        MapRegion("arunachal_pradesh", "Arunachal Pradesh", "https://example.com/india/arunachal_pradesh.map", 15000000),
+        MapRegion("assam", "Assam", "https://example.com/india/assam.map", 30000000),
+        MapRegion("bihar", "Bihar", "https://example.com/india/bihar.map", 35000000),
+        MapRegion("chhattisgarh", "Chhattisgarh", "https://example.com/india/chhattisgarh.map", 25000000),
+        MapRegion("goa", "Goa", "https://example.com/india/goa.map", 5000000),
+        MapRegion("gujarat", "Gujarat", "https://example.com/india/gujarat.map", 40000000),
+        MapRegion("haryana", "Haryana", "https://example.com/india/haryana.map", 20000000),
+        MapRegion("himachal_pradesh", "Himachal Pradesh", "https://example.com/india/himachal_pradesh.map", 18000000),
+        MapRegion("jharkhand", "Jharkhand", "https://example.com/india/jharkhand.map", 22000000),
+        MapRegion("karnataka", "Karnataka", "https://example.com/india/karnataka.map", 48000000),
+        MapRegion("kerala", "Kerala", "https://example.com/india/kerala.map", 25000000),
+        MapRegion("madhya_pradesh", "Madhya Pradesh", "https://example.com/india/madhya_pradesh.map", 50000000),
+        MapRegion("maharashtra", "Maharashtra", "https://example.com/india/maharashtra.map", 60000000),
+        MapRegion("manipur", "Manipur", "https://example.com/india/manipur.map", 8000000),
+        MapRegion("meghalaya", "Meghalaya", "https://example.com/india/meghalaya.map", 7000000),
+        MapRegion("mizoram", "Mizoram", "https://example.com/india/mizoram.map", 5000000),
+        MapRegion("nagaland", "Nagaland", "https://example.com/india/nagaland.map", 6000000),
+        MapRegion("odisha", "Odisha", "https://example.com/india/odisha.map", 32000000),
+        MapRegion("punjab", "Punjab", "https://example.com/india/punjab.map", 24000000),
+        MapRegion("rajasthan", "Rajasthan", "https://example.com/india/rajasthan.map", 45000000),
+        MapRegion("sikkim", "Sikkim", "https://example.com/india/sikkim.map", 3000000),
+        MapRegion("tamil_nadu", "Tamil Nadu", "https://example.com/india/tamil_nadu.map", 55000000),
+        MapRegion("telangana", "Telangana", "https://example.com/india/telangana.map", 38000000),
+        MapRegion("tripura", "Tripura", "https://example.com/india/tripura.map", 9000000),
+        MapRegion("uttar_pradesh", "Uttar Pradesh", "https://example.com/india/uttar_pradesh.map", 70000000),
+        MapRegion("uttarakhand", "Uttarakhand", "https://example.com/india/uttarakhand.map", 15000000),
+        MapRegion("west_bengal", "West Bengal", "https://example.com/india/west_bengal.map", 42000000)
     )
 
     suspend fun downloadRegionalMap(regionId: String, downloadUrl: String): Boolean {
