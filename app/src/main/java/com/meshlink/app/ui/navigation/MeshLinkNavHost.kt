@@ -14,6 +14,8 @@ import com.meshlink.app.ui.home.HomeScreen
 import com.meshlink.app.ui.medical.MedicalProfileScreen
 import com.meshlink.app.ui.sos.SosScreen
 import com.meshlink.app.ui.settings.SettingsScreen
+import com.meshlink.app.ui.guide.EmergencyGuideScreen
+import com.meshlink.app.ui.dashboard.NodeDashboardScreen
 
 @Composable
 fun MeshLinkNavHost(
@@ -55,7 +57,11 @@ fun MeshLinkNavHost(
         // ── SOS tab ───────────────────────────────────────────────────────────
         composable(Screen.Sos.route) {
             val viewModel: com.meshlink.app.ui.sos.SosViewModel = androidx.hilt.navigation.compose.hiltViewModel()
-            SosScreen(viewModel = viewModel)
+            SosScreen(
+                viewModel = viewModel,
+                onGuideClick = { navController.navigate(Screen.EmergencyGuide.route) },
+                onDashboardClick = { navController.navigate(Screen.NodeDashboard.route) }
+            )
         }
 
         // ── MAP tab ───────────────────────────────────────────────────────────
@@ -105,6 +111,28 @@ fun MeshLinkNavHost(
         // ── Debug Dashboard (full-screen, no bottom bar) ──────────────────────
         composable(Screen.DebugDashboard.route) {
             com.meshlink.app.ui.debug.DebugDashboardScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // ── Emergency Guide (full-screen) ─────────────────────────────────────
+        composable(Screen.EmergencyGuide.route) {
+            EmergencyGuideScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToAi = { navController.navigate(Screen.AiAssistant.route) }
+            )
+        }
+
+        // ── Node Dashboard (full-screen) ──────────────────────────────────────
+        composable(Screen.NodeDashboard.route) {
+            NodeDashboardScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // ── AI Assistant (full-screen) ────────────────────────────────────────
+        composable(Screen.AiAssistant.route) {
+            com.meshlink.app.ai.AiAssistantScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

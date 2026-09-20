@@ -42,12 +42,12 @@ class LocationSyncManagerImpl @Inject constructor(
 
     override suspend fun onPeerConnected(peerDeviceId: String) {
         withContext(Dispatchers.IO) {
-            Timber.i("LocationSyncManager: Peer connected $peerDeviceId, initiating VectorClock exchange.")
-            // Get our current VectorClock state
+            Timber.i("LocationSyncManager: Peer connected $peerDeviceId — initiating bidirectional VectorClock exchange.")
+            // Send our VectorClock so the peer knows what we have and can send us their delta.
+            // The peer will respond with their own VectorClock, triggering our handleVectorClockRequest
+            // to send them back anything they're missing. This ensures both sides converge after a partition.
             val ourClocks = locationEventDao.getVectorClock()
             val payload = buildVectorClockPayload(ourClocks)
-            
-            // Send VectorClock to peer
             sendPayloadToPeer(peerDeviceId, payload)
         }
     }
@@ -71,40 +71,43 @@ class LocationSyncManagerImpl @Inject constructor(
         val obj = JSONObject(payload)
         val clocksArray = obj.getJSONArray("clocks")
         val peerState = mutableMapOf<String, Int>()
-        
+
         for (i in 0 until clocksArray.length()) {
             val clock = clocksArray.getJSONObject(i)
             peerState[clock.getString("peerId")] = clock.getInt("sequenceNumber")
         }
 
-        // Now compute the delta: what do we have that they don't?
+        // Compute delta: what do we have that the peer doesn't?
         val ourClocks = locationEventDao.getVectorClock()
         val missingEvents = mutableListOf<LocationEventEntity>()
 
         for (ourClock in ourClocks) {
             val peerSeq = peerState[ourClock.peerId] ?: 0
             if (ourClock.sequenceNumber > peerSeq) {
-                // Fetch events they are missing
                 val events = locationEventDao.getEventsAfterSequence(ourClock.peerId, peerSeq)
                 missingEvents.addAll(events)
             }
         }
 
-        if (missingEvents.isNotEmpty()) {
-            Timber.i("LocationSyncManager: Sending ${missingEvents.size} missing delta events to peer.")
-            // Implement split-horizon: don't send missing events back to the node that just requested them if it's not the target? 
-            // Wait, if they sent the vector clock request, they ARE the target. We DO want to send it to them!
-            // But we should ONLY send to them to save bandwidth, not broadcast to everyone.
+        if (missingEvents.isNotEmpty() && sourcePeerId != null) {
+            Timber.i("LocationSyncManager: Sending ${missingEvents.size} delta events to $sourcePeerId after partition merge.")
             val eventsPayload = buildEventsPayload(missingEvents, decrementTtl = false)
             val peers = nearbyRepository.get().getConnectedPeers()
-            // Send specifically to the source if known, otherwise broadcast
-            val targetPeers = if (sourcePeerId != null) peers.filterValues { it == sourcePeerId } else peers
+            val targetPeers = peers.filterValues { it == sourcePeerId }
             val result = meshRouter.buildLocationSync(eventsPayload, targetPeers)
             if (result is com.meshlink.app.mesh.routing.RoutingResult.Processed) {
                 result.forwardTargets.forEach { target ->
                     nearbyRepository.get().dispatchRawPacket(target.endpointId, target.packet)
                 }
             }
+        }
+
+        // Reply with our own VectorClock so the sender can compute THEIR delta too.
+        // This is the second leg of the bidirectional handshake:
+        // A sends clock → B sends delta + B's clock → A sends delta
+        if (sourcePeerId != null) {
+            val replyPayload = buildVectorClockPayload(ourClocks)
+            sendPayloadToPeer(sourcePeerId, replyPayload)
         }
     }
 

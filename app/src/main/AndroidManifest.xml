@@ -2,6 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
     <!-- ── Bluetooth ────────────────────────────────────────────────────── -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
@@ -22,6 +28,9 @@
     <!-- ── Location (required for Nearby discovery on API < 33, and SOS features) ─────────── -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- ── Audio (required for Voice AI Assistant) ────────────────────────── -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- ── Internet (required by Nearby Connections internally) ─────────── -->
     <uses-permission android:name="android.permission.INTERNET" />

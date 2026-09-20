@@ -48,6 +48,8 @@ class HomeViewModelTest {
 
         // Default: no connections
         every { nearbyRepo.connectionStates } returns MutableStateFlow(emptyMap())
+        every { pendingMessageRepo.getPendingCountFlow() } returns flowOf(0)
+        every { nearbyRepo.scanStrategy } returns MutableStateFlow(com.meshlink.app.domain.model.ScanStrategy.CONTINUOUS)
     }
 
     @After

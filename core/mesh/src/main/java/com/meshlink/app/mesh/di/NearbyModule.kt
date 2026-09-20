@@ -44,6 +44,11 @@ object NearbyProvideModule {
     @Singleton
     fun provideMeshtasticTransport(@ApplicationContext context: Context): com.meshlink.app.mesh.transport.MeshtasticTransport =
         com.meshlink.app.mesh.transport.MeshtasticBleTransport(context)
+
+    @Provides
+    @Singleton
+    fun provideSosBeaconAdvertiser(@ApplicationContext context: Context): com.meshlink.app.mesh.transport.SosBeaconAdvertiser =
+        com.meshlink.app.mesh.transport.SosBeaconAdvertiser(context)
 }
 
 @Module

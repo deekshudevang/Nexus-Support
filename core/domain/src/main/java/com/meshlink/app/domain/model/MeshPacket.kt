@@ -64,7 +64,9 @@ data class MeshPacket(
         /** Routing metadata. Plaintext JSON (battery, link quality). 1-2 hops max. */
         HEARTBEAT,
         /** Location synchronization payload. Contains JSON array of LocationEventEntity. */
-        LOCATION_SYNC
+        LOCATION_SYNC,
+        /** Node role/resource status announcement. JSON NodeStatus payload. */
+        STATUS_UPDATE
     }
 
     val isBroadcast: Boolean get() = finalDestId == BROADCAST_DEST

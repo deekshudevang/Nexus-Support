@@ -13,6 +13,7 @@ import com.meshlink.app.domain.repository.MessageRepository
 import com.meshlink.app.domain.repository.NearbyRepository
 import com.meshlink.app.domain.repository.PendingMessageRepository
 import com.meshlink.app.domain.repository.UserProfileManager
+import com.meshlink.app.domain.repository.EmergencyGuideRepository
 import com.meshlink.app.mesh.di.NearbyBindModule
 import dagger.hilt.android.testing.BindValue
 import dagger.hilt.android.testing.HiltAndroidRule
@@ -57,6 +58,10 @@ class HomeScreenTest {
     @BindValue
     @JvmField
     val nearbyRepo: NearbyRepository = mockk(relaxed = true)
+
+    @BindValue
+    @JvmField
+    val emergencyGuideRepo: EmergencyGuideRepository = mockk(relaxed = true)
 
     @Before
     fun setUp() {

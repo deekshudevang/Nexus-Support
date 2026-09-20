@@ -7,28 +7,28 @@ import androidx.compose.ui.graphics.Color
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── Core Palette ─────────────────────────────────────────────────────────────
-val Primary            = Color(0xFF2979FF)   // Electric Blue — startup aesthetic
-val PrimaryDark        = Color(0xFF1565C0)   // Deeper blue
-val PrimaryLight       = Color(0x332979FF)   // Light tint for containers (20% opacity)
-val PrimaryContainer   = Color(0x4D2979FF)   // Container (30% opacity)
+val Primary            = Color(0xFF00E5FF)   // Neon Cyan / Electric Blue
+val PrimaryDark        = Color(0xFF00B2CC)   // Deeper cyan
+val PrimaryLight       = Color(0x3300E5FF)   // Light tint for containers (20% opacity)
+val PrimaryContainer   = Color(0x4D00E5FF)   // Container (30% opacity)
 
-val Secondary          = Color(0xFFBB86FC)   // Neon Purple — accent / highlights
-val SecondaryDark      = Color(0xFF9B51E0)   // Deep purple
-val SecondaryLight     = Color(0x33BB86FC)   // Light purple tint
-val SecondaryContainer = Color(0x4DBB86FC)   // Purple container
+val Secondary          = Color(0xFFB026FF)   // Neon Purple
+val SecondaryDark      = Color(0xFF8B12CC)   // Deep purple
+val SecondaryLight     = Color(0x33B026FF)   // Light purple tint
+val SecondaryContainer = Color(0x4DB026FF)   // Purple container
 
-val Tertiary           = Color(0xFF00E676)   // Spring Green — success, connected, safe
-val TertiaryDark       = Color(0xFF00C853)   // Pressed green
-val TertiaryLight      = Color(0x3300E676)   // Light green tint
-val TertiaryContainer  = Color(0x4D00E676)   // Green container
+val Tertiary           = Color(0xFF00FFA3)   // Neon Green
+val TertiaryDark       = Color(0xFF00CC82)   // Deeper green
+val TertiaryLight      = Color(0x3300FFA3)   // Light green tint
+val TertiaryContainer  = Color(0x4D00FFA3)   // Green container
 
 val Neutral            = Color(0xFFFFFFFF)   // Near-white — primary text on dark
 
 // ── Backgrounds & Surfaces (DARK MODE) ───────────────────────────────────────
-val AppBackground      = Color(0xFF0B0B0C)   // Deep OLED Black
-val CardSurface        = Color(0xFF151518)   // Elevated sleek surface for cards
-val SurfaceVariant     = Color(0xFF1E1E22)   // Input fields, secondary surfaces
-val SurfaceBright      = Color(0xFF28282D)   // Elevated bright surface
+val AppBackground      = Color(0xFF000000)   // True OLED Black
+val CardSurface        = Color(0xFF0F0F13)   // Elevated sleek surface for cards
+val SurfaceVariant     = Color(0xFF16161A)   // Input fields, secondary surfaces
+val SurfaceBright      = Color(0xFF1F1F24)   // Elevated bright surface
 
 // ── Text Colors ──────────────────────────────────────────────────────────────
 val TextPrimary        = Color(0xFFF0F0F0)   // Primary text (Soft White)
