@@ -1,5 +1,13 @@
 syntax = "proto3";
 
+// -----------------------------------------------------------------------------
+// PROTOBUF VERSIONING RULES (DO NOT IGNORE)
+// 1. Additive changes only. Never remove or rename existing fields.
+// 2. Never reuse a field number. If a field is deprecated, prefix its name 
+//    with `deprecated_` or use the `[deprecated=true]` option, and leave it.
+// 3. Changing field types (e.g., uint32 to int32) breaks wire compatibility.
+// -----------------------------------------------------------------------------
+
 package meshtastic;
 
 import "portnums.proto";

@@ -9,7 +9,7 @@ import com.meshlink.app.domain.model.VectorClock
 import com.meshlink.app.domain.repository.DeviceRepository
 import com.meshlink.app.domain.repository.NearbyRepository
 import com.meshlink.app.mesh.routing.MeshRouter
-import com.meshlink.app.crypto.CryptoManager
+import com.meshlink.app.crypto.identity.KeyProvider
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -38,7 +38,7 @@ class PartitionReconnectTest {
     private val processedEventDao = mockk<ProcessedEventDao>(relaxed = true)
     private val meshRouter = mockk<MeshRouter>(relaxed = true)
     private val deviceRepository = mockk<DeviceRepository>(relaxed = true)
-    private val cryptoManager = mockk<CryptoManager>(relaxed = true)
+    private val keyProvider: KeyProvider = mockk(relaxed = true)
     private val nearbyRepository = mockk<NearbyRepository>(relaxed = true)
     private val nearbyLazy = mockk<dagger.Lazy<NearbyRepository>>()
 
@@ -48,7 +48,7 @@ class PartitionReconnectTest {
     @Before
     fun setup() {
         every { nearbyLazy.get() } returns nearbyRepository
-        every { cryptoManager.verify(any(), any(), any()) } returns true
+        every { keyProvider.verify(any(), any(), any()) } returns true
         coEvery { processedEventDao.isProcessed(any()) } returns false
 
         syncManager = LocationSyncManagerImpl(
@@ -58,7 +58,7 @@ class PartitionReconnectTest {
             meshRouter,
             deviceRepository,
             localDeviceId,
-            cryptoManager,
+            keyProvider,
             nearbyLazy
         )
     }

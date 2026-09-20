@@ -7,7 +7,7 @@ import com.meshlink.app.data.local.entity.LocationEventEntity
 import com.meshlink.app.domain.repository.DeviceRepository
 import com.meshlink.app.domain.repository.NearbyRepository
 import com.meshlink.app.mesh.routing.MeshRouter
-import com.meshlink.app.crypto.CryptoManager
+import com.meshlink.app.crypto.identity.KeyProvider
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import org.json.JSONArray
@@ -25,7 +25,7 @@ class LocationSyncManagerTest {
     private val processedEventDao: ProcessedEventDao = mockk(relaxed = true)
     private val meshRouter: MeshRouter = mockk(relaxed = true)
     private val deviceRepository: DeviceRepository = mockk(relaxed = true)
-    private val cryptoManager: CryptoManager = mockk(relaxed = true)
+    private val keyProvider: KeyProvider = mockk(relaxed = true)
     private val nearbyRepository: NearbyRepository = mockk(relaxed = true)
     
     private val localDeviceId = "local-device"
@@ -42,12 +42,12 @@ class LocationSyncManagerTest {
             meshRouter,
             deviceRepository,
             localDeviceId,
-            cryptoManager,
+            keyProvider,
             nearbyLazy
         )
 
         // Default stubs
-        every { cryptoManager.verify(any(), any(), any()) } returns true
+        every { keyProvider.verify(any(), any(), any()) } returns true
         coEvery { processedEventDao.isProcessed(any()) } returns false
     }
 

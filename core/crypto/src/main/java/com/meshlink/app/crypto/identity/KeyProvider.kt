@@ -13,4 +13,14 @@ interface KeyProvider {
      * Throws [java.security.GeneralSecurityException] on invalid peer key.
      */
     fun computeSharedSecret(peerPublicKeyBytes: ByteArray): ByteArray
+    
+    /**
+     * Signs [data] using ECDSA with SHA-256 and returns a Base64 encoded string.
+     */
+    fun sign(data: ByteArray): String
+    
+    /**
+     * Verifies an ECDSA signature [signatureBase64] against [data] using [publicKeyBase64].
+     */
+    fun verify(data: ByteArray, signatureBase64: String, publicKeyBase64: String): Boolean
 }

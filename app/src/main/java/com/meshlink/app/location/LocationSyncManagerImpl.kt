@@ -22,7 +22,7 @@ import com.meshlink.app.domain.repository.LocationSyncManager
 import com.meshlink.app.data.local.dao.ProcessedEventDao
 import com.meshlink.app.data.local.entity.ProcessedEventEntity
 import dagger.Lazy
-import com.meshlink.app.crypto.CryptoManager
+import com.meshlink.app.crypto.identity.KeyProvider
 
 @Singleton
 class LocationSyncManagerImpl @Inject constructor(
@@ -32,7 +32,7 @@ class LocationSyncManagerImpl @Inject constructor(
     private val meshRouter: MeshRouter,
     private val deviceRepository: DeviceRepository,
     @Named("localDeviceId") private val localDeviceId: String,
-    private val cryptoManager: CryptoManager,
+    private val keyProvider: KeyProvider,
     private val nearbyRepository: Lazy<NearbyRepository> // Lazy to avoid circular dependency
 ) : LocationSyncManager {
 
@@ -144,7 +144,7 @@ class LocationSyncManagerImpl @Inject constructor(
 
             // Verify the signature
             val payloadToVerify = "$eventId:$peerId:$latitude:$longitude:$accuracy:$timestamp:$sequenceNumber".toByteArray(Charsets.UTF_8)
-            val isValid = cryptoManager.verify(payloadToVerify, signature, publicKey)
+            val isValid = keyProvider.verify(payloadToVerify, signature, publicKey)
             if (!isValid) {
                 Timber.w("LocationSyncManager: Invalid signature for event $eventId from $peerId. Dropping.")
                 continue

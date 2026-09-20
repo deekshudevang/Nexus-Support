@@ -65,6 +65,32 @@ class ProductionKeyManager @Inject constructor(
         return keyAgreement.generateSecret()
     }
 
+    override fun sign(data: ByteArray): String {
+        val signature = java.security.Signature.getInstance("SHA256withECDSA").apply {
+            initSign(keyPair.private)
+            update(data)
+        }
+        return Base64.encodeToString(signature.sign(), Base64.NO_WRAP)
+    }
+
+    override fun verify(data: ByteArray, signatureBase64: String, publicKeyBase64: String): Boolean {
+        return try {
+            val publicKeyBytes = Base64.decode(publicKeyBase64, Base64.NO_WRAP)
+            val keyFactory = KeyFactory.getInstance(EC_ALGORITHM)
+            val publicKey: java.security.PublicKey = keyFactory.generatePublic(X509EncodedKeySpec(publicKeyBytes))
+
+            val signature = java.security.Signature.getInstance("SHA256withECDSA").apply {
+                initVerify(publicKey)
+                update(data)
+            }
+            val signatureBytes = Base64.decode(signatureBase64, Base64.NO_WRAP)
+            signature.verify(signatureBytes)
+        } catch (e: Exception) {
+            Timber.e(e, "Signature verification failed")
+            false
+        }
+    }
+
     private fun loadOrGenerate(): KeyPair {
         // 1. Check legacy software keys first to prevent breaking existing user identities
         val legacyPair = loadLegacySoftwareKeys()
@@ -121,7 +147,7 @@ class ProductionKeyManager @Inject constructor(
             context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
             
         val builder = KeyGenParameterSpec.Builder(
-            KEYSTORE_ALIAS, KeyProperties.PURPOSE_AGREE_KEY
+            KEYSTORE_ALIAS, KeyProperties.PURPOSE_AGREE_KEY or KeyProperties.PURPOSE_SIGN
         )
             .setAlgorithmParameterSpec(ECGenParameterSpec(CURVE))
             .setDigests(KeyProperties.DIGEST_SHA256)
