@@ -53,12 +53,12 @@ When communications infrastructure collapses during natural disasters, search-an
 | **Zero-Internet Maps** | 100% offline Mapsforge vector tile engine rendering topo & street maps directly on-device. |
 | **High-Precision GPS** | Sub-meter location tracking synchronized via **Vector Clocks & CRDTs** for eventual consistency. |
 | **Store & Forward** | Persistent message buffer (48h TTL) delivering packets automatically when disconnected peers rejoin. |
-| **Hardware KeyStore** | EC P-256 identity key generation isolated within **StrongBox Keymaster HSM** / TEE enclaves. |
+| **Hardware KeyStore** | EC P-256 identity key generation via EncryptedSharedPreferences *(Roadmap: StrongBox Keymaster HSM)*. |
 | **End-to-End Encryption** | Direct **AES-256-GCM** sessions + multi-hop **ECIES** (Ephemeral ECDH + HKDF SHA-256). |
 | **Tamper Proofing** | ECDSA SHA-256 signatures bound to packet UUIDs with a 24h temporal validity window. |
 | **At-Rest Encryption** | Entire Room SQLite database encrypted at rest via **SQLCipher AES-256-CBC**. |
 | **Battery Intelligence** | Adaptive scan cycle adjusting discovery intervals based on battery level and movement. |
-| **Opportunistic Sync** | Background WorkManager syncing pending telemetry to cloud backends if internet restores. |
+| **Opportunistic Sync** | Architecture in place for WorkManager syncing telemetry to cloud backends *(Currently mocked)*. |
 
 ---
 
@@ -121,7 +121,7 @@ Nexus Support treats every radio link as an insecure medium:
 │                        Wire Packet Security                            │
 ├──────────────────────────┬─────────────────────────────────────────────┤
 │ Identity                 │ NIST P-256 (secp256r1) EC KeyPair           │
-│ Hardware Module          │ Android StrongBox HSM / Hardware TEE        │
+│ Hardware Module          │ EncryptedSharedPreferences (Roadmap: StrongBox)   │
 │ Direct Link Encryption   │ AES-256-GCM (96-bit Nonce, 128-bit Tag)     │
 │ Multi-Hop Routing        │ ECIES (Ephemeral ECDH + HKDF-SHA256)        │
 │ Replay Defense           │ ECDSA(SHA-256, eventId ∥ peerId ∥ payload)  │

@@ -8,15 +8,16 @@ Nexus Support is architected with a zero-trust threat model. In an offline disas
 
 ### Node Identity KeyPair
 - **Algorithm**: Elliptic Curve Diffie-Hellman / Digital Signature Algorithm (ECDH/ECDSA) over NIST curve **P-256 (secp256r1)**.
-- **Enclave**: Generated via `KeyGenParameterSpec` inside the **Android KeyStore provider**.
-- **StrongBox Backing**:
+- **Enclave**: Currently uses `EncryptedSharedPreferences` for broad device compatibility.
+- **StrongBox Backing (Roadmap)**:
+  Future updates will generate keys inside the Android KeyStore provider with StrongBox backing:
   ```kotlin
   if (context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)) {
       builder.setIsStrongBoxBacked(true)
   }
   ```
-  On devices with dedicated tamper-resistant hardware security modules (HSM) such as Pixel Titan M or Samsung Knox, keys are isolated from the main application processor.
-- **Exportability**: Private keys are marked non-exportable (`PURPOSE_SIGN`, `PURPOSE_DECRYPT`).
+  On devices with dedicated tamper-resistant hardware security modules (HSM) such as Pixel Titan M or Samsung Knox, keys will be isolated from the main application processor.
+- **Exportability**: Keys are meant to be non-exportable once migrated to KeyStore.
 
 ---
 

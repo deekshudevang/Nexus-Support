@@ -58,7 +58,7 @@ fun AiAssistantScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Offline AI Assistant") },
+                title = { Text("Offline AI Assistant (Experimental)") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, "Back")
