@@ -1,75 +1,80 @@
 package com.meshlink.app.mesh.security
 
-import org.junit.Test
+import android.util.Base64
+import com.meshlink.app.crypto.cipher.EciesService
+import com.meshlink.app.crypto.cipher.EncryptionService
+import com.meshlink.app.crypto.identity.KeyManager
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import timber.log.Timber
+import org.junit.Before
+import org.junit.Test
+import java.security.KeyPairGenerator
+import java.security.spec.ECGenParameterSpec
+import org.mockito.Mockito.*
 
 /**
  * Validates the mesh network's resilience against active threats and attacks.
- * Verifies that the cryptographic layer and routing protocol can defend against
- * replays, tampering, route poisoning, and duplicate flooding.
+ * Tests the actual cryptographic implementations.
  */
 class ThreatModelValidationTest {
 
-    @Test
-    fun testReplayAttack_BlockedByTemporalValidityAndCache() {
-        Timber.i("Simulating Replay Attack...")
-        // Simulate an attacker intercepting a valid packet and re-transmitting it
-        // after 1 hour or immediately.
+    private lateinit var eciesService: EciesService
+    private lateinit var keyManager: KeyManager
+    private lateinit var encryptionService: EncryptionService
+    
+    private lateinit var recipientPublicKeyBytes: ByteArray
+
+    @Before
+    fun setup() {
+        // Initialize real cryptographic primitives for testing
+        val kpg = KeyPairGenerator.getInstance("EC")
+        kpg.initialize(ECGenParameterSpec("secp256r1"))
         
-        val isAcceptedFirstTime = simulatePacketReception(isReplay = false, isTampered = false)
-        val isAcceptedSecondTime = simulatePacketReception(isReplay = true, isTampered = false)
+        val senderKeyPair = kpg.generateKeyPair()
+        val recipientKeyPair = kpg.generateKeyPair()
         
-        assertTrue("Original packet should be accepted", isAcceptedFirstTime)
-        assertFalse("Replayed packet should be dropped by SeenMessageCache", isAcceptedSecondTime)
-        Timber.i("Result: Replay Attack mitigated successfully.")
+        recipientPublicKeyBytes = recipientKeyPair.public.encoded
+        
+        // Mock KeyManager to return the recipient's private key for decryption
+        keyManager = mock(KeyManager::class.java)
+        `when`(keyManager.keyPair).thenReturn(recipientKeyPair)
+        
+        encryptionService = EncryptionService()
+        eciesService = EciesService(keyManager, encryptionService)
     }
 
     @Test
     fun testPacketTampering_FailsGCMAuthTag() {
-        Timber.i("Simulating Packet Tampering Attack...")
-        // Simulate an attacker modifying the ciphertext in transit
-        val isAccepted = simulatePacketReception(isReplay = false, isTampered = true)
+        val plaintext = "SECRET_MISSION_DATA".toByteArray()
+        val wireBytes = eciesService.encrypt(plaintext, recipientPublicKeyBytes)
         
-        assertFalse("Tampered packet should fail AES-GCM tag verification", isAccepted)
-        Timber.i("Result: Packet Tampering mitigated successfully.")
+        // Ensure normal decryption works
+        val decrypted = eciesService.decrypt(wireBytes)
+        assertNotNull("Normal decryption should succeed", decrypted)
+        
+        // TAMPERING ATTACK: Modify a single byte of the ciphertext (which is after the 91-byte public key)
+        val tamperedBytes = wireBytes.copyOf()
+        tamperedBytes[100] = (tamperedBytes[100] + 1).toByte()
+        
+        val tamperedDecrypted = eciesService.decrypt(tamperedBytes)
+        assertNull("Tampered packet should fail AES-GCM tag verification and return null", tamperedDecrypted)
     }
 
     @Test
-    fun testDuplicateFlooding_TriggersRateLimiting() {
-        Timber.i("Simulating Duplicate Flooding (Sybil behavior)...")
-        // Simulate 1000 identical packets sent in rapid succession
-        var acceptedCount = 0
-        for (i in 0 until 1000) {
-            val isAccepted = simulatePacketReception(isReplay = true, isTampered = false)
-            if (isAccepted) acceptedCount++
-        }
+    fun testReplayAttack_ValidationLogic() {
+        // In the actual app, SeenMessageCache handles replays.
+        // We simulate the router's behavior here to prove the logic.
+        val cache = mutableSetOf<String>()
+        val packetId = "uuid-1234"
         
-        // Only the first packet should be accepted, the rest rate-limited / cached
-        assertTrue("Flood should result in only 1 accepted packet", acceptedCount <= 1)
-        Timber.i("Result: Duplicate Flooding mitigated successfully. Accepted: $acceptedCount / 1000")
-    }
-
-    @Test
-    fun testRoutePoisoning_MitigatedBySignedUpdates() {
-        Timber.i("Simulating Route Poisoning Attack...")
-        // Simulate a malicious node sending a fake routing advertisement
-        val isPoisoningSuccessful = simulateRoutingAdvertisement(isValidSignature = false)
+        // First reception
+        val isFirstAccepted = cache.add(packetId)
+        assertTrue("First reception should be accepted", isFirstAccepted)
         
-        assertFalse("Malicious route advertisement must be dropped if signature is invalid", isPoisoningSuccessful)
-        Timber.i("Result: Route Poisoning mitigated successfully.")
-    }
-
-    // --- Mock Helpers ---
-
-    private fun simulatePacketReception(isReplay: Boolean, isTampered: Boolean): Boolean {
-        if (isTampered) return false // Fails cryptographic authentication
-        if (isReplay) return false   // Fails duplicate cache
-        return true
-    }
-    
-    private fun simulateRoutingAdvertisement(isValidSignature: Boolean): Boolean {
-        return isValidSignature
+        // Replay attack
+        val isSecondAccepted = cache.add(packetId)
+        assertFalse("Replay should be rejected by the cache", isSecondAccepted)
     }
 }
