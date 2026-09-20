@@ -105,6 +105,7 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation("org.json:json:20210307")
 
     // Testing — instrumented / Compose UI tests
     androidTestImplementation(libs.androidx.junit)

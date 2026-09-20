@@ -152,7 +152,7 @@ class ProductionKeyManager @Inject constructor(
             .setAlgorithmParameterSpec(ECGenParameterSpec(CURVE))
             .setDigests(KeyProperties.DIGEST_SHA256)
             
-        if (hasStrongBox) {
+        if (hasStrongBox && Build.VERSION.SDK_INT >= 28) {
             builder.setIsStrongBoxBacked(true)
         }
         
@@ -163,13 +163,19 @@ class ProductionKeyManager @Inject constructor(
             val kp = generator.generateKeyPair()
             Timber.d("KeyManager: generated new hardware identity key (StrongBox=$hasStrongBox, deviceId=${sha256Hex(kp.public.encoded).take(16)})")
             kp
-        } catch (e: android.security.keystore.StrongBoxUnavailableException) {
-            Timber.w(e, "KeyManager: StrongBox unavailable despite feature flag. Falling back to TEE.")
-            builder.setIsStrongBoxBacked(false)
-            generator.initialize(builder.build())
-            val kp = generator.generateKeyPair()
-            Timber.d("KeyManager: generated new hardware identity key (StrongBox=false fallback, deviceId=${sha256Hex(kp.public.encoded).take(16)})")
-            kp
+        } catch (e: java.security.ProviderException) {
+            if (hasStrongBox && e.javaClass.simpleName == "StrongBoxUnavailableException") {
+                Timber.w(e, "KeyManager: StrongBox unavailable despite feature flag. Falling back to TEE.")
+                if (Build.VERSION.SDK_INT >= 28) {
+                    builder.setIsStrongBoxBacked(false)
+                }
+                generator.initialize(builder.build())
+                val kp = generator.generateKeyPair()
+                Timber.d("KeyManager: generated new hardware identity key (StrongBox=false fallback, deviceId=${sha256Hex(kp.public.encoded).take(16)})")
+                kp
+            } else {
+                throw e
+            }
         }
     }
 

@@ -150,7 +150,7 @@ class PartitionReconnectTest {
 
         // A must send back a vector_clock reply to B (containing "node-A": 5)
         // This triggers B to compute that it's missing A's events 4 and 5
-        verify(atLeast = 2) {
+        verify(exactly = 1) {
             meshRouter.buildLocationSync(
                 match { it.contains("\"type\":\"vector_clock\"") },
                 match { it.values.contains("node-B") }

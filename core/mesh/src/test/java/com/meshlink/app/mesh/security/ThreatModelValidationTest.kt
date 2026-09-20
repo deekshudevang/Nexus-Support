@@ -4,6 +4,8 @@ import android.util.Base64
 import com.meshlink.app.crypto.cipher.EciesService
 import com.meshlink.app.crypto.cipher.EncryptionService
 import com.meshlink.app.crypto.identity.KeyProvider
+import io.mockk.every
+import io.mockk.mockk
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -12,7 +14,6 @@ import org.junit.Before
 import org.junit.Test
 import java.security.KeyPairGenerator
 import java.security.spec.ECGenParameterSpec
-import org.mockito.Mockito.*
 
 /**
  * Validates the mesh network's resilience against active threats and attacks.
@@ -38,8 +39,8 @@ class ThreatModelValidationTest {
         recipientPublicKeyBytes = recipientKeyPair.public.encoded
         
         // Mock KeyManager to return the recipient's private key for decryption
-        keyManager = mock(KeyProvider::class.java)
-        `when`(keyManager.keyPair).thenReturn(recipientKeyPair)
+        keyManager = mockk()
+        every { keyManager.keyPair } returns recipientKeyPair
         
         encryptionService = EncryptionService()
         eciesService = EciesService(keyManager, encryptionService)
@@ -80,7 +81,6 @@ class ThreatModelValidationTest {
 
     @Test
     fun testDuplicateFlooding_TriggersRateLimiting() {
-        Timber.i("Simulating Duplicate Flooding (Sybil behavior)...")
         // Simulate 1000 identical packets sent in rapid succession
         val cache = mutableSetOf<String>()
         val packetId = "uuid-flood-999"
@@ -93,17 +93,14 @@ class ThreatModelValidationTest {
         
         // Only the first packet should be accepted, the rest rate-limited / cached
         assertTrue("Flood should result in only 1 accepted packet", acceptedCount <= 1)
-        Timber.i("Result: Duplicate Flooding mitigated successfully. Accepted: $acceptedCount / 1000")
     }
 
     @Test
     fun testRoutePoisoning_MitigatedBySignedUpdates() {
-        Timber.i("Simulating Route Poisoning Attack...")
         // Simulate a malicious node sending a fake routing advertisement
         // In a real scenario, this would verify the ECDSA signature of the packet
         val maliciousSignatureValid = false // Fails cryptographic verification
         
         assertFalse("Malicious route advertisement must be dropped if signature is invalid", maliciousSignatureValid)
-        Timber.i("Result: Route Poisoning mitigated successfully.")
     }
 }

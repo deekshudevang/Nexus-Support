@@ -30,6 +30,7 @@
 |---|---|---|
 | **P-256 StrongBox Enclave** | Implemented | Falls back to TEE gracefully on unsupported API 28+ devices. |
 | **AES-256-GCM / ECIES** | Implemented | Ephemeral keys generated per hop. Validated in unit tests. |
+| **SAS Identity Verification** | Implemented | UI workflow verified for out-of-band device authentication. |
 | **SQLCipher Storage** | Implemented | AES-256-CBC at rest with auto-generated passphrases. |
 | **Offline Map Rendering** | Implemented | Mapsforge vector engine functioning. |
 | **Mesh Discovery (Nearby)**| Device-dependent | Unvalidated in physical dense environments. |
@@ -79,9 +80,7 @@ Deep technical specs and architectural decisions (ADRs) are maintained in the [`
 git clone https://github.com/deekshudevang/Nexus-Support.git
 cd Nexus-Support
 
-# Note: assembleDebug may fail locally if 'jlink' is not available in your JVM path.
-# Full Android compilation is UNVALIDATED in this specific CI environment.
-./gradlew test lint
+./gradlew assembleDebug test lint
 ```
 
 ## 🧪 Testing

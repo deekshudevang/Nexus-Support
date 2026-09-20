@@ -95,7 +95,10 @@ class HomeViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.conversations.test {
-            val conversations = awaitItem()
+            var conversations = awaitItem()
+            if (conversations.isEmpty()) {
+                conversations = awaitItem()
+            }
             assertEquals(1, conversations.size)
             assertEquals("Alice", conversations[0].deviceName)
             assertEquals("peer-id", conversations[0].deviceId)
@@ -121,7 +124,10 @@ class HomeViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.conversations.test {
-            val conversations = awaitItem()
+            var conversations = awaitItem()
+            if (conversations.isEmpty()) {
+                conversations = awaitItem()
+            }
             assertEquals(1, conversations.size)
             assertEquals("unknown-", conversations[0].deviceName)  // take(8)
             cancelAndIgnoreRemainingEvents()
@@ -140,7 +146,10 @@ class HomeViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.conversations.test {
-            val conversations = awaitItem()
+            var conversations = awaitItem()
+            if (conversations.isEmpty()) {
+                conversations = awaitItem()
+            }
             assertEquals(2, conversations.size)
             assertTrue(conversations[0].timestamp > conversations[1].timestamp)
             cancelAndIgnoreRemainingEvents()
@@ -178,7 +187,11 @@ class HomeViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.peerCount.test {
-            assertEquals(2, awaitItem())  // only 2 CONNECTED, not CONNECTING
+            var count = awaitItem()
+            if (count == 0) {
+                count = awaitItem()
+            }
+            assertEquals(2, count)  // only 2 CONNECTED, not CONNECTING
             cancelAndIgnoreRemainingEvents()
         }
     }

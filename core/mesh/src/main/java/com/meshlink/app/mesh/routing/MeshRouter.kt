@@ -100,6 +100,16 @@ class MeshRouter @Inject constructor(
         }
         seenMessageCache.markSeen(packet.messageId)
 
+        if (packet.type == PacketType.HEARTBEAT) {
+            val now = System.currentTimeMillis()
+            val lastSeen = heartbeatLastSeen[packet.originId] ?: 0L
+            if (now - lastSeen < HEARTBEAT_MIN_INTERVAL_MS) {
+                Timber.w("MeshRouter: Rate-limiting HEARTBEAT flood from ${packet.originId}")
+                return@withContext RoutingResult.Drop
+            }
+            heartbeatLastSeen[packet.originId] = now
+        }
+
         // 2. TTL check
         if (packet.hopCount >= packet.maxHops) {
             Timber.d("MeshRouter: DROP TTL exceeded hopCount=${packet.hopCount} maxHops=${packet.maxHops}")
@@ -530,14 +540,6 @@ class MeshRouter @Inject constructor(
 
             PacketType.HEARTBEAT -> {
                 try {
-                    val now = System.currentTimeMillis()
-                    val lastSeen = heartbeatLastSeen[packet.originId] ?: 0L
-                    if (now - lastSeen < HEARTBEAT_MIN_INTERVAL_MS) {
-                        Timber.w("MeshRouter: Rate-limiting HEARTBEAT flood from ${packet.originId}")
-                        return null
-                    }
-                    heartbeatLastSeen[packet.originId] = now
-
                     val j = org.json.JSONObject(packet.content)
                     val battery = j.optInt("battery", 100)
                     val nArr = j.optJSONArray("neighbors")

@@ -50,6 +50,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
+    testImplementation("org.json:json:20210307")
 
     implementation(libs.protobuf.javalite)
 }
