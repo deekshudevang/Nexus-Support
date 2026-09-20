@@ -7,6 +7,7 @@ import com.meshlink.app.crypto.session.SessionKeyStore
 import com.meshlink.app.domain.model.Message
 import com.meshlink.app.domain.model.MeshPacket
 import com.meshlink.app.domain.model.MeshPacket.PacketType
+import com.meshlink.app.domain.model.NodeStatus
 import com.meshlink.app.domain.model.PendingMessage
 import com.meshlink.app.domain.repository.DeviceRepository
 import com.meshlink.app.domain.repository.MessageRepository
@@ -418,6 +419,39 @@ class MeshRouter @Inject constructor(
         return RoutingResult.Processed(localMessage = null, forwardTargets = targets)
     }
 
+    /**
+     * Build a [PacketType.STATUS_UPDATE] packet to announce this node's role and resources.
+     * Inspired by RescueMesh-1's community dashboard resource coordination.
+     */
+    fun buildStatusUpdate(
+        nodeStatus: NodeStatus,
+        connectedPeers: Map<String, String>
+    ): RoutingResult {
+        val messageId = UUID.randomUUID().toString()
+        seenMessageCache.markSeen(messageId)
+
+        // Also update our own routing table
+        routingTable.updateNodeStatus(nodeStatus)
+
+        val packet = MeshPacket(
+            senderId    = myDeviceId,
+            receiverId  = MeshPacket.BROADCAST_DEST,
+            content     = nodeStatus.toJson(),
+            timestamp   = System.currentTimeMillis(),
+            type        = PacketType.STATUS_UPDATE,
+            messageId   = messageId,
+            originId    = myDeviceId,
+            finalDestId = MeshPacket.BROADCAST_DEST,
+            hopCount    = 0,
+            maxHops     = 5,
+            priority    = 1,
+            senderName  = userProfileManager.getDisplayName()
+        )
+
+        val targets = connectedPeers.keys.map { ep -> ForwardTarget(ep, packet) }
+        return RoutingResult.Processed(localMessage = null, forwardTargets = targets)
+    }
+
     // ── Pending queue flushing ────────────────────────────────────────────────
 
     /**
@@ -527,10 +561,20 @@ class MeshRouter @Inject constructor(
             }
 
             PacketType.LOCATION_SYNC -> {
-                // Return null because location events are not normal chat messages
-                // We let the dedicated Sync Manager process the payload later.
-                // Just log it for now.
                 Timber.d("MeshRouter: Received LOCATION_SYNC payload size=${packet.content.length}")
+                return null
+            }
+
+            PacketType.STATUS_UPDATE -> {
+                try {
+                    val status = packet.content.toNodeStatusOrNull()
+                    if (status != null) {
+                        routingTable.updateNodeStatus(status)
+                        Timber.i("MeshRouter: Updated status for ${status.deviceId} role=${status.role}")
+                    }
+                } catch (e: Exception) {
+                    Timber.w(e, "Failed to parse STATUS_UPDATE payload")
+                }
                 return null
             }
 
@@ -732,6 +776,28 @@ private fun String.toMeshPacketOrNull(): MeshPacket? = try {
         maxHops      = j.optInt("maxHops", 7),
         routeHistory = history,
         senderName   = j.optString("senderName", "")
+    )
+} catch (e: Exception) {
+    null
+}
+
+private fun String.toNodeStatusOrNull(): NodeStatus? = try {
+    val j = org.json.JSONObject(this)
+    NodeStatus(
+        deviceId = j.getString("deviceId"),
+        displayName = j.optString("displayName", ""),
+        role = try {
+            com.meshlink.app.domain.model.NodeRole.valueOf(j.optString("role", "SURVIVOR"))
+        } catch (_: Exception) { com.meshlink.app.domain.model.NodeRole.SURVIVOR },
+        batteryLevel = j.optInt("batteryLevel", 100),
+        hasWater = j.optBoolean("hasWater", false),
+        hasFood = j.optBoolean("hasFood", false),
+        hasMedKit = j.optBoolean("hasMedKit", false),
+        needsHelp = j.optBoolean("needsHelp", false),
+        personCount = j.optInt("personCount", 1),
+        latitude = j.optDouble("latitude", 0.0),
+        longitude = j.optDouble("longitude", 0.0),
+        timestamp = j.optLong("timestamp", System.currentTimeMillis())
     )
 } catch (e: Exception) {
     null

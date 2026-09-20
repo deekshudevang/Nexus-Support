@@ -5,9 +5,11 @@ import com.meshlink.app.data.repository.MessageRepositoryImpl
 import com.meshlink.app.data.repository.PendingMessageRepositoryImpl
 import com.meshlink.app.data.repository.UserProfileManagerImpl
 import com.meshlink.app.domain.repository.DeviceRepository
+import com.meshlink.app.domain.repository.EmergencyGuideRepository
 import com.meshlink.app.domain.repository.MessageRepository
 import com.meshlink.app.domain.repository.PendingMessageRepository
 import com.meshlink.app.domain.repository.UserProfileManager
+import com.meshlink.app.data.repository.EmergencyGuideRepositoryImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -28,4 +30,7 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindUserProfileManager(impl: UserProfileManagerImpl): UserProfileManager
+
+    @Binds
+    abstract fun bindEmergencyGuideRepository(impl: EmergencyGuideRepositoryImpl): EmergencyGuideRepository
 }

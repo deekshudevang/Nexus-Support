@@ -8,6 +8,7 @@ import com.meshlink.app.domain.model.Message
 import com.meshlink.app.domain.model.MeshPacket
 import com.meshlink.app.domain.repository.MessageRepository
 import com.meshlink.app.domain.repository.NearbyRepository
+import com.meshlink.app.mesh.battery.BatteryMonitor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,6 +31,7 @@ class ChatViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val messageRepository: MessageRepository,
     private val nearbyRepository: NearbyRepository,
+    private val batteryMonitor: BatteryMonitor,
     @Named("localDeviceId") val localDeviceId: String
 ) : ViewModel() {
 
@@ -149,7 +151,7 @@ class ChatViewModel @Inject constructor(
     // --- MOCK TELEMETRY FOR UI REDESIGN ---
     val snr = MutableStateFlow("+8.2 dB")
     val signalStrength = MutableStateFlow("-62 dBm")
-    val battery = MutableStateFlow("88%")
+    val battery = MutableStateFlow(batteryMonitor.getBatteryLevel().toString())
     val protocol = MutableStateFlow("NOISE-XX PROTOCOL")
     val modulation = MutableStateFlow("SF11 / BW: 125 kHz")
     val dutyCycleAirtime = MutableStateFlow("~0.84s")

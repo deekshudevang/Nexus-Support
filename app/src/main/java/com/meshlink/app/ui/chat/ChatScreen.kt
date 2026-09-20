@@ -18,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -69,13 +70,12 @@ fun ChatScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(CardSurface)
-                .border(1.dp, Primary.copy(alpha = 0.15f))
+                .background(CardSurface.copy(alpha = 0.85f))
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBackClick) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Primary)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
@@ -124,18 +124,17 @@ fun ChatScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(CardSurface)
-                .border(1.dp, Primary.copy(alpha = 0.15f))
-                .padding(12.dp)
+                .background(CardSurface.copy(alpha = 0.9f))
+                .padding(16.dp)
         ) {
             // Quick action chips
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = 8.dp)
+                modifier = Modifier.padding(bottom = 12.dp)
             ) {
-                QuickActionChip(icon = Icons.Default.LocationOn, text = "Send Location")
-                QuickActionChip(icon = Icons.Default.Memory, text = "Send Vitals")
-                QuickActionChip(icon = Icons.Default.Map, text = "Send Map Tile")
+                QuickActionChip(icon = Icons.Default.LocationOn, text = "Location")
+                QuickActionChip(icon = Icons.Default.Memory, text = "Vitals")
+                QuickActionChip(icon = Icons.Default.Map, text = "Map Tile")
             }
             
             // Input field
@@ -143,9 +142,9 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF2C2C2C), RoundedCornerShape(4.dp))
-                    .border(1.dp, Color(0xFF333333), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .background(Color(0xFF1A1A1F), RoundedCornerShape(24.dp))
+                    .border(1.dp, Color(0xFF2A2A35), RoundedCornerShape(24.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 BasicTextField(
                     value = inputText,
@@ -162,11 +161,11 @@ fun ChatScreen(
                 
                 Box(
                     modifier = Modifier
-                        .background(txColor, RoundedCornerShape(4.dp))
+                        .background(txColor, RoundedCornerShape(16.dp))
                         .clickable(enabled = connState == ConnectionState.CONNECTED) { viewModel.onSendClick() }
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .padding(horizontal = 20.dp, vertical = 10.dp)
                 ) {
-                    Text("Send", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif)
+                    Text("Send", color = Color.Black, fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif)
                 }
             }
             
@@ -180,6 +179,12 @@ fun ChatScreen(
 
 @Composable
 fun MessageBubble(message: Message, isMe: Boolean) {
+    val bubbleShape = if (isMe) {
+        RoundedCornerShape(16.dp, 16.dp, 2.dp, 16.dp)
+    } else {
+        RoundedCornerShape(16.dp, 16.dp, 16.dp, 2.dp)
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
@@ -187,21 +192,27 @@ fun MessageBubble(message: Message, isMe: Boolean) {
         Box(
             modifier = Modifier
                 .widthIn(max = 280.dp)
-                .background(
-                    color = if (isMe) Primary.copy(alpha = 0.2f) else Color(0xFF1E1E1E),
-                    shape = RoundedCornerShape(12.dp)
+                .then(
+                    if (isMe) {
+                        Modifier.background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(Primary, Color(0xFF00B2CC))
+                            ),
+                            shape = bubbleShape
+                        )
+                    } else {
+                        Modifier.background(
+                            color = Color(0xFF1E1E24),
+                            shape = bubbleShape
+                        ).border(1.dp, Color(0xFF2C2C32), bubbleShape)
+                    }
                 )
-                .border(
-                    width = 1.dp,
-                    color = if (isMe) Primary.copy(alpha = 0.6f) else Color.DarkGray,
-                    shape = RoundedCornerShape(4.dp)
-                )
-                .padding(12.dp)
+                .padding(14.dp)
         ) {
             Text(
                 text = String(message.ciphertext, Charsets.UTF_8),
-                color = Color.White,
-                fontSize = 14.sp
+                color = if (isMe) Color.Black else Color.White,
+                fontSize = 15.sp
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
@@ -233,12 +244,12 @@ fun QuickActionChip(icon: androidx.compose.ui.graphics.vector.ImageVector, text:
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .background(Color.Transparent)
-            .border(1.dp, Primary.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
-            .padding(horizontal = 6.dp, vertical = 4.dp)
+            .background(Color(0xFF24242A), RoundedCornerShape(16.dp))
+            .border(1.dp, Color(0xFF33333E), RoundedCornerShape(16.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
-        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
-        Spacer(modifier = Modifier.width(4.dp))
+        Icon(icon, contentDescription = null, tint = Primary, modifier = Modifier.size(14.dp))
+        Spacer(modifier = Modifier.width(6.dp))
         Text(text, color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
     }
 }

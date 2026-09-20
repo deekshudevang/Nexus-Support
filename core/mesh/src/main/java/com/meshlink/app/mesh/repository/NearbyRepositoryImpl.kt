@@ -137,8 +137,14 @@ class NearbyRepositoryImpl @Inject constructor(
                 filtered + DiscoveredDevice(endpointId, info.endpointName)
             }
             
-            // Auto-connect to discovered peer
-            requestConnection(endpointId)
+            // Auto-connect to discovered peer (tie-breaker to prevent STATUS_ALREADY_CONNECTED_TO_ENDPOINT)
+            val localName = userProfileManager.getDisplayName()
+            if (localName >= info.endpointName) {
+                Timber.d("Initiating connection to ${info.endpointName} (tie-breaker won)")
+                requestConnection(endpointId)
+            } else {
+                Timber.d("Waiting for ${info.endpointName} to initiate connection (tie-breaker lost)")
+            }
         }
 
         override fun onEndpointLost(endpointId: String) {
@@ -179,9 +185,13 @@ class NearbyRepositoryImpl @Inject constructor(
             if (deviceId != null) {
                 routingTable.removeRoutesFor(deviceId)  // Phase 4: invalidate stale routes
             }
-            isAdvertising = false
-            isDiscovering = false
-            scheduleRestart()
+            
+            // Wake up and immediately try to reconnect to any lost peers
+            adaptiveScanController.onUserActive()
+            if (!scanningPaused) {
+                startAdvertisingInternal()
+                startDiscoveryInternal()
+            }
         }
     }
 
@@ -199,6 +209,7 @@ class NearbyRepositoryImpl @Inject constructor(
                 MeshPacket.PacketType.ACK,
                 MeshPacket.PacketType.BROADCAST,
                 MeshPacket.PacketType.SOS,
+                MeshPacket.PacketType.STATUS_UPDATE,
                 MeshPacket.PacketType.HEARTBEAT  -> handleRoutedPacket(endpointId, packet)
                 MeshPacket.PacketType.LOCATION_SYNC -> {
                     // Send to MeshRouter to forward (if TTL > 0), then process locally
@@ -681,6 +692,12 @@ class NearbyRepositoryImpl @Inject constructor(
             adaptiveScanController.onRestartComplete()  // update backoff
             val delay = adaptiveScanController.nextRestartDelayMs
             Timber.d("scheduleRestart: waiting ${delay}ms before next scan cycle")
+            
+            connectionsClient.stopAdvertising()
+            connectionsClient.stopDiscovery()
+            isAdvertising = false
+            isDiscovering = false
+            
             delay(delay)
             if (!scanningPaused) {
                 startAdvertisingInternal()
@@ -691,6 +708,7 @@ class NearbyRepositoryImpl @Inject constructor(
 
     private fun startAdvertisingInternal() {
         if (isAdvertising) return
+        connectionsClient.stopAdvertising() // Clear any stuck state
         // Read fresh display name each time so profile changes take effect
         val currentName = userProfileManager.getDisplayName()
         connectionsClient.startAdvertising(
@@ -707,6 +725,7 @@ class NearbyRepositoryImpl @Inject constructor(
 
     private fun startDiscoveryInternal() {
         if (isDiscovering) return
+        connectionsClient.stopDiscovery() // Clear any stuck state
         connectionsClient.startDiscovery(
             SERVICE_ID, endpointDiscoveryCallback,
             DiscoveryOptions.Builder().setStrategy(STRATEGY).build()

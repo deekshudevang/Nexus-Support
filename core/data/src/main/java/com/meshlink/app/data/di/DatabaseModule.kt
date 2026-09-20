@@ -37,7 +37,8 @@ object DatabaseModule {
                 AppDatabase.MIGRATION_8_9,
                 AppDatabase.MIGRATION_9_10,
                 AppDatabase.MIGRATION_10_11,
-                AppDatabase.MIGRATION_11_12
+                AppDatabase.MIGRATION_11_12,
+                AppDatabase.MIGRATION_12_13
             ).fallbackToDestructiveMigration()
             .build()
     }
@@ -87,4 +88,7 @@ object DatabaseModule {
 
     @Provides
     fun provideProcessedEventDao(appDatabase: AppDatabase): com.meshlink.app.data.local.dao.ProcessedEventDao = appDatabase.processedEventDao()
+
+    @Provides
+    fun provideSosPacketDao(appDatabase: AppDatabase): com.meshlink.app.data.local.dao.SosPacketDao = appDatabase.sosPacketDao()
 }

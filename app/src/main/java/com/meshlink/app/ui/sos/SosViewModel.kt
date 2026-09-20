@@ -12,14 +12,20 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import android.content.Context
+import com.meshlink.app.domain.model.SosPacketData
+import com.meshlink.app.mesh.transport.SosBeaconAdvertiser
+import com.meshlink.app.mesh.transport.SosBeaconCodec
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Named
 
 @HiltViewModel
 class SosViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
+    @Named("localDeviceId") private val myDeviceId: String,
     private val locationTracker: LocationTracker,
     private val meshRouter: MeshRouter,
-    private val nearbyRepository: NearbyRepository
+    private val nearbyRepository: NearbyRepository,
+    private val sosBeaconAdvertiser: SosBeaconAdvertiser
 ) : ViewModel() {
 
     private val _isBroadcasting = MutableStateFlow(false)
@@ -57,6 +63,7 @@ class SosViewModel @Inject constructor(
     fun toggleSos() {
         if (_isBroadcasting.value) {
             _isBroadcasting.value = false
+            sosBeaconAdvertiser.stopAdvertising()
         } else {
             _isBroadcasting.value = true
             broadcastSos()
@@ -66,16 +73,19 @@ class SosViewModel @Inject constructor(
     private fun broadcastSos() {
         viewModelScope.launch {
             val incidentStr = if (_incidentType.value != IncidentType.NONE) "[${_incidentType.value.name}] " else ""
-            val initialPayload = "SOS! ${incidentStr}I need help!"
-            nearbyRepository.sendSos(initialPayload)
+            var message = "SOS! ${incidentStr}I need help!"
 
-            if (_includeGps.value && _isBroadcasting.value) {
+            var lat = 0.0
+            var lon = 0.0
+
+            if (_includeGps.value) {
                 val location = locationTracker.getCurrentLocation(timeoutMs = 3000)
                 if (location != null && _isBroadcasting.value) {
+                    lat = location.latitude
+                    lon = location.longitude
                     val mapsUrl = locationTracker.formatLocationUrl(location)
-                    if (location.latitude != 0.0 || location.longitude != 0.0) {
-                        val locationPayload = "SOS Location Update: $mapsUrl"
-                        nearbyRepository.sendSos(locationPayload)
+                    if (lat != 0.0 || lon != 0.0) {
+                        message += "\nLocation: $mapsUrl"
                     }
                 } else if (_isBroadcasting.value) {
                     Timber.w("Failed to get location for SOS")
@@ -88,16 +98,52 @@ class SosViewModel @Inject constructor(
                 val allergies = prefs.getString("allergies", "")
                 val meds = prefs.getString("medications", "")
                 
-                val builder = java.lang.StringBuilder("SOS Medical Info:\n")
+                val builder = java.lang.StringBuilder("\nMedical Info:\n")
                 if (!bg.isNullOrBlank()) builder.append("Blood: $bg\n")
                 if (!allergies.isNullOrBlank()) builder.append("Allergies: $allergies\n")
                 if (!meds.isNullOrBlank()) builder.append("Meds: $meds\n")
                 
-                val finalPayload = builder.toString().trim()
-                if (finalPayload != "SOS Medical Info:") {
-                    nearbyRepository.sendSos(finalPayload)
+                if (builder.toString() != "\nMedical Info:\n") {
+                    message += builder.toString()
                 }
             }
+
+            val eType = when (_incidentType.value) {
+                IncidentType.MED_EVAC -> SosPacketData.EmergencyType.MEDICAL
+                IncidentType.LOST -> SosPacketData.EmergencyType.LOST
+                IncidentType.GEAR -> SosPacketData.EmergencyType.OTHER
+                IncidentType.SECURITY -> SosPacketData.EmergencyType.SECURITY
+                IncidentType.NONE -> SosPacketData.EmergencyType.OTHER
+            }
+
+            val packetData = SosPacketData(
+                senderId = myDeviceId,
+                emergencyType = eType,
+                severity = 5,
+                latitude = lat,
+                longitude = lon,
+                message = message.trim()
+            )
+
+            // Send via Nearby Mesh (Phase 3 structured SOS)
+            nearbyRepository.sendSos(packetData.toJson())
+
+            // Start BLE beacon advertising (Phase 2 compact SOS)
+            val beaconEType = when (_incidentType.value) {
+                IncidentType.MED_EVAC -> SosBeaconCodec.EmergencyType.MEDICAL
+                IncidentType.LOST -> SosBeaconCodec.EmergencyType.LOST
+                IncidentType.GEAR -> SosBeaconCodec.EmergencyType.OTHER
+                IncidentType.SECURITY -> SosBeaconCodec.EmergencyType.SECURITY
+                IncidentType.NONE -> SosBeaconCodec.EmergencyType.OTHER
+            }
+            val beaconPayload = SosBeaconCodec.encode(
+                deviceId = myDeviceId,
+                latitude = lat,
+                longitude = lon,
+                emergencyType = beaconEType,
+                severity = 5
+            )
+            sosBeaconAdvertiser.startAdvertising(beaconPayload)
         }
     }
 }

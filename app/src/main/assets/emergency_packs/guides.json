@@ -1,0 +1,223 @@
+[
+  {
+    "id": "cpr",
+    "title": "CPR (Cardiopulmonary Resuscitation)",
+    "icon": "favorite",
+    "steps": [
+      "Check the scene for safety before approaching.",
+      "Tap the person's shoulder and shout 'Are you OK?' to check responsiveness.",
+      "Call emergency services (or ask someone nearby to call).",
+      "Place the person on their back on a firm, flat surface.",
+      "Place the heel of one hand on the center of the chest (lower half of breastbone).",
+      "Place your other hand on top and interlock fingers.",
+      "Push hard and fast — at least 2 inches deep, at 100-120 compressions per minute.",
+      "Allow full chest recoil between compressions.",
+      "After 30 compressions, tilt the head back, lift the chin, and give 2 rescue breaths.",
+      "Continue 30:2 cycles until help arrives or the person starts breathing."
+    ],
+    "warnings": [
+      "Do NOT stop CPR unless the person starts breathing or professional help takes over.",
+      "If you are untrained, do compression-only CPR (skip rescue breaths).",
+      "For infants, use two fingers instead of the heel of your hand."
+    ],
+    "keywords": ["cpr", "heart", "cardiac", "chest compression", "breathing", "pulse", "resuscitation", "heart attack"]
+  },
+  {
+    "id": "bleeding",
+    "title": "Severe Bleeding Control",
+    "icon": "water_drop",
+    "steps": [
+      "Put on gloves or use a barrier (plastic bag) if available.",
+      "Apply direct pressure with a clean cloth or bandage to the wound.",
+      "Press firmly and do NOT remove the cloth — add more layers if blood soaks through.",
+      "If bleeding is from a limb, elevate it above heart level if possible.",
+      "For life-threatening limb bleeding, apply a tourniquet 2-3 inches above the wound.",
+      "Tighten the tourniquet until bleeding stops. Note the time of application.",
+      "Keep the person warm and lying down to prevent shock.",
+      "Monitor for signs of shock: pale skin, rapid breathing, confusion."
+    ],
+    "warnings": [
+      "Do NOT remove embedded objects — stabilize them in place.",
+      "A tourniquet should only be loosened by medical professionals.",
+      "Apply pressure for at least 10 minutes before checking if bleeding has stopped."
+    ],
+    "keywords": ["bleeding", "blood", "wound", "cut", "laceration", "tourniquet", "hemorrhage", "pressure"]
+  },
+  {
+    "id": "burn_injury",
+    "title": "Burn Treatment",
+    "icon": "local_fire_department",
+    "steps": [
+      "Remove the person from the heat source immediately.",
+      "Cool the burn with cool (not cold/ice) running water for at least 20 minutes.",
+      "Remove clothing and jewelry near the burn UNLESS stuck to the skin.",
+      "Cover the burn loosely with a sterile non-stick bandage or clean cloth.",
+      "For large burns, wrap the person in a clean sheet and keep them warm.",
+      "Give small sips of water if the person is conscious and able to swallow.",
+      "Elevate the burned area above heart level if possible."
+    ],
+    "warnings": [
+      "Do NOT apply ice, butter, toothpaste, or any home remedies to burns.",
+      "Do NOT pop blisters — they protect against infection.",
+      "Chemical burns: brush off dry chemicals, then flush with water for 20+ minutes.",
+      "Seek emergency care for burns larger than the person's palm, or on face/hands/genitals."
+    ],
+    "keywords": ["burn", "fire", "scald", "heat", "blister", "chemical burn", "thermal"]
+  },
+  {
+    "id": "choking",
+    "title": "Choking Response",
+    "icon": "air",
+    "steps": [
+      "Ask 'Are you choking?' — if the person cannot speak, cough, or breathe, act immediately.",
+      "Stand behind the person and wrap your arms around their waist.",
+      "Make a fist with one hand and place it just above the navel, below the ribcage.",
+      "Grasp your fist with your other hand.",
+      "Perform quick, upward abdominal thrusts (Heimlich maneuver).",
+      "Repeat thrusts until the object is expelled or the person becomes unconscious.",
+      "If the person becomes unconscious, lower them to the ground and begin CPR.",
+      "Check the mouth for the object before giving rescue breaths during CPR."
+    ],
+    "warnings": [
+      "For pregnant women or obese individuals, perform chest thrusts instead.",
+      "For infants: alternate 5 back blows and 5 chest thrusts.",
+      "Do NOT perform blind finger sweeps — only remove objects you can see."
+    ],
+    "keywords": ["choking", "airway", "heimlich", "obstruction", "throat", "swallowing", "abdominal thrust"]
+  },
+  {
+    "id": "earthquake",
+    "title": "Earthquake Response",
+    "icon": "public",
+    "steps": [
+      "DROP to your hands and knees immediately.",
+      "Take COVER under a sturdy desk or table. Protect your head and neck.",
+      "HOLD ON to your shelter until shaking stops.",
+      "If no shelter is available, crouch near an interior wall away from windows.",
+      "If outdoors, move to an open area away from buildings, power lines, and trees.",
+      "If driving, pull over away from overpasses and bridges. Stay in the car.",
+      "After shaking stops, check yourself and others for injuries.",
+      "Be prepared for aftershocks — they can be as strong as the initial quake.",
+      "Check for gas leaks, damaged wiring, and structural damage before re-entering buildings.",
+      "Use text messages instead of calls to keep phone lines open for emergencies."
+    ],
+    "warnings": [
+      "Do NOT run outside during shaking — falling debris is the #1 cause of injury.",
+      "Do NOT stand in doorways — this is a myth.",
+      "If near the coast after a major quake, move to high ground immediately (tsunami risk)."
+    ],
+    "keywords": ["earthquake", "quake", "tremor", "seismic", "aftershock", "drop cover hold", "shaking"]
+  },
+  {
+    "id": "flood",
+    "title": "Flood Safety",
+    "icon": "waves",
+    "steps": [
+      "Move to higher ground immediately if flooding is imminent.",
+      "Do NOT walk, swim, or drive through flood waters.",
+      "Just 6 inches of moving water can knock you down; 1 foot can sweep a vehicle.",
+      "If trapped in a vehicle, get out immediately and move to higher ground.",
+      "If trapped in a building, move to the highest floor — do NOT go into the attic unless you can access the roof.",
+      "Signal for rescue from the roof or highest point if stranded.",
+      "Avoid contact with flood water — it may be contaminated with sewage or chemicals.",
+      "After flooding, do not return home until authorities say it is safe.",
+      "Document damage with photos for insurance before cleanup."
+    ],
+    "warnings": [
+      "Turn Around, Don't Drown — never attempt to cross flooded roads.",
+      "Flood water can hide downed power lines, sharp debris, and sinkholes.",
+      "Boil tap water or use bottled water after flooding until water supply is confirmed safe."
+    ],
+    "keywords": ["flood", "flooding", "water", "flash flood", "rising water", "evacuation", "high ground"]
+  },
+  {
+    "id": "fire",
+    "title": "Fire Emergency",
+    "icon": "whatshot",
+    "steps": [
+      "Alert everyone in the building — shout 'FIRE!' and activate the fire alarm.",
+      "Feel doors before opening — if hot, use an alternate exit.",
+      "Stay LOW to the ground where air is cleaner (crawl under smoke).",
+      "Cover your mouth and nose with a wet cloth if possible.",
+      "Exit the building using stairs — NEVER use elevators during a fire.",
+      "If clothes catch fire: STOP, DROP to the ground, and ROLL to smother flames.",
+      "Once outside, move at least 150 feet from the building.",
+      "Call emergency services from a safe location.",
+      "Do NOT re-enter a burning building for any reason.",
+      "Account for all occupants at a designated meeting point."
+    ],
+    "warnings": [
+      "Smoke inhalation kills more people than flames — stay low.",
+      "If trapped, seal door gaps with wet towels and signal from a window.",
+      "Never open windows unless you need to signal for rescue — oxygen feeds fire."
+    ],
+    "keywords": ["fire", "smoke", "flames", "evacuation", "fire alarm", "exit", "burning", "wildfire"]
+  },
+  {
+    "id": "fracture",
+    "title": "Fracture & Bone Injury",
+    "icon": "accessibility_new",
+    "steps": [
+      "Keep the injured area still — do NOT attempt to straighten a broken bone.",
+      "Apply a splint above and below the fracture to immobilize the area.",
+      "Use any rigid material (sticks, boards, rolled magazines) as a splint.",
+      "Pad the splint with soft material (cloth, towels) for comfort.",
+      "Secure the splint with tape, belts, or torn fabric strips.",
+      "Apply ice wrapped in cloth to reduce swelling (20 minutes on, 20 minutes off).",
+      "Elevate the injured limb above heart level if possible.",
+      "Monitor circulation below the injury — check for numbness, tingling, or color change.",
+      "For suspected spinal injury, do NOT move the person — stabilize the head and neck."
+    ],
+    "warnings": [
+      "Do NOT move someone with a suspected spine or neck injury.",
+      "If bone is protruding through skin (open fracture), cover with clean dressing — do NOT push it back.",
+      "Check pulse below the fracture — loss of pulse is a medical emergency."
+    ],
+    "keywords": ["fracture", "broken bone", "splint", "sprain", "dislocation", "immobilize", "bone injury"]
+  },
+  {
+    "id": "shock",
+    "title": "Treating Shock",
+    "icon": "monitor_heart",
+    "steps": [
+      "Call emergency services immediately — shock is life-threatening.",
+      "Have the person lie down on their back.",
+      "Elevate the legs about 12 inches (unless you suspect head, neck, or back injury).",
+      "Keep the person warm with blankets or coats.",
+      "Do NOT give the person anything to eat or drink.",
+      "Loosen tight clothing, belts, or restrictive gear.",
+      "If the person vomits, turn them on their side to prevent choking.",
+      "Monitor breathing and pulse continuously.",
+      "If breathing stops, begin CPR immediately.",
+      "Keep the person calm and reassured until help arrives."
+    ],
+    "warnings": [
+      "Signs of shock: pale/gray skin, rapid weak pulse, rapid breathing, confusion, nausea.",
+      "Anaphylactic shock: use an epinephrine auto-injector (EpiPen) if available.",
+      "Do NOT elevate legs if there is a head, neck, back, or leg injury."
+    ],
+    "keywords": ["shock", "pale", "weak pulse", "fainting", "blood pressure", "anaphylaxis", "collapse"]
+  },
+  {
+    "id": "poisoning",
+    "title": "Poisoning Response",
+    "icon": "science",
+    "steps": [
+      "Call Poison Control or emergency services immediately.",
+      "Try to identify the poison: what substance, how much, when ingested.",
+      "If the person is conscious, do NOT induce vomiting unless told to by Poison Control.",
+      "If poison is on the skin, remove contaminated clothing and rinse skin with water for 20 minutes.",
+      "If poison is in the eyes, flush with clean water for 15-20 minutes.",
+      "If inhaled poison, move the person to fresh air immediately.",
+      "Save any containers, labels, or samples of the substance for emergency responders.",
+      "If the person is unconscious, place them in the recovery position (on their side).",
+      "Monitor breathing — begin CPR if breathing stops."
+    ],
+    "warnings": [
+      "Do NOT give activated charcoal unless directed by medical professionals.",
+      "Do NOT induce vomiting for corrosive substances (acids, bleach) or petroleum products.",
+      "Carbon monoxide poisoning is odorless — evacuate immediately if CO detector alarms."
+    ],
+    "keywords": ["poison", "poisoning", "ingestion", "chemical", "toxic", "overdose", "vomiting", "antidote"]
+  }
+]

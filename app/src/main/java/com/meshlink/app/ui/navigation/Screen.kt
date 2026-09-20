@@ -29,6 +29,15 @@ sealed class Screen(val route: String) {
     /** Full-screen: Map Download UI */
     object MapDownload : Screen("map_download")
 
+    /** Full-screen: Emergency Guide Knowledge Base */
+    object EmergencyGuide : Screen("emergency_guide")
+
+    /** Full-screen: Mesh Node Dashboard */
+    object NodeDashboard : Screen("node_dashboard")
+
+    /** Full-screen: AI Assistant (Voice + RAG) */
+    object AiAssistant : Screen("ai_assistant")
+
     /** Full-screen: Individual chat */
     data object Chat : Screen("chat/{deviceId}/{deviceName}") {
         fun createRoute(deviceId: String, deviceName: String): String {

@@ -25,7 +25,11 @@ import androidx.compose.ui.unit.sp
 import com.meshlink.app.ui.components.NexusCard
 
 @Composable
-fun SosScreen(viewModel: SosViewModel) {
+fun SosScreen(
+    viewModel: SosViewModel,
+    onGuideClick: () -> Unit = {},
+    onDashboardClick: () -> Unit = {}
+) {
     val isBroadcasting by viewModel.isBroadcasting.collectAsState()
     val satelliteLock by viewModel.satelliteLockStatus.collectAsState()
     val activeUplink by viewModel.activeUplink.collectAsState()
@@ -264,6 +268,26 @@ fun SosScreen(viewModel: SosViewModel) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (isBroadcasting) errorColor else MaterialTheme.colorScheme.onSurface
             )
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = onGuideClick,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+            ) {
+                Text("Emergency Guides")
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Button(
+                onClick = onDashboardClick,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+            ) {
+                Text("Node Dashboard")
+            }
         }
         
         Spacer(modifier = Modifier.height(48.dp))

@@ -16,7 +16,8 @@ import org.junit.Before
 import org.junit.Test
 import org.json.JSONArray
 import org.json.JSONObject
-import kotlin.test.assertEquals
+import org.junit.Assert.assertEquals
+import dagger.Lazy
 
 /**
  * Regression tests for the CRDT partition+reconnect bug.
@@ -39,7 +40,7 @@ class PartitionReconnectTest {
     private val deviceRepository = mockk<DeviceRepository>(relaxed = true)
     private val cryptoManager = mockk<CryptoManager>(relaxed = true)
     private val nearbyRepository = mockk<NearbyRepository>(relaxed = true)
-    private val nearbyLazy = mockk<Lazy<NearbyRepository>>()
+    private val nearbyLazy = mockk<dagger.Lazy<NearbyRepository>>()
 
     private val localDeviceId = "node-A"
     private lateinit var syncManager: LocationSyncManagerImpl
@@ -127,7 +128,7 @@ class PartitionReconnectTest {
      * so B can compute A's missing events too (bidirectional handshake).
      */
     @Test
-    fun `partition reconnect - bidirectional: A replies with own clock after receiving B clock`() = runTest {
+    fun `partition reconnect - bidirectional A replies with own clock after receiving B clock`() = runTest {
         coEvery { locationEventDao.getVectorClock() } returns listOf(VectorClock("node-A", 5))
         coEvery { locationEventDao.getEventsAfterSequence(any(), any()) } returns emptyList()
         every { nearbyRepository.getConnectedPeers() } returns mapOf("ep-B" to "node-B")
