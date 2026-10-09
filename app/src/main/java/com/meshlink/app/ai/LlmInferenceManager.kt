@@ -1,38 +1,69 @@
 package com.meshlink.app.ai
 
+import android.content.Context
+import com.google.mediapipe.tasks.genai.llminference.LlmInference
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import timber.log.Timber
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class LlmInferenceManager @Inject constructor() {
+class LlmInferenceManager @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    private var llmInference: LlmInference? = null
+    private val modelName = "gemma.bin"
 
-    // Simulates the initialization of MediaPipe LLM Inference API with a Gemma 4b/2b model
+    // Initializes the MediaPipe LLM Inference API with a Gemma 4b/2b model
     suspend fun initializeModel(): Boolean = withContext(Dispatchers.IO) {
-        delay(1500) // Simulating model load time from disk
-        true
+        try {
+            val modelFile = File(context.filesDir, modelName)
+            if (!modelFile.exists()) {
+                Timber.w("Gemma model not found at ${modelFile.absolutePath}. Falling back to stub.")
+                return@withContext false
+            }
+            
+            val options = LlmInference.LlmInferenceOptions.builder()
+                .setModelPath(modelFile.absolutePath)
+                .setMaxTokens(512)
+                .build()
+                
+            llmInference = LlmInference.createFromOptions(context, options)
+            true
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to initialize LLM Inference")
+            false
+        }
     }
 
     /**
      * Generates a response using Retrieval-Augmented Generation (RAG).
-     * @param query The user's query (e.g. "How do I treat a burn?")
-     * @param contextData The contextual knowledge retrieved from the EmergencyGuides database
      */
     suspend fun generateRagResponse(query: String, contextData: String): String = withContext(Dispatchers.IO) {
-        // Simulate inference delay for Gemma 2B running on Android
-        delay(2000)
-        
-        // In a real implementation with MediaPipe LLM Inference:
-        // val prompt = "You are a disaster response AI. Using this context: $contextData\n\nAnswer: $query"
-        // return llmInference.generateResponse(prompt)
-        
-        if (contextData.isBlank()) {
-            return@withContext "I don't have specific offline guides for '$query', but please stay calm, seek shelter, and broadcast an SOS if you are in danger."
+        if (llmInference == null) {
+            delay(1500) // Simulate delay for stub
+            if (contextData.isBlank()) {
+                return@withContext "I don't have specific offline guides for '$query', but please stay calm, seek shelter, and broadcast an SOS if you are in danger."
+            }
+            return@withContext "Based on the emergency protocols:\n$contextData\n\nFollow these steps carefully and prioritize your safety."
         }
         
-        // Stubbed response utilizing the provided context
-        return@withContext "Based on the emergency protocols:\n$contextData\n\nFollow these steps carefully and prioritize your safety."
+        try {
+            val prompt = if (contextData.isNotBlank()) {
+                "You are an offline disaster response AI. Using this emergency protocol context: $contextData\n\nAnswer the user's query: $query"
+            } else {
+                "You are an offline disaster response AI. Please answer the user's query: $query"
+            }
+            
+            val response = llmInference?.generateResponse(prompt) ?: throw IllegalStateException("LLM not initialized")
+            return@withContext response.trim()
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to generate LLM response")
+            return@withContext "I am sorry, my AI engine encountered an error generating a response."
+        }
     }
 }

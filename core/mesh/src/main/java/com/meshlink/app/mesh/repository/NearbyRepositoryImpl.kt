@@ -35,6 +35,7 @@ import com.meshlink.app.mesh.util.toMeshPacket
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -73,7 +74,9 @@ class NearbyRepositoryImpl @Inject constructor(
     // Phase 7: Meshtastic
     private val meshtasticTransport: com.meshlink.app.mesh.transport.MeshtasticTransport,
     // Phase 4: Location Sync
-    private val locationSyncManager: com.meshlink.app.domain.repository.LocationSyncManager
+    private val locationSyncManager: com.meshlink.app.domain.repository.LocationSyncManager,
+    // Phase 8: SOS
+    private val sosBeaconAdvertiser: com.meshlink.app.mesh.transport.SosBeaconAdvertiser
 ) : NearbyRepository {
 
     companion object {
@@ -134,25 +137,40 @@ class NearbyRepositoryImpl @Inject constructor(
                 val filtered = current.filter { it.name != info.endpointName }
                 filtered + DiscoveredDevice(endpointId, info.endpointName)
             }
+            _connectionStates.update { it + (endpointId to ConnectionState.DISCOVERED) }
             
             // Auto-connect to discovered peer (tie-breaker to prevent STATUS_ALREADY_CONNECTED_TO_ENDPOINT)
             val localName = userProfileManager.getDisplayName()
-            if (localName >= info.endpointName) {
+            if (localName > info.endpointName) {
                 Timber.d("Initiating connection to ${info.endpointName} (tie-breaker won)")
                 requestConnection(endpointId)
-            } else {
+            } else if (localName < info.endpointName) {
                 Timber.d("Waiting for ${info.endpointName} to initiate connection (tie-breaker lost)")
+            } else {
+                Timber.d("Names equal, initiating connection to ${info.endpointName}")
+                requestConnection(endpointId)
             }
         }
 
         override fun onEndpointLost(endpointId: String) {
             Timber.d("Endpoint lost: $endpointId")
             _discoveredDevices.update { it.filter { d -> d.endpointId != endpointId } }
+            nameToEndpointId.entries.removeIf { it.value == endpointId }
         }
     }
 
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
+            val existingEndpoint = nameToEndpointId[info.endpointName]
+            if (existingEndpoint != null && existingEndpoint != endpointId) {
+                val state = _connectionStates.value[existingEndpoint]
+                if (state == ConnectionState.CONNECTED || state == ConnectionState.CONNECTING) {
+                    Timber.w("Rejecting duplicate connection from ${info.endpointName} (ep=$endpointId)")
+                    connectionsClient.rejectConnection(endpointId)
+                    return
+                }
+            }
+
             Timber.d("Connection initiated: $endpointId (${info.endpointName}), auto-accepting")
             _connectionStates.update { it + (endpointId to ConnectionState.CONNECTING) }
             connectionsClient.acceptConnection(endpointId, payloadCallback)
@@ -183,6 +201,7 @@ class NearbyRepositoryImpl @Inject constructor(
             if (deviceId != null) {
                 routingTable.removeRoutesFor(deviceId)  // Phase 4: invalidate stale routes
             }
+            nameToEndpointId.entries.removeIf { it.value == endpointId }
             
             // Wake up and immediately try to reconnect to any lost peers
             adaptiveScanController.onUserActive()
@@ -272,6 +291,36 @@ class NearbyRepositoryImpl @Inject constructor(
         // Phase 7: Start Meshtastic BLE Scanner
         meshtasticTransport.startScanning()
         
+        // Phase 8: Start SOS Beacon Scanner
+        sosBeaconAdvertiser.startScanning()
+
+        // Listen to SOS Beacons
+        scope.launch {
+            sosBeaconAdvertiser.detectedBeacons.collect { beacon ->
+                val beaconJson = """
+                    {"emergencyType": "${beacon.emergencyType.name}", "severity": ${beacon.severity}, "lat": ${beacon.latitude}, "lon": ${beacon.longitude}}
+                """.trimIndent()
+                
+                val domainPacket = MeshPacket(
+                    senderId = beacon.deviceIdHash.toString(),
+                    receiverId = "broadcast",
+                    content = beaconJson,
+                    timestamp = System.currentTimeMillis(),
+                    type = MeshPacket.PacketType.SOS,
+                    messageId = "sos-${beacon.deviceIdHash}-${System.currentTimeMillis()}",
+                    originId = beacon.deviceIdHash.toString(),
+                    finalDestId = "broadcast",
+                    hopCount = 0,
+                    maxHops = 3,
+                    priority = 100 // High priority
+                )
+                
+                val result = meshRouter.route("sos-beacon", domainPacket, _connectionStates.value.mapValues { it.key })
+                handleRoutingResult(result, domainPacket, "sos-beacon")
+                _incomingPackets.emit(domainPacket)
+            }
+        }
+        
         // Listen to Meshtastic packets
         scope.launch {
             meshtasticTransport.receivedPackets.collect { packet ->
@@ -317,8 +366,8 @@ class NearbyRepositoryImpl @Inject constructor(
                 // 2. Update routing table: direct 1-hop route
                 routingTable.addLink(localDeviceId, packet.senderId)
 
-                // 3. Mark CONNECTED — UI send button activates
-                _connectionStates.update { it + (endpointId to ConnectionState.CONNECTED) }
+                // 3. Mark CONNECTED/AUTHENTICATED — UI send button activates
+                _connectionStates.update { it + (endpointId to ConnectionState.AUTHENTICATED) }
 
                 // 4. Persist peer identity for future ECIES encryption
                 val peerPubKeyBytes = Base64.decode(packet.content, Base64.NO_WRAP)
@@ -452,6 +501,7 @@ class NearbyRepositoryImpl @Inject constructor(
         isDiscovering = false
         _discoveredDevices.value = emptyList()
         meshtasticTransport.stopScanning()
+        sosBeaconAdvertiser.stopScanning()
     }
 
     fun disconnectAll() {
@@ -459,6 +509,7 @@ class NearbyRepositoryImpl @Inject constructor(
         _connectionStates.value = emptyMap()
         routingTable.clear()
         meshtasticTransport.disconnect()
+        sosBeaconAdvertiser.cleanup()
     }
 
     override fun restartAdvertisingOnly() {
@@ -483,8 +534,8 @@ class NearbyRepositoryImpl @Inject constructor(
      */
     override fun sendPacket(endpointId: String, packet: MeshPacket) {
         val state = _connectionStates.value[endpointId]
-        if (state != ConnectionState.CONNECTED) {
-            Timber.w("sendPacket: dropping — state=$state for $endpointId (need CONNECTED)")
+        if (state != ConnectionState.CONNECTED && state != ConnectionState.AUTHENTICATED) {
+            Timber.w("sendPacket: dropping — state=$state for $endpointId (need CONNECTED/AUTHENTICATED)")
             return
         }
         val peerDeviceId = endpointIdToDeviceId[endpointId] ?: run {
@@ -581,14 +632,33 @@ class NearbyRepositoryImpl @Inject constructor(
             if (result is RoutingResult.Processed) {
                 result.forwardTargets.forEach { dispatchToNearby(it) }
             }
+            
+            // Phase 8: Start BLE beacon advertising
+            val encoded = com.meshlink.app.mesh.transport.SosBeaconCodec.encode(
+                deviceId = localDeviceId,
+                latitude = 0.0,
+                longitude = 0.0,
+                emergencyType = com.meshlink.app.mesh.transport.SosBeaconCodec.EmergencyType.MEDICAL, // Default Medical
+                severity = 5
+            )
+            sosBeaconAdvertiser.startAdvertising(encoded)
         }
     }
+
+    override fun cancelSos() {
+        sosBeaconAdvertiser.stopAdvertising()
+        // Could also send a cancellation packet here if needed
+    }
+
 
     override fun disconnect(endpointId: String) {
         connectionsClient.disconnectFromEndpoint(endpointId)
         handshakeManager.clearSession(endpointId)
-        endpointIdToDeviceId.remove(endpointId)
-        routingTable.removeRoutesFor(endpointId)
+        val deviceId = endpointIdToDeviceId.remove(endpointId)
+        if (deviceId != null) {
+            routingTable.removeRoutesFor(deviceId)
+        }
+        nameToEndpointId.entries.removeIf { it.value == endpointId }
         _connectionStates.update { it + (endpointId to ConnectionState.DISCONNECTED) }
     }
 
@@ -600,7 +670,7 @@ class NearbyRepositoryImpl @Inject constructor(
 
     override fun getConnectedPeers(): Map<String, String> {
         val connectedStates = _connectionStates.value
-            .filter { it.value == ConnectionState.CONNECTED }
+            .filter { it.value == ConnectionState.CONNECTED || it.value == ConnectionState.AUTHENTICATED }
             .keys
         return connectedStates
             .mapNotNull { ep -> endpointIdToDeviceId[ep]?.let { deviceId -> ep to deviceId } }
@@ -616,7 +686,7 @@ class NearbyRepositoryImpl @Inject constructor(
     private fun dispatchToNearby(target: ForwardTarget) {
         val (endpointId, packet) = target
         val state = _connectionStates.value[endpointId]
-        if (state != ConnectionState.CONNECTED) {
+        if (state != ConnectionState.CONNECTED && state != ConnectionState.AUTHENTICATED) {
             Timber.w("dispatchToNearby: skipping $endpointId — state=$state")
             return
         }
@@ -729,5 +799,10 @@ class NearbyRepositoryImpl @Inject constructor(
             Timber.e(e, "startDiscovery failed")
             isDiscovering = false
         }
+    }
+
+    override fun cleanup() {
+        disconnectAll()
+        scope.cancel()
     }
 }

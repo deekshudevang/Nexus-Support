@@ -56,7 +56,10 @@
 # ── Google Nearby / Play Services ─────────────────────────────────────────────
 -keep class com.google.android.gms.nearby.** { *; }
 -keep class com.google.android.gms.** { *; }
+-keep class com.google.android.gms.internal.location.** { *; }
+-keepclassmembers class com.google.android.gms.internal.location.** { *; }
 -dontwarn com.google.android.gms.**
+-dontwarn com.google.android.gms.internal.location.**
 
 # ── WorkManager ───────────────────────────────────────────────────────────────
 -keep class androidx.work.** { *; }
@@ -86,3 +89,9 @@
 # ── Coroutines ────────────────────────────────────────────────────────────────
 -keep class kotlinx.coroutines.** { *; }
 -dontwarn kotlinx.coroutines.**
+
+# ── Annotation Processors / AutoValue ─────────────────────────────────────────
+-dontwarn javax.lang.model.**
+-dontwarn autovalue.shaded.**
+-dontwarn com.google.auto.value.**
+-dontwarn javax.annotation.processing.**

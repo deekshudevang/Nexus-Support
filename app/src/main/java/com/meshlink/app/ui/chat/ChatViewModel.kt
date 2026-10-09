@@ -121,7 +121,7 @@ class ChatViewModel @Inject constructor(
 
     /** Number of currently CONNECTED peers across the whole mesh (for top bar chip). */
     val peerCount: StateFlow<Int> = nearbyRepository.connectionStates
-        .map { states -> states.count { it.value == ConnectionState.CONNECTED } }
+        .map { states -> states.count { it.value == ConnectionState.CONNECTED || it.value == ConnectionState.AUTHENTICATED } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     private val _inputText = MutableStateFlow("")

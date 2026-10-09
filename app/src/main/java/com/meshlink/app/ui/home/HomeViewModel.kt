@@ -64,7 +64,7 @@ class HomeViewModel @Inject constructor(
 
     /** Number of currently CONNECTED (post-handshake) peers. */
     val peerCount: StateFlow<Int> = nearbyRepository.connectionStates
-        .map { states -> states.count { it.value == ConnectionState.CONNECTED } }
+        .map { states -> states.count { it.value == ConnectionState.CONNECTED || it.value == ConnectionState.AUTHENTICATED } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     val pendingMessageCount: StateFlow<Int> = pendingMessageRepository.getPendingCountFlow()

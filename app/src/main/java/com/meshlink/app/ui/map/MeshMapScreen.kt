@@ -97,7 +97,7 @@ fun MeshMapScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .background(Color(0xFF1E1E1E))
+                    .background(MaterialTheme.colorScheme.surface)
             ) {
                 AndroidView(
                     factory = { ctx ->
@@ -256,7 +256,7 @@ fun MeshMapScreen(
                                         modifier = Modifier
                                             .size(8.dp)
                                             .background(
-                                                color = if (node.isDirect) Color(0xFF4CAF50) else Color(0xFFFFC107),
+                                                color = if (node.isDirect) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.secondary,
                                                 shape = CircleShape
                                             )
                                     )
@@ -362,7 +362,7 @@ fun MeshMapScreen(
                             Text(
                                 text = if (activeNode.isDirect) "Direct Connection" else "${activeNode.hopCount} Hops Away",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = if (activeNode.isDirect) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (activeNode.isDirect) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }

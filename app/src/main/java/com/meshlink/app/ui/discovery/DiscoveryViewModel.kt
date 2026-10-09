@@ -36,8 +36,8 @@ class DiscoveryViewModel @Inject constructor(
     fun onDeviceClick(device: DiscoveredDevice) {
         val state = connectionStates.value[device.endpointId]
         when (state) {
-            ConnectionState.CONNECTED -> {
-                // Already connected — just navigate to chat
+            ConnectionState.CONNECTED, ConnectionState.AUTHENTICATED -> {
+                // Already connected or authenticated — just navigate to chat
                 viewModelScope.launch {
                     _navigateToChat.emit(device.endpointId to device.name)
                 }
@@ -51,7 +51,7 @@ class DiscoveryViewModel @Inject constructor(
                 viewModelScope.launch {
                     connectionStates.collect { states ->
                         val current = states[device.endpointId]
-                        if (current == ConnectionState.CONNECTED) {
+                        if (current == ConnectionState.CONNECTED || current == ConnectionState.AUTHENTICATED) {
                             _navigateToChat.emit(device.endpointId to device.name)
                             return@collect
                         }

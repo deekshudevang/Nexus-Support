@@ -1,9 +1,12 @@
 package com.meshlink.app.ui.sos
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -12,17 +15,26 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material.icons.rounded.MedicalServices
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.meshlink.app.ui.components.NexusCard
+import kotlinx.coroutines.delay
 
 @Composable
 fun SosScreen(
@@ -41,35 +53,50 @@ fun SosScreen(
     val bg = MaterialTheme.colorScheme.background
     val primary = MaterialTheme.colorScheme.primary
     val errorColor = MaterialTheme.colorScheme.error
+    val haptic = LocalHapticFeedback.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(bg)
             .statusBarsPadding()
-            .padding(24.dp)
-            .verticalScroll(rememberScrollState()),
+            .padding(horizontal = 24.dp)
+            .verticalScroll(rememberScrollState())
+            .semantics { contentDescription = "SOS Emergency Screen" },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        AnimatedVisibility(visible = isBroadcasting) {
-            NexusCard(
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        AnimatedVisibility(
+            visible = isBroadcasting,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 24.dp),
-                elevation = 8.dp
+                shape = RoundedCornerShape(16.dp),
+                color = errorColor.copy(alpha = 0.1f),
+                border = BorderStroke(1.dp, errorColor.copy(alpha = 0.3f))
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.padding(16.dp).fillMaxWidth()
                 ) {
-                    Icon(Icons.Default.Warning, contentDescription = null, tint = errorColor)
+                    Icon(
+                        Icons.Default.Warning, 
+                        contentDescription = "Active Alert", 
+                        tint = errorColor
+                    )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "Emergency Signal Active",
+                        text = "EMERGENCY SIGNAL ACTIVE",
                         color = errorColor,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
                     )
                 }
             }
@@ -77,124 +104,82 @@ fun SosScreen(
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.align(Alignment.Start)
+            modifier = Modifier
+                .align(Alignment.Start)
+                .background(primary.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
-            Icon(Icons.Default.GpsFixed, contentDescription = "GPS", tint = primary, modifier = Modifier.size(16.dp))
+            Icon(Icons.Default.GpsFixed, contentDescription = "GPS Status", tint = primary, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = if (satelliteLock.contains("LOCK")) "GPS Signal: Strong" else "GPS Signal: Searching...",
                 color = primary,
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold
             )
         }
         
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Big SOS / Cancel Button
-        Box(
-            modifier = Modifier
-                .size(200.dp)
-                .shadow(
-                    elevation = if (isBroadcasting) 28.dp else 12.dp,
-                    shape = CircleShape,
-                    ambientColor = if (isBroadcasting) errorColor else primary,
-                    spotColor = if (isBroadcasting) errorColor else primary
-                )
-                .clip(CircleShape)
-                .background(if (isBroadcasting) errorColor else primary)
-                .border(
-                    width = 4.dp,
-                    color = Color.White.copy(alpha = 0.25f),
-                    shape = CircleShape
-                )
-                .clickable { viewModel.toggleSos() },
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                if (isBroadcasting) {
-                    // Cancel state: smaller text + subtext so it fits cleanly
-                    Text(
-                        text = "✕",
-                        color = Color.White,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Black,
-                        lineHeight = 32.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "CANCEL",
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 3.sp
-                    )
-                } else {
-                    // SOS state: large bold letters
-                    Text(
-                        text = "SOS",
-                        color = Color.White,
-                        fontSize = 52.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 4.sp,
-                        lineHeight = 52.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "TAP TO SEND",
-                        color = Color.White.copy(alpha = 0.75f),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp
-                    )
-                }
-            }
-        }
-        
         Spacer(modifier = Modifier.height(48.dp))
 
+        SosInteractiveButton(
+            isBroadcasting = isBroadcasting,
+            onToggle = { 
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                viewModel.toggleSos() 
+            }
+        )
+        
+        Spacer(modifier = Modifier.height(56.dp))
+
         Text(
-            text = "Connection Method",
-            style = MaterialTheme.typography.titleSmall,
+            text = "CONNECTION METHOD",
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp,
             modifier = Modifier.align(Alignment.Start)
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
             SelectionPill(
                 text = "Local Mesh",
                 selected = activeUplink == SosViewModel.UplinkType.LORA_RF,
-                onClick = { viewModel.setUplink(SosViewModel.UplinkType.LORA_RF) },
+                onClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.setUplink(SosViewModel.UplinkType.LORA_RF) 
+                },
                 modifier = Modifier.weight(1f)
             )
             Spacer(modifier = Modifier.width(12.dp))
             SelectionPill(
                 text = "Satellite",
                 selected = activeUplink == SosViewModel.UplinkType.SATELLITE,
-                onClick = { viewModel.setUplink(SosViewModel.UplinkType.SATELLITE) },
+                onClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.setUplink(SosViewModel.UplinkType.SATELLITE) 
+                },
                 modifier = Modifier.weight(1f)
             )
         }
         
-        if (activeUplink == SosViewModel.UplinkType.SATELLITE) {
-            Spacer(modifier = Modifier.height(8.dp))
+        AnimatedVisibility(visible = activeUplink == SosViewModel.UplinkType.SATELLITE) {
             Text(
                 text = "Satellite available in ${nextOrb}s",
                 color = primary,
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.align(Alignment.End)
+                modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
+                textAlign = androidx.compose.ui.text.style.TextAlign.End
             )
         }
         
         Spacer(modifier = Modifier.height(32.dp))
 
         Text(
-            text = "What is your emergency?",
-            style = MaterialTheme.typography.titleSmall,
+            text = "NATURE OF EMERGENCY",
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp,
             modifier = Modifier.align(Alignment.Start)
         )
         Spacer(modifier = Modifier.height(12.dp))
@@ -203,14 +188,20 @@ fun SosScreen(
             SelectionCard(
                 text = "Medical",
                 selected = incidentType == SosViewModel.IncidentType.MED_EVAC,
-                onClick = { viewModel.setIncidentType(SosViewModel.IncidentType.MED_EVAC) },
+                onClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.setIncidentType(SosViewModel.IncidentType.MED_EVAC) 
+                },
                 modifier = Modifier.weight(1f)
             )
             Spacer(modifier = Modifier.width(12.dp))
             SelectionCard(
                 text = "Lost",
                 selected = incidentType == SosViewModel.IncidentType.LOST,
-                onClick = { viewModel.setIncidentType(SosViewModel.IncidentType.LOST) },
+                onClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.setIncidentType(SosViewModel.IncidentType.LOST) 
+                },
                 modifier = Modifier.weight(1f)
             )
         }
@@ -219,74 +210,98 @@ fun SosScreen(
             SelectionCard(
                 text = "Equipment",
                 selected = incidentType == SosViewModel.IncidentType.GEAR,
-                onClick = { viewModel.setIncidentType(SosViewModel.IncidentType.GEAR) },
+                onClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.setIncidentType(SosViewModel.IncidentType.GEAR) 
+                },
                 modifier = Modifier.weight(1f)
             )
             Spacer(modifier = Modifier.width(12.dp))
             SelectionCard(
                 text = "In Danger",
                 selected = incidentType == SosViewModel.IncidentType.SECURITY,
-                onClick = { viewModel.setIncidentType(SosViewModel.IncidentType.SECURITY) },
+                onClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.setIncidentType(SosViewModel.IncidentType.SECURITY) 
+                },
                 modifier = Modifier.weight(1f)
             )
         }
         
         Spacer(modifier = Modifier.height(32.dp))
 
-        NexusCard(elevation = 0.dp) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Share my location", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                Switch(checked = includeGps, onCheckedChange = { viewModel.toggleGps() })
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Share medical info", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                Switch(checked = includeMedical, onCheckedChange = { viewModel.toggleMedical() })
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { 
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.toggleGps() 
+                        }
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Map, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(12.dp))
+                        Text("Share location", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                    }
+                    Switch(checked = includeGps, onCheckedChange = { viewModel.toggleGps() })
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(horizontal = 16.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { 
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.toggleMedical() 
+                        }
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.MedicalServices, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(12.dp))
+                        Text("Share medical info", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                    }
+                    Switch(checked = includeMedical, onCheckedChange = { viewModel.toggleMedical() })
+                }
             }
         }
         
         Spacer(modifier = Modifier.height(32.dp))
         
-        // Simple Status Log
-        NexusCard(elevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = "System Status",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = if (isBroadcasting) "Sending emergency signal..." else "Ready to send.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (isBroadcasting) errorColor else MaterialTheme.colorScheme.onSurface
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-
         Row(modifier = Modifier.fillMaxWidth()) {
             Button(
-                onClick = onGuideClick,
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onGuideClick()
+                },
+                modifier = Modifier.weight(1f).height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
             ) {
-                Text("Emergency Guides")
+                Text("Guides", fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.width(16.dp))
             Button(
-                onClick = onDashboardClick,
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onDashboardClick()
+                },
+                modifier = Modifier.weight(1f).height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
             ) {
-                Text("Node Dashboard")
+                Text("Dashboard", fontWeight = FontWeight.Bold)
             }
         }
         
@@ -295,10 +310,158 @@ fun SosScreen(
 }
 
 @Composable
+private fun SosInteractiveButton(
+    isBroadcasting: Boolean,
+    onToggle: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    var isPressed by remember { mutableStateOf(false) }
+    
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "buttonScale"
+    )
+
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.4f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulseScale"
+    )
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulseAlpha"
+    )
+
+    val errorColor = MaterialTheme.colorScheme.error
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val mainColor = if (isBroadcasting) errorColor else primaryColor
+
+    Box(
+        modifier = Modifier
+            .size(240.dp)
+            .semantics { contentDescription = if (isBroadcasting) "Cancel SOS" else "Hold to send SOS" },
+        contentAlignment = Alignment.Center
+    ) {
+        // Pulsing rings when broadcasting
+        if (isBroadcasting) {
+            Box(
+                modifier = Modifier
+                    .size(200.dp)
+                    .scale(pulseScale)
+                    .clip(CircleShape)
+                    .background(errorColor.copy(alpha = pulseAlpha))
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .size(200.dp)
+                .scale(scale)
+                .shadow(
+                    elevation = if (isBroadcasting) 24.dp else 12.dp,
+                    shape = CircleShape,
+                    spotColor = mainColor
+                )
+                .clip(CircleShape)
+                .background(mainColor)
+                .border(4.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onPress = {
+                            isPressed = true
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            val pressStartTime = System.currentTimeMillis()
+                            try {
+                                awaitRelease()
+                                val duration = System.currentTimeMillis() - pressStartTime
+                                if (duration > 500) { // Hold for 500ms to activate/cancel
+                                    onToggle()
+                                } else {
+                                    // Hint to hold longer
+                                }
+                            } finally {
+                                isPressed = false
+                            }
+                        }
+                    )
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                if (isBroadcasting) {
+                    Text(
+                        text = "✕",
+                        color = Color.White,
+                        fontSize = 40.sp,
+                        fontWeight = FontWeight.Black,
+                        lineHeight = 40.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "HOLD TO CANCEL",
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                } else {
+                    Text(
+                        text = "SOS",
+                        color = Color.White,
+                        fontSize = 56.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 2.sp,
+                        lineHeight = 56.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "HOLD TO SEND",
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                }
+            }
+        }
+        
+        // Progress ring during press
+        if (isPressed) {
+            val progress by animateFloatAsState(
+                targetValue = 1f,
+                animationSpec = tween(500, easing = LinearEasing),
+                label = "holdProgress"
+            )
+            CircularProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.size(220.dp),
+                color = Color.White,
+                strokeWidth = 6.dp,
+                trackColor = Color.Transparent
+            )
+        }
+    }
+}
+
+@Composable
 fun SelectionPill(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val bgColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
-    val borderColor = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
-    val textColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    val bgColor by animateColorAsState(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, label = "bg")
+    val textColor by animateColorAsState(if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, label = "text")
+    val borderColor = if (selected) Color.Transparent else MaterialTheme.colorScheme.outlineVariant
     
     Box(
         modifier = modifier
@@ -306,7 +469,10 @@ fun SelectionPill(text: String, selected: Boolean, onClick: () -> Unit, modifier
             .border(1.dp, borderColor, RoundedCornerShape(24.dp))
             .clip(RoundedCornerShape(24.dp))
             .clickable { onClick() }
-            .padding(vertical = 12.dp),
+            .padding(vertical = 12.dp)
+            .semantics { 
+                contentDescription = if (selected) "$text selected" else text 
+            },
         contentAlignment = Alignment.Center
     ) {
         Text(text, color = textColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
@@ -315,17 +481,20 @@ fun SelectionPill(text: String, selected: Boolean, onClick: () -> Unit, modifier
 
 @Composable
 fun SelectionCard(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val bgColor = if (selected) MaterialTheme.colorScheme.error.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
-    val borderColor = if (selected) MaterialTheme.colorScheme.error else Color.Transparent
-    val textColor = if (selected) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    val bgColor by animateColorAsState(if (selected) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surface, label = "bg")
+    val textColor by animateColorAsState(if (selected) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface, label = "text")
+    val borderColor = if (selected) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant
     
     Box(
         modifier = modifier
             .background(bgColor, RoundedCornerShape(16.dp))
-            .border(2.dp, borderColor, RoundedCornerShape(16.dp))
+            .border(if (selected) 2.dp else 1.dp, borderColor, RoundedCornerShape(16.dp))
             .clip(RoundedCornerShape(16.dp))
             .clickable { onClick() }
-            .padding(vertical = 20.dp),
+            .padding(vertical = 20.dp)
+            .semantics { 
+                contentDescription = if (selected) "$text selected" else text 
+            },
         contentAlignment = Alignment.Center
     ) {
         Text(text, color = textColor, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)

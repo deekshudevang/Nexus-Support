@@ -106,4 +106,12 @@ interface NearbyRepository {
      * High priority.
      */
     fun sendSos(content: String)
+
+    /**
+     * Stop broadcasting SOS emergency beacons and send an emergency cancellation packet if needed.
+     */
+    fun cancelSos()
+
+    /** Clean up resources and coroutines */
+    fun cleanup()
 }

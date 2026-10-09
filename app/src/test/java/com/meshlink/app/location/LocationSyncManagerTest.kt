@@ -32,8 +32,9 @@ class LocationSyncManagerTest {
 
     @Before
     fun setup() {
-        val nearbyLazy = mockk<Lazy<NearbyRepository>>()
-        every { nearbyLazy.get() } returns nearbyRepository
+        val nearbyLazy = object : Lazy<NearbyRepository> {
+            override fun get(): NearbyRepository = nearbyRepository
+        }
         
         syncManager = LocationSyncManagerImpl(
             locationEventDao,

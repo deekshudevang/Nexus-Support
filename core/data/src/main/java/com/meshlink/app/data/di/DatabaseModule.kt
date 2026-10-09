@@ -45,7 +45,7 @@ object DatabaseModule {
                 AppDatabase.MIGRATION_13_14
             ).apply {
                 if (BuildConfig.DEBUG) {
-                    fallbackToDestructiveMigration(dropAllTables = true)
+                    fallbackToDestructiveMigration()
                 }
             }.build()
     }

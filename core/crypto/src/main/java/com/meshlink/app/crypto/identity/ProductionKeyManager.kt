@@ -8,7 +8,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKeys
+import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import java.security.KeyFactory
@@ -181,21 +181,25 @@ class ProductionKeyManager @Inject constructor(
 
     private fun createEncryptedPrefs(): SharedPreferences {
         return try {
-            val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
             EncryptedSharedPreferences.create(
-                PREFS_FILE,
-                masterKeyAlias,
                 context,
+                PREFS_FILE,
+                masterKey,
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
         } catch (e: Exception) {
             context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE).edit().clear().apply()
-            val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
             EncryptedSharedPreferences.create(
-                PREFS_FILE,
-                masterKeyAlias,
                 context,
+                PREFS_FILE,
+                masterKey,
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )

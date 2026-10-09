@@ -47,7 +47,9 @@ class PartitionReconnectTest {
 
     @Before
     fun setup() {
-        every { nearbyLazy.get() } returns nearbyRepository
+        val nearbyLazy = object : Lazy<NearbyRepository> {
+            override fun get(): NearbyRepository = nearbyRepository
+        }
         every { keyProvider.verify(any(), any(), any()) } returns true
         coEvery { processedEventDao.isProcessed(any()) } returns false
 

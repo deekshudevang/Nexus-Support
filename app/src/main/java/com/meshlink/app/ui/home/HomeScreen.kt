@@ -5,7 +5,7 @@ import com.meshlink.app.ui.components.EmptyStateView
 import com.meshlink.app.ui.components.NexusCard
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import com.meshlink.app.ui.components.bounceClick
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,12 +78,14 @@ fun HomeScreen(
                 SectionLabel("BROADCAST CHANNEL")
                 if (conversations.isNotEmpty()) {
                     val broadcast = conversations.first()
-                    BroadcastChannelCard(
+                    BroadcastChannelRow(
                         conversation = broadcast,
                         onClick      = { onConversationClick(broadcast.deviceId, broadcast.deviceName) }
                     )
+                    Divider()
                 } else {
-                    EmptyBroadcastCard()
+                    EmptyBroadcastRow()
+                    Divider()
                 }
             }
 
@@ -94,6 +96,7 @@ fun HomeScreen(
                     scanStrategy = scanStrategy,
                     onResumeClick = { viewModel.forceResumeScanning() }
                 ) 
+                Divider()
             }
             item { BroadcastToAllButton(onClick = onBroadcastClick) }
             item { SectionLabel("ACTIVE CHANNELS") }
@@ -114,19 +117,23 @@ fun HomeScreen(
                         isOnline     = true,
                         onClick      = { onConversationClick(conv.deviceId, conv.deviceName) }
                     )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 78.dp)
-                            .height(0.5.dp)
-                            .background(MaterialTheme.colorScheme.outline)
-                    )
+                    Divider()
                 }
             }
 
             item { Spacer(Modifier.height(12.dp)) }
         }
     }
+}
+
+@Composable
+private fun Divider() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(MaterialTheme.colorScheme.outlineVariant)
+    )
 }
 
 @Composable
@@ -192,83 +199,77 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun BroadcastChannelCard(conversation: Conversation, onClick: () -> Unit) {
-    Surface(
+private fun BroadcastChannelRow(conversation: Conversation, onClick: () -> Unit) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        color = if (conversation.isSos) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
-        border = if (conversation.isSos) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+            .background(if (conversation.isSos) MaterialTheme.colorScheme.error.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceVariant)
+            .bounceClick(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier              = Modifier.padding(14.dp),
-            verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Box {
-                MeshAvatar(name = conversation.deviceName, size = 50.dp)
+        Box {
+            MeshAvatar(name = conversation.deviceName, size = 50.dp)
+            Box(
+                modifier = Modifier
+                    .size(13.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.background)
+                    .align(Alignment.BottomEnd)
+            ) {
                 Box(
                     modifier = Modifier
-                        .size(13.dp)
+                        .size(9.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.background)
-                        .align(Alignment.BottomEnd)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(9.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.tertiary)
-                            .align(Alignment.Center)
-                    )
-                }
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text       = conversation.deviceName,
-                        style      = MaterialTheme.typography.titleSmall,
-                        color      = if (conversation.isSos) Color(0xFFEF4444) else MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    if (conversation.isSos) {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFFEF4444)
-                        ) {
-                            Text("SOS", color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp), fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text     = conversation.lastMessage,
-                    style    = MaterialTheme.typography.bodySmall,
-                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                        .background(MaterialTheme.colorScheme.tertiary)
+                        .align(Alignment.Center)
                 )
             }
+        }
 
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text       = conversation.deviceName,
+                    style      = MaterialTheme.typography.titleSmall,
+                    color      = if (conversation.isSos) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (conversation.isSos) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.error
+                    ) {
+                        Text("SOS", color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp), fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            Spacer(Modifier.height(3.dp))
             Text(
-                text  = conversation.formattedTime,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                text     = conversation.lastMessage,
+                style    = MaterialTheme.typography.bodySmall,
+                color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
+
+        Text(
+            text  = conversation.formattedTime,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
 @Composable
-private fun EmptyBroadcastCard() {
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+private fun EmptyBroadcastRow() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(vertical = 16.dp)
     ) {
         EmptyStateView(
             icon = Icons.Default.Info,
@@ -285,9 +286,11 @@ private fun NetworkStatusSection(
     scanStrategy: com.meshlink.app.domain.model.ScanStrategy,
     onResumeClick: () -> Unit
 ) {
-    NexusCard(
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-        elevation = 0.dp
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
         Text(
             text          = "NETWORK STATUS",
@@ -389,14 +392,14 @@ private fun BroadcastToAllButton(onClick: () -> Unit) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .bounceClick(onClick = onClick)
+            .clip(RoundedCornerShape(8.dp)),
+        shape = RoundedCornerShape(8.dp),
         color = MaterialTheme.colorScheme.secondary
     ) {
         Row(
-            modifier              = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+            modifier              = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
             verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -440,7 +443,7 @@ private fun ActiveChannelRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(bgColor)
-            .clickable(onClick = onClick)
+            .bounceClick(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -477,13 +480,13 @@ private fun ActiveChannelRow(
                     Text(
                         text       = conversation.deviceName,
                         style      = MaterialTheme.typography.titleSmall,
-                        color      = if (conversation.isSos) Color(0xFFEF4444) else MaterialTheme.colorScheme.onSurface,
+                        color      = if (conversation.isSos) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.SemiBold
                     )
                     if (conversation.isSos) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFFEF4444)
+                            color = MaterialTheme.colorScheme.error
                         ) {
                             Text("SOS", color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp), fontWeight = FontWeight.Bold)
                         }

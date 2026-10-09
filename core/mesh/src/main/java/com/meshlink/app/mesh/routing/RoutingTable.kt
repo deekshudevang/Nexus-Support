@@ -103,7 +103,8 @@ class RoutingTable @Inject constructor(
         queue.add(Pair(myDeviceId, 0))
 
         while (queue.isNotEmpty()) {
-            val (u, distU) = queue.poll()
+            val pollResult = queue.poll() ?: continue
+            val (u, distU) = pollResult
 
             if (distU > (distances[u] ?: Int.MAX_VALUE)) continue
             if (u == destinationDeviceId) break // Found shortest path

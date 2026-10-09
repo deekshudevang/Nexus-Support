@@ -43,7 +43,7 @@ class SeenMessageCache @Inject constructor() {
      * Uses Bloom filter first, then falls back to LRU for exact check.
      */
     @Synchronized
-    fun isAlreadySeen(messageId: String): Boolean {
+    fun isAlreadySeen(messageId: String, isCritical: Boolean = false): Boolean {
         // Fast check: LRU exact match (handles TTL expiry)
         val entry = lruCache[messageId]
         if (entry != null) {
@@ -55,6 +55,11 @@ class SeenMessageCache @Inject constructor() {
                 return true
             }
         }
+        
+        if (isCritical) {
+            return false
+        }
+
         // Probabilistic check: Bloom filter (no TTL, but auto-rotates at capacity)
         return bloomFilter.mightContain(messageId)
     }

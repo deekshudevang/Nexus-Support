@@ -14,9 +14,17 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        getByName("test").assets.srcDirs("/schemas")
     }
 
     buildFeatures {
@@ -26,12 +34,14 @@ android {
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
+    arg("room.generateKotlin", "true")
 }
 
 dependencies {
     implementation(project(":core:domain"))
 
     implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
     implementation(libs.hilt.android)
@@ -45,6 +55,12 @@ dependencies {
     implementation(libs.retrofit.converter.gson)
     implementation(libs.sqlcipher.android)
     implementation(libs.androidx.security.crypto)
+
+    testImplementation(libs.robolectric)
+    testImplementation(libs.room.testing)
+    testImplementation(libs.androidx.junit)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.kotlinx.coroutines.test)
 
     androidTestImplementation(libs.room.testing)
     androidTestImplementation(libs.androidx.junit)

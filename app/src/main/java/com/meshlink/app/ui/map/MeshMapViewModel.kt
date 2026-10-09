@@ -66,7 +66,7 @@ class MeshMapViewModel @Inject constructor(
         val edges = mutableListOf<MeshEdge>()
         
         // Find all connected peers (direct neighbors)
-        val connectedEndpoints = connStates.filterValues { it == ConnectionState.CONNECTED }.keys
+        val connectedEndpoints = connStates.filterValues { it == ConnectionState.CONNECTED || it == ConnectionState.AUTHENTICATED }.keys
         val directDeviceIds = mutableSetOf<String>()
         
         for (ep in connectedEndpoints) {

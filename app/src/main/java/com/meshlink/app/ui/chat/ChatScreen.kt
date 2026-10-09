@@ -3,6 +3,7 @@ package com.meshlink.app.ui.chat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import com.meshlink.app.ui.components.bounceClick
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -29,8 +30,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.meshlink.app.domain.model.ConnectionState
 import com.meshlink.app.domain.model.Message
-import com.meshlink.app.ui.theme.CardSurface
-import com.meshlink.app.ui.theme.Primary
 
 
 @Composable
@@ -62,7 +61,7 @@ fun ChatScreen(
     }
     
     val txColor by androidx.compose.animation.animateColorAsState(
-        targetValue = if (connState == ConnectionState.CONNECTED) MaterialTheme.colorScheme.primary else Color.Gray,
+        targetValue = if (connState == ConnectionState.CONNECTED || connState == ConnectionState.AUTHENTICATED) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
         label = "txColor"
     )
 
@@ -77,73 +76,68 @@ fun ChatScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(CardSurface.copy(alpha = 0.85f))
+                .background(MaterialTheme.colorScheme.surface)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBackClick) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
                     Text(
                         text = viewModel.deviceName.uppercase(),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        fontFamily = FontFamily.Monospace
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.titleLarge
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (isPeerVerified) {
-                            Icon(Icons.Default.VerifiedUser, contentDescription = "Verified", tint = Color(0xFF4CAF50), modifier = Modifier.size(14.dp))
+                            Icon(Icons.Default.VerifiedUser, contentDescription = "Verified", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                         }
                         androidx.compose.animation.AnimatedContent(targetState = connState, label = "connState") { state ->
                             Text(
-                                text = if (state == ConnectionState.CONNECTED) "Connected via Mesh" else "Offline",
-                                color = if (state == ConnectionState.CONNECTED) Primary else Color.Gray,
-                                fontSize = 12.sp,
-                                fontFamily = FontFamily.SansSerif
+                                text = if (state == ConnectionState.CONNECTED || state == ConnectionState.AUTHENTICATED) "Connected via Mesh" else "Offline",
+                                color = if (state == ConnectionState.CONNECTED || state == ConnectionState.AUTHENTICATED) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelMedium
                             )
                         }
                     }
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(text = "Battery: ${battery}%", color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
-                    Text(text = "Encrypted", color = Primary, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
+                    Text(text = "Battery: ${battery}%", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+                    Text(text = "Encrypted", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
                     if (sasCode != null && !isPeerVerified) {
                         TextButton(
                             onClick = { showVerifyDialog = true },
                             contentPadding = PaddingValues(0.dp)
                         ) {
-                            Text(text = "Verify Contact", color = Primary, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                            Text(text = "Verify Contact", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            // Telemetry badges removed for simplicity
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
 
         if (showVerifyDialog && sasCode != null) {
             AlertDialog(
                 onDismissRequest = { showVerifyDialog = false },
-                title = { Text("Verify Contact", color = Color.White) },
+                title = { Text("Verify Contact", color = MaterialTheme.colorScheme.onSurface) },
                 text = {
                     Column {
-                        Text("Compare this security code with the one on ${viewModel.deviceName}'s screen:", color = Color.Gray, fontSize = 14.sp)
+                        Text("Compare this security code with the one on ${viewModel.deviceName}'s screen:", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = sasCode ?: "",
-                            color = Primary,
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.displaySmall,
                             modifier = Modifier.align(Alignment.CenterHorizontally)
                         )
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("If the codes match exactly, it is safe to verify. This protects against Man-in-the-Middle attacks.", color = Color.Gray, fontSize = 12.sp)
+                        Text("If the codes match exactly, it is safe to verify. This protects against Man-in-the-Middle attacks.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     }
                 },
                 confirmButton = {
@@ -151,32 +145,64 @@ fun ChatScreen(
                         viewModel.onVerifyContactConfirmed()
                         showVerifyDialog = false
                     }) {
-                        Text("Verify", color = Primary)
+                        Text("Verify", color = MaterialTheme.colorScheme.primary)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showVerifyDialog = false }) {
-                        Text("Cancel", color = Color.Gray)
+                        Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
-                containerColor = CardSurface,
-                titleContentColor = Color.White,
-                textContentColor = Color.White
+                containerColor = MaterialTheme.colorScheme.surface,
+                titleContentColor = MaterialTheme.colorScheme.onSurface,
+                textContentColor = MaterialTheme.colorScheme.onSurface
             )
         }
 
         // Messages List
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(vertical = 16.dp)
-        ) {
-            items(messages) { msg ->
-                val isMe = msg.senderId == viewModel.localDeviceId
-                MessageBubble(message = msg, isMe = isMe)
+        if (messages.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        Icons.Default.Shield,
+                        contentDescription = "No Messages",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(64.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "No Messages Yet",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Send a secure message to start the conversation. All communication is end-to-end encrypted.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(vertical = 16.dp)
+            ) {
+                items(messages) { msg ->
+                    val isMe = msg.senderId == viewModel.localDeviceId
+                    MessageBubble(message = msg, isMe = isMe)
+                }
             }
         }
 
@@ -184,7 +210,7 @@ fun ChatScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(CardSurface.copy(alpha = 0.9f))
+                .background(MaterialTheme.colorScheme.surface)
                 .padding(16.dp)
         ) {
             // Quick action chips
@@ -202,36 +228,38 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF1A1A1F), RoundedCornerShape(24.dp))
-                    .border(1.dp, Color(0xFF2A2A35), RoundedCornerShape(24.dp))
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(24.dp))
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(24.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
                 BasicTextField(
                     value = inputText,
                     onValueChange = { viewModel.onInputChanged(it) },
                     modifier = Modifier.weight(1f),
-                    textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 14.sp),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                     decorationBox = { innerTextField ->
                         if (inputText.isEmpty()) {
-                            Text("Message...", color = Color.Gray, fontSize = 14.sp, fontFamily = FontFamily.SansSerif)
+                            Text("Message...", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), style = MaterialTheme.typography.bodyLarge)
                         }
                         innerTextField()
                     }
                 )
                 
+                Spacer(modifier = Modifier.width(8.dp))
+                
                 Box(
                     modifier = Modifier
-                        .background(txColor, RoundedCornerShape(16.dp))
-                        .clickable(enabled = connState == ConnectionState.CONNECTED) { viewModel.onSendClick() }
-                        .padding(horizontal = 20.dp, vertical = 10.dp)
+                        .background(txColor, RoundedCornerShape(20.dp))
+                        .bounceClick(enabled = connState == ConnectionState.CONNECTED || connState == ConnectionState.AUTHENTICATED) { viewModel.onSendClick() }
+                        .padding(horizontal = 24.dp, vertical = 12.dp)
                 ) {
-                    Text("Send", color = Color.Black, fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif)
+                    Text("Send", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.labelLarge)
                 }
             }
             
             // Payload Estimator
             Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
-                Text(text = "${inputText.length}/240", color = Color.Gray, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
+                Text(text = "${inputText.length}/240", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
             }
         }
     }
@@ -255,23 +283,21 @@ fun MessageBubble(message: Message, isMe: Boolean) {
                 .then(
                     if (isMe) {
                         Modifier.background(
-                            brush = Brush.linearGradient(
-                                colors = listOf(Primary, Color(0xFF00B2CC))
-                            ),
+                            color = MaterialTheme.colorScheme.primary,
                             shape = bubbleShape
                         )
                     } else {
                         Modifier.background(
-                            color = Color(0xFF1E1E24),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = bubbleShape
-                        ).border(1.dp, Color(0xFF2C2C32), bubbleShape)
+                        ).border(1.dp, MaterialTheme.colorScheme.outlineVariant, bubbleShape)
                     }
                 )
                 .padding(14.dp)
         ) {
             Text(
                 text = String(message.ciphertext, Charsets.UTF_8),
-                color = if (isMe) Color.Black else Color.White,
+                color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 15.sp
             )
         }
@@ -280,9 +306,9 @@ fun MessageBubble(message: Message, isMe: Boolean) {
         // Status / Telemetry for message
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (isMe) {
-                Text("Delivered", color = Primary, fontSize = 10.sp, fontFamily = FontFamily.SansSerif)
+                Text("Delivered", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
             } else {
-                Text("via Node-Echo", color = Color.Gray, fontSize = 10.sp, fontFamily = FontFamily.SansSerif)
+                Text("via Node-Echo", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
             }
         }
     }
@@ -292,10 +318,11 @@ fun MessageBubble(message: Message, isMe: Boolean) {
 fun TelemetryBadge(text: String) {
     Box(
         modifier = Modifier
-            .background(Color(0xFF2A1105), RoundedCornerShape(2.dp))
-            .padding(horizontal = 4.dp, vertical = 2.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 4.dp)
     ) {
-        Text(text = text, color = Primary, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+        Text(text = text, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelSmall)
     }
 }
 
@@ -304,12 +331,12 @@ fun QuickActionChip(icon: androidx.compose.ui.graphics.vector.ImageVector, text:
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .background(Color(0xFF24242A), RoundedCornerShape(16.dp))
-            .border(1.dp, Color(0xFF33333E), RoundedCornerShape(16.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
-        Icon(icon, contentDescription = null, tint = Primary, modifier = Modifier.size(14.dp))
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
         Spacer(modifier = Modifier.width(6.dp))
-        Text(text, color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
+        Text(text, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelMedium)
     }
 }

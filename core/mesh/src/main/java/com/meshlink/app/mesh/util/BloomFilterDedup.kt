@@ -53,7 +53,8 @@ class BloomFilterDedup(
     fun put(value: String) {
         val bytes = value.toByteArray(Charset.forName("UTF-8"))
         for (i in 0 until hashCount) {
-            val idx = abs(murmurHash3(bytes, i)) % bitSize
+            val hash = murmurHash3(bytes, i)
+            val idx = (hash and 0x7FFFFFFF) % bitSize
             currentBits[idx] = true
         }
         insertionCount++
@@ -62,7 +63,8 @@ class BloomFilterDedup(
 
     private fun checkBits(bits: BooleanArray, bytes: ByteArray): Boolean {
         for (i in 0 until hashCount) {
-            val idx = abs(murmurHash3(bytes, i)) % bitSize
+            val hash = murmurHash3(bytes, i)
+            val idx = (hash and 0x7FFFFFFF) % bitSize
             if (!bits[idx]) return false
         }
         return true

@@ -162,7 +162,7 @@ fun DiscoveryScreen(
                     val state        = connectionStates[device.endpointId] ?: ConnectionState.IDLE
                     val isConnecting = state == ConnectionState.CONNECTING ||
                                        state == ConnectionState.HANDSHAKING
-                    val isConnected  = state == ConnectionState.CONNECTED
+                    val isConnected  = state == ConnectionState.CONNECTED || state == ConnectionState.AUTHENTICATED
                     DeviceCard(
                         device       = device,
                         icon         = deviceIcon(idx),
@@ -335,13 +335,13 @@ private fun DeviceCard(
                     modifier         = Modifier
                         .size(48.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFFE2E8F0)),
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector        = icon,
                         contentDescription = null,
-                        tint               = Color(0xFF64748B),
+                        tint               = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier           = Modifier.size(24.dp)
                     )
                 }
@@ -391,7 +391,7 @@ private fun DeviceCard(
                     .background(
                         when {
                             isConnected  -> EmergencyGreen
-                            isConnecting -> Color(0xFF374151)
+                            isConnecting -> MaterialTheme.colorScheme.secondary
                             else         -> TextPrimary
                         }
                     )
