@@ -114,7 +114,7 @@ fun HomeScreen(
                 items(conversations.drop(1).ifEmpty { conversations }, key = { it.deviceId }) { conv ->
                     ActiveChannelRow(
                         conversation = conv,
-                        isOnline     = true,
+                        isOnline     = conv.isOnline,
                         onClick      = { onConversationClick(conv.deviceId, conv.deviceName) }
                     )
                     Divider()

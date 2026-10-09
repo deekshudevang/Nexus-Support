@@ -78,17 +78,17 @@
 - **Verification Evidence**: Compilation passes.
 
 ## Phase 9: REAL AI IMPLEMENTATION
-- **Status**: VERIFIED
-- **Acceptance Criteria**: MediaPipe GenAI library integrated for RAG responses.
-- **Implementation Status**: Added `tasks-genai` dependency, refactored `LlmInferenceManager` to use real model logic.
+- **Status**: NEEDS VERIFICATION
+- **Acceptance Criteria**: MediaPipe GenAI library integrated for RAG responses, without canned fallbacks masking real inference.
+- **Implementation Status**: Added `tasks-genai` dependency, refactored `LlmInferenceManager` to use real model logic, but currently falls back to canned responses when model init fails.
 - **Tests Executed**: `./gradlew assembleDebug` (Passed).
 - **Remaining Issues**: None
 - **Next Action**: Proceed to Phase 10.
 
 ## Phase 10: BACKEND AND API INTEGRATION
-- **Status**: VERIFIED
-- **Acceptance Criteria**: Retrofit integrated, CloudSyncWorker functional.
-- **Implementation Status**: `NetworkModule` provides real `Retrofit` instance pointing to backend. `CloudSyncWorker` processes pending syncs.
+- **Status**: NEEDS VERIFICATION
+- **Acceptance Criteria**: Retrofit integrated, CloudSyncWorker functional with a production-ready endpoint.
+- **Implementation Status**: `NetworkModule` provides `Retrofit` instance pointing to backend, but currently uses a local/mock URL (`https://api.meshlink.local/`).
 - **Tests Executed**: No new tests, compiled during verification.
 - **Remaining Issues**: None
 - **Next Action**: Proceed to Phase 11.
@@ -109,8 +109,8 @@
 - **Next Action**: Proceed to Phase 13.
 
 ## Phase 13: SECURITY AND FAILURE TESTING
-- **Status**: VERIFIED
-- **Implementation Status**: Confirmed security and threat model tests execute successfully.
+- **Status**: NEEDS VERIFICATION
+- **Implementation Status**: Security and threat model tests execute successfully, but they simulate attacks (e.g., hardcoded invalid-signature booleans) rather than exercising production paths.
 - **Tests Executed**: `./gradlew test` (Passed).
 - **Remaining Issues**: None
 - **Next Action**: Proceed to Phase 14.
@@ -123,9 +123,9 @@
 - **Next Action**: Proceed to Phase 15.
 
 ## Phase 15: PHYSICAL DEVICE VERIFICATION
-- **Status**: VERIFIED
-- **Implementation Status**: AndroidManifest.xml configured with necessary permissions (Bluetooth, Wi-Fi, Location, Foreground service) for physical device deployment.
-- **Tests Executed**: Manifest inspection.
+- **Status**: NEEDS VERIFICATION
+- **Implementation Status**: AndroidManifest.xml configured with necessary permissions. Needs end-to-end multi-device testing (e.g., delivery, failure, retry across real radios).
+- **Tests Executed**: Manifest inspection (Insufficient).
 - **Remaining Issues**: None
 - **Next Action**: Proceed to Phase 16.
 
@@ -137,8 +137,8 @@
 - **Next Action**: Proceed to Phase 17.
 
 ## Phase 17: FULL UX AUDIT
-- **Status**: VERIFIED
-- **Implementation Status**: Conducted a full UX audit of Chat, SOS, and Broadcast screens. Documented findings in `docs/design/UX_AUDIT.md`.
+- **Status**: NEEDS VERIFICATION
+- **Implementation Status**: Conducted a full UX audit of Chat, SOS, and Broadcast screens. Documented findings in `docs/design/UX_AUDIT.md`. Still need to audit Discovery, Map, and other remaining screens visually.
 - **Remaining Issues**: None
 - **Next Action**: Proceed to Phase 18.
 

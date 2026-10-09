@@ -65,42 +65,70 @@ class ThreatModelValidationTest {
 
     @Test
     fun testReplayAttack_ValidationLogic() {
-        // In the actual app, SeenMessageCache handles replays.
-        // We simulate the router's behavior here to prove the logic.
-        val cache = mutableSetOf<String>()
+        // Use the actual production SeenMessageCache for replay testing
+        val cache = com.meshlink.app.mesh.routing.SeenMessageCache()
         val packetId = "uuid-1234"
         
         // First reception
-        val isFirstAccepted = cache.add(packetId)
-        assertTrue("First reception should be accepted", isFirstAccepted)
+        val isFirstSeen = cache.isAlreadySeen(packetId)
+        assertFalse("First reception should not be seen", isFirstSeen)
+        cache.markSeen(packetId)
         
         // Replay attack
-        val isSecondAccepted = cache.add(packetId)
-        assertFalse("Replay should be rejected by the cache", isSecondAccepted)
+        val isSecondSeen = cache.isAlreadySeen(packetId)
+        assertTrue("Replay should be identified by the cache", isSecondSeen)
     }
 
     @Test
     fun testDuplicateFlooding_TriggersRateLimiting() {
-        // Simulate 1000 identical packets sent in rapid succession
-        val cache = mutableSetOf<String>()
+        val cache = com.meshlink.app.mesh.routing.SeenMessageCache()
         val packetId = "uuid-flood-999"
         
-        var acceptedCount = 0
+        var newlyAcceptedCount = 0
         for (i in 0 until 1000) {
-            val isAccepted = cache.add(packetId)
-            if (isAccepted) acceptedCount++
+            val isAlreadySeen = cache.isAlreadySeen(packetId)
+            if (!isAlreadySeen) {
+                newlyAcceptedCount++
+                cache.markSeen(packetId)
+            }
         }
         
         // Only the first packet should be accepted, the rest rate-limited / cached
-        assertTrue("Flood should result in only 1 accepted packet", acceptedCount <= 1)
+        assertTrue("Flood should result in exactly 1 newly accepted packet", newlyAcceptedCount == 1)
     }
 
     @Test
     fun testRoutePoisoning_MitigatedBySignedUpdates() {
-        // Simulate a malicious node sending a fake routing advertisement
-        // In a real scenario, this would verify the ECDSA signature of the packet
-        val maliciousSignatureValid = false // Fails cryptographic verification
+        // Use real cryptographic ECDSA signature verification for route poisoning mitigation
+        val kpg = KeyPairGenerator.getInstance("EC")
+        kpg.initialize(ECGenParameterSpec("secp256r1"))
         
-        assertFalse("Malicious route advertisement must be dropped if signature is invalid", maliciousSignatureValid)
+        val legitimateKeyPair = kpg.generateKeyPair()
+        val maliciousKeyPair = kpg.generateKeyPair()
+        
+        val routingPayload = "ROUTE_UPDATE:PEER_X_TO_PEER_Y".toByteArray()
+        
+        // Legitimate signing
+        val legitimateSignature = java.security.Signature.getInstance("SHA256withECDSA").apply {
+            initSign(legitimateKeyPair.private)
+            update(routingPayload)
+        }.sign()
+        
+        // Attacker modifies payload
+        val maliciousPayload = "ROUTE_UPDATE:PEER_X_TO_ATTACKER".toByteArray()
+        
+        // Attacker attempts to append legitimate signature to malicious payload
+        val verifier = java.security.Signature.getInstance("SHA256withECDSA").apply {
+            initVerify(legitimateKeyPair.public)
+            update(maliciousPayload)
+        }
+        
+        val isValid = try {
+            verifier.verify(legitimateSignature)
+        } catch (e: Exception) {
+            false
+        }
+        
+        assertFalse("Malicious route advertisement must fail cryptographic verification", isValid)
     }
 }

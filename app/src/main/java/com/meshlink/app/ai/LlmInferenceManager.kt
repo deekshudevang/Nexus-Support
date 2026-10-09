@@ -45,11 +45,7 @@ class LlmInferenceManager @Inject constructor(
      */
     suspend fun generateRagResponse(query: String, contextData: String): String = withContext(Dispatchers.IO) {
         if (llmInference == null) {
-            delay(1500) // Simulate delay for stub
-            if (contextData.isBlank()) {
-                return@withContext "I don't have specific offline guides for '$query', but please stay calm, seek shelter, and broadcast an SOS if you are in danger."
-            }
-            return@withContext "Based on the emergency protocols:\n$contextData\n\nFollow these steps carefully and prioritize your safety."
+            return@withContext "Error: Offline AI model (Gemma) is not initialized or model file is missing."
         }
         
         try {
@@ -63,7 +59,7 @@ class LlmInferenceManager @Inject constructor(
             return@withContext response.trim()
         } catch (e: Exception) {
             Timber.e(e, "Failed to generate LLM response")
-            return@withContext "I am sorry, my AI engine encountered an error generating a response."
+            return@withContext "I am sorry, my AI engine encountered an error generating a response: ${e.message}"
         }
     }
 }
