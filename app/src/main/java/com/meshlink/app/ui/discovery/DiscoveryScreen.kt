@@ -1,11 +1,17 @@
 package com.meshlink.app.ui.discovery
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,10 +33,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CellTower
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SignalCellularAlt
 import androidx.compose.material.icons.filled.WifiTethering
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,22 +61,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.meshlink.app.domain.model.ConnectionState
 import com.meshlink.app.domain.model.DiscoveredDevice
-import com.meshlink.app.ui.theme.BadgeFar
-import com.meshlink.app.ui.theme.BadgeNear
-import com.meshlink.app.ui.theme.BadgeVeryFar
-import com.meshlink.app.ui.theme.DarkBackground
-import com.meshlink.app.ui.theme.DarkSurface
-import com.meshlink.app.ui.theme.DarkSurfaceElevated
-import com.meshlink.app.ui.theme.EmergencyGreen
-import com.meshlink.app.ui.theme.EmergencyRed
-import com.meshlink.app.ui.theme.LightBackground
-import com.meshlink.app.ui.theme.LightBorder
-import com.meshlink.app.ui.theme.LightSurface
-import com.meshlink.app.ui.theme.TextOnDark
-import com.meshlink.app.ui.theme.TextOnDarkDim
-import com.meshlink.app.ui.theme.TextOnDarkMuted
-import com.meshlink.app.ui.theme.TextPrimary
-import com.meshlink.app.ui.theme.TextSecondary
 
 // Mocked distance helper (Nearby API doesn't expose distance)
 private fun mockDistance(endpointId: String): String {
@@ -75,12 +68,22 @@ private fun mockDistance(endpointId: String): String {
     return distances[Math.abs(endpointId.hashCode()) % distances.size]
 }
 
-private fun distanceBadge(endpointId: String): Pair<String, Color> {
+@Composable
+private fun getDistanceColor(endpointId: String): Color {
     val d = mockDistance(endpointId).removeSuffix("M").toIntOrNull() ?: 100
     return when {
-        d <= 80  -> "NEAR"      to BadgeNear
-        d <= 180 -> "FAR"       to BadgeFar
-        else     -> "VERY FAR" to BadgeVeryFar
+        d <= 80  -> MaterialTheme.colorScheme.primary
+        d <= 180 -> MaterialTheme.colorScheme.secondary
+        else     -> MaterialTheme.colorScheme.error
+    }
+}
+
+private fun distanceBadgeLabel(endpointId: String): String {
+    val d = mockDistance(endpointId).removeSuffix("M").toIntOrNull() ?: 100
+    return when {
+        d <= 80  -> "NEAR"
+        d <= 180 -> "FAR"
+        else     -> "VERY FAR"
     }
 }
 
@@ -109,7 +112,7 @@ fun DiscoveryScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         DeviceListHeader(onSettingsClick = onSettingsClick)
 
@@ -118,14 +121,14 @@ fun DiscoveryScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = 24.dp, vertical = 16.dp),
             verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
                 text          = "PEERS IN RANGE",
                 style         = MaterialTheme.typography.labelLarge,
-                color         = TextPrimary,
+                color         = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 fontWeight    = FontWeight.Bold,
                 letterSpacing = 1.sp
             )
@@ -139,24 +142,24 @@ fun DiscoveryScreen(
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     CircularProgressIndicator(
-                        color       = EmergencyRed,
-                        strokeWidth = 2.dp,
-                        modifier    = Modifier.size(32.dp)
+                        color       = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 3.dp,
+                        modifier    = Modifier.size(48.dp)
                     )
                     Text(
                         text  = "Scanning for mesh nodes…",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextOnDarkDim
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                     )
                 }
             }
         } else {
             LazyColumn(
                 modifier            = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 items(devices.mapIndexed { i, d -> i to d }, key = { it.second.endpointId }) { (idx, device) ->
                     val state        = connectionStates[device.endpointId] ?: ConnectionState.IDLE
@@ -167,14 +170,13 @@ fun DiscoveryScreen(
                         device       = device,
                         icon         = deviceIcon(idx),
                         distance     = mockDistance(device.endpointId),
-                        badge        = distanceBadge(device.endpointId),
                         isConnecting = isConnecting,
                         isConnected  = isConnected,
                         onClick      = { if (!isConnecting) viewModel.onDeviceClick(device) },
                         onDisconnect = { viewModel.onDisconnectClick(device.endpointId) }
                     )
                 }
-                item { Spacer(Modifier.height(8.dp)) }
+                item { Spacer(Modifier.height(16.dp)) }
             }
         }
     }
@@ -186,36 +188,49 @@ private fun DeviceListHeader(onSettingsClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(DarkBackground)
+            .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 24.dp, vertical = 20.dp),
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
             verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(
-                Icons.Default.WifiTethering,
-                contentDescription = null,
-                tint     = EmergencyRed,
-                modifier = Modifier.size(22.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.WifiTethering,
+                    contentDescription = null,
+                    tint     = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
             Text(
-                text       = "MESH ACTIVE",
-                style      = MaterialTheme.typography.titleMedium,
-                color      = EmergencyRed,
+                text       = "Mesh Network",
+                style      = MaterialTheme.typography.titleLarge,
+                color      = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 1.sp
+                letterSpacing = 0.5.sp
             )
         }
-        IconButton(onClick = onSettingsClick) {
+        IconButton(
+            onClick = onSettingsClick,
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        ) {
             Icon(
-                Icons.Default.Edit,
-                contentDescription = "Edit profile",
-                tint     = TextOnDark,
-                modifier = Modifier.size(20.dp)
+                Icons.Outlined.Settings,
+                contentDescription = "Settings",
+                tint     = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
             )
         }
     }
@@ -224,55 +239,61 @@ private fun DeviceListHeader(onSettingsClick: () -> Unit) {
 
 @Composable
 private fun NetworkStatusCard(deviceCount: Int) {
-    Surface(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = LightSurface
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Row {
-            // Red left accent bar
+        Row(modifier = Modifier.fillMaxWidth()) {
+            // Left accent bar
             Box(
                 modifier = Modifier
-                    .width(5.dp)
-                    .height(100.dp)
-                    .background(EmergencyRed, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
+                    .width(6.dp)
+                    .height(120.dp)
+                    .background(MaterialTheme.colorScheme.primary)
             )
             Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
                     text          = "NETWORK STATUS",
                     style         = MaterialTheme.typography.labelMedium,
-                    color         = TextSecondary,
-                    letterSpacing = 1.sp
+                    color         = MaterialTheme.colorScheme.onSurfaceVariant,
+                    letterSpacing = 1.2.sp
                 )
                 Text(
-                    text       = if (deviceCount == 0) "NO PEOPLE\nFOUND"
-                                 else "$deviceCount PEOPLE\nNEARBY",
-                    style      = MaterialTheme.typography.displayMedium,
-                    color      = TextPrimary,
-                    fontWeight = FontWeight.ExtraBold,
-                    lineHeight = 40.sp
+                    text       = if (deviceCount == 0) "Scanning for peers"
+                                 else "$deviceCount peers nearby",
+                    style      = MaterialTheme.typography.headlineSmall,
+                    color      = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 32.sp
                 )
                 Row(
                     verticalAlignment     = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 4.dp)
                 ) {
+                    val statusColor by animateColorAsState(
+                        targetValue = if (deviceCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        label = "statusColor"
+                    )
                     Box(
                         modifier = Modifier
-                            .size(8.dp)
+                            .size(10.dp)
                             .clip(CircleShape)
-                            .background(EmergencyGreen)
+                            .background(statusColor)
                     )
                     Text(
-                        text       = "MESH SECURED",
+                        text       = if (deviceCount > 0) "MESH SECURED" else "WAITING FOR PEERS",
                         style      = MaterialTheme.typography.labelMedium,
-                        color      = EmergencyGreen,
+                        color      = statusColor,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp
+                        letterSpacing = 0.5.sp
                     )
                 }
             }
@@ -285,21 +306,34 @@ private fun NetworkStatusCard(deviceCount: Int) {
 private fun ScanningBadge() {
     val transition = rememberInfiniteTransition(label = "scan")
     val alpha by transition.animateFloat(
-        initialValue  = 0.4f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(800, easing = LinearEasing), RepeatMode.Reverse),
+        initialValue  = 0.2f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1000, easing = LinearEasing), RepeatMode.Reverse),
         label = "alpha"
     )
     Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = DarkSurfaceElevated
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = alpha * 0.3f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = alpha * 0.5f))
     ) {
-        Text(
-            text     = "SCANNING…",
-            style    = MaterialTheme.typography.labelSmall,
-            color    = TextOnDarkDim.copy(alpha = alpha),
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            letterSpacing = 0.8.sp
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = alpha))
+            )
+            Text(
+                text     = "SCANNING",
+                style    = MaterialTheme.typography.labelSmall,
+                color    = MaterialTheme.colorScheme.primary,
+                letterSpacing = 1.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 
@@ -309,124 +343,153 @@ private fun DeviceCard(
     device:       DiscoveredDevice,
     icon:         ImageVector,
     distance:     String,
-    badge:        Pair<String, Color>,
     isConnecting: Boolean,
     isConnected:  Boolean,
     onClick:      () -> Unit,
     onDisconnect: () -> Unit
 ) {
-    val (badgeLabel, badgeColor) = badge
+    val badgeColor = getDistanceColor(device.endpointId)
+    val badgeLabel = distanceBadgeLabel(device.endpointId)
+    
+    val containerColor by animateColorAsState(
+        targetValue = if (isConnected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface,
+        label = "cardColor"
+    )
 
-    Surface(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = LightSurface
+            .padding(horizontal = 24.dp)
+            .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessLow)),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isConnected) 0.dp else 2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
             Row(
                 modifier              = Modifier.fillMaxWidth(),
                 verticalAlignment     = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Device icon in gray circle
+                // Device icon
                 Box(
                     modifier         = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.secondaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector        = icon,
                         contentDescription = null,
-                        tint               = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier           = Modifier.size(24.dp)
+                        tint               = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier           = Modifier.size(28.dp)
                     )
                 }
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text       = device.name,
-                        style      = MaterialTheme.typography.titleSmall,
-                        color      = TextPrimary,
+                        style      = MaterialTheme.typography.titleMedium,
+                        color      = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold
                     )
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text  = distance + " AWAY",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        text  = "$distance away",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
-                // Distance badge (top-right)
+                // Distance badge
                 Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = badgeColor.copy(alpha = 0.12f),
-                    modifier = Modifier.border(
-                        width = 1.dp,
-                        color = badgeColor,
-                        shape = RoundedCornerShape(6.dp)
-                    )
+                    shape = RoundedCornerShape(12.dp),
+                    color = badgeColor.copy(alpha = 0.1f),
+                    border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.2f))
                 ) {
                     Text(
                         text     = badgeLabel,
                         style    = MaterialTheme.typography.labelSmall,
                         color    = badgeColor,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         letterSpacing = 0.5.sp
                     )
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(20.dp))
 
-            // CONNECT / DISCONNECT button
+            // Action button
+            val buttonColor by animateColorAsState(
+                targetValue = when {
+                    isConnected  -> MaterialTheme.colorScheme.primary
+                    isConnecting -> MaterialTheme.colorScheme.surfaceVariant
+                    else         -> MaterialTheme.colorScheme.secondary
+                },
+                label = "buttonColor"
+            )
+            val buttonTextColor by animateColorAsState(
+                targetValue = when {
+                    isConnected  -> MaterialTheme.colorScheme.onPrimary
+                    isConnecting -> MaterialTheme.colorScheme.onSurfaceVariant
+                    else         -> MaterialTheme.colorScheme.onSecondary
+                },
+                label = "buttonTextColor"
+            )
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        when {
-                            isConnected  -> EmergencyGreen
-                            isConnecting -> MaterialTheme.colorScheme.secondary
-                            else         -> TextPrimary
-                        }
-                    )
+                    .height(52.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(buttonColor)
                     .clickable(enabled = !isConnecting) {
                         if (isConnected) onDisconnect() else onClick()
-                    }
-                    .padding(vertical = 13.dp),
+                    },
                 contentAlignment = Alignment.Center
             ) {
-                if (isConnecting) {
-                    Row(
-                        verticalAlignment     = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (isConnecting) {
                         CircularProgressIndicator(
-                            color       = Color.White,
+                            color       = buttonTextColor,
                             strokeWidth = 2.dp,
-                            modifier    = Modifier.size(14.dp)
+                            modifier    = Modifier.size(18.dp)
                         )
                         Text(
-                            text       = "CONNECTING…",
+                            text       = "Connecting…",
                             style      = MaterialTheme.typography.labelLarge,
-                            color      = Color.White,
+                            color      = buttonTextColor,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
+                            letterSpacing = 0.5.sp
+                        )
+                    } else if (isConnected) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = buttonTextColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text       = "Connected",
+                            style      = MaterialTheme.typography.labelLarge,
+                            color      = buttonTextColor,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                    } else {
+                        Text(
+                            text       = "Connect",
+                            style      = MaterialTheme.typography.labelLarge,
+                            color      = buttonTextColor,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
                         )
                     }
-                } else {
-                    Text(
-                        text       = if (isConnected) "CONNECTED ✓" else "CONNECT",
-                        style      = MaterialTheme.typography.labelLarge,
-                        color      = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.5.sp
-                    )
                 }
             }
         }

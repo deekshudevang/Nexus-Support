@@ -36,6 +36,27 @@ This document outlines the UX audit findings for the key communication screens i
 - **Input Field Discoverability**: The `BasicTextField` is placed inside a container, but without a clear focus indicator or outline, users might not immediately realize it's a text input area until they tap it.
 - **Accessibility**: Missing content descriptions for some visual elements, which could impair screen reader experience.
 
+## 4. Discovery Screen (`DiscoveryScreen.kt`)
+
+### Strengths
+- **Clear Status**: The scanning badge animation and empty state clearly communicate what the app is doing.
+- **Visual Grouping**: Device cards are well structured with clear distance badges and large connect buttons.
+
+### Areas for Improvement
+- **Hardcoded Colors**: The screen extensively imports and uses hardcoded hex colors from the theme (e.g., `DarkBackground`, `LightSurface`, `EmergencyRed`) instead of relying on `MaterialTheme.colorScheme`. This breaks system-level dark/light mode switching.
+- **Clunky Transitions**: The transition from empty state to populated list lacks smooth layout animations. The connect button state changes abruptly without `AnimatedContent` transitions.
+- **Basic UI**: The overall feel is rigid and less fluid/premium compared to the SOS/Broadcast screens.
+
+## 5. Map Screen (`MeshMapScreen.kt`)
+
+### Strengths
+- **Rich Data**: Effectively visualizes node clusters, RF hop limits, and direct connections.
+- **Accessibility**: Bottom sheets and floating action buttons are standard and accessible.
+
+### Areas for Improvement
+- **Mixed Color Paradigms**: The map overlays (polylines, cluster icons) use raw `android.graphics.Color` with hardcoded ARGB values (e.g., neon orange), while the rest of the UI uses Compose `MaterialTheme`. This creates a visual disconnect.
+- **Lack of Animation**: Map centering and state updates (like finding location) happen abruptly. It needs smoother interpolations or transition states.
+
 ## General Recommendations
 1. **Adopt MaterialTheme Colors**: Replace all hardcoded hex values and specific `Light*` or `Dark*` color references with `MaterialTheme.colorScheme` attributes to ensure seamless light/dark mode support.
 2. **Improve Empty States**: Add illustrations and helpful text for empty lists, particularly in the Chat screen.

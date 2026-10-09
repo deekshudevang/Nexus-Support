@@ -211,21 +211,6 @@ private fun BroadcastChannelRow(conversation: Conversation, onClick: () -> Unit)
     ) {
         Box {
             MeshAvatar(name = conversation.deviceName, size = 50.dp)
-            Box(
-                modifier = Modifier
-                    .size(13.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.background)
-                    .align(Alignment.BottomEnd)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(9.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.tertiary)
-                        .align(Alignment.Center)
-                )
-            }
         }
 
         Column(modifier = Modifier.weight(1f)) {
