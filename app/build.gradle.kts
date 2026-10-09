@@ -98,7 +98,7 @@ dependencies {
     implementation(libs.mapsforge.map.reader)
     implementation(libs.mapsforge.themes)
     implementation(libs.osmbonuspack)
-    implementation("com.google.mlkit:image-labeling:17.0.8")
+    implementation("com.google.mlkit:image-labeling:17.0.9")
     implementation("com.google.mediapipe:tasks-genai:0.10.14")
 
     // Testing — unit tests
