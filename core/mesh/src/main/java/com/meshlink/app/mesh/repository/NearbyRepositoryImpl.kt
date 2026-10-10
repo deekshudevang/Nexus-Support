@@ -156,6 +156,20 @@ class NearbyRepositoryImpl @Inject constructor(
             Timber.d("Endpoint lost: $endpointId")
             _discoveredDevices.update { it.filter { d -> d.endpointId != endpointId } }
             nameToEndpointId.entries.removeIf { it.value == endpointId }
+            // Only update state for peers that were not yet established.
+            // CONNECTED/AUTHENTICATED peers use onDisconnected (data-plane) as the gate;
+            // Nearby may fire onEndpointLost for advertising-plane churn while the
+            // data channel is still alive.
+            _connectionStates.update { states ->
+                val current = states[endpointId]
+                if (current == ConnectionState.DISCOVERED ||
+                    current == ConnectionState.CONNECTING ||
+                    current == ConnectionState.HANDSHAKING) {
+                    states + (endpointId to ConnectionState.DISCONNECTED)
+                } else {
+                    states
+                }
+            }
         }
     }
 

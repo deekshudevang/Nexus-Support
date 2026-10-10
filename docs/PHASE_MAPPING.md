@@ -98,3 +98,8 @@
   - **Acceptance Criteria**: None
   - **Required Evidence Level**: L3 (Automated tests passing / Log output)
 
+
+## Test classification (L2 only)
+- SIMULATED (deterministic simulators/fault injection): LargeScaleMeshSimTest, DeterministicMeshSimulator
+- L2 unit tests with mocked dependencies (not physical evidence): MeshRouterTest, RoutingTableTest, SeenMessageCacheTest, NearbyRepositoryImplEndpointLostTest, AdaptiveScanControllerTest, SosBeaconCodecTest, ThreatModelValidationTest (isolated crypto/cache logic only, not the real router)
+

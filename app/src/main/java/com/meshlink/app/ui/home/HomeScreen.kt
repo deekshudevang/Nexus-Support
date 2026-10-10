@@ -61,15 +61,13 @@ fun HomeScreen(
     val scanStrategy  by viewModel.scanStrategy.collectAsStateWithLifecycle()
     val networkState  by viewModel.networkState.collectAsStateWithLifecycle()
 
-    val isScanningPaused = scanStrategy == com.meshlink.app.domain.model.ScanStrategy.PAUSED
-
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
         ChatListHeader(
-            isScanningPaused = isScanningPaused,
+            scanStrategy = scanStrategy,
             networkState = networkState,
             onToggleScan = { viewModel.toggleScanning() },
             onSettingsClick = onSettingsClick
@@ -96,7 +94,6 @@ fun HomeScreen(
                     peerCount = peerCount, 
                     pendingCount = pendingCount,
                     networkState = networkState,
-                    scanStrategy = scanStrategy,
                     onResumeClick = { viewModel.forceResumeScanning() }
                 ) 
                 Divider()
@@ -141,7 +138,7 @@ private fun Divider() {
 
 @Composable
 private fun ChatListHeader(
-    isScanningPaused: Boolean,
+    scanStrategy: com.meshlink.app.domain.model.ScanStrategy,
     networkState: MeshNetworkState,
     onToggleScan: () -> Unit,
     onSettingsClick: () -> Unit
@@ -183,7 +180,7 @@ private fun ChatListHeader(
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             androidx.compose.material3.Switch(
-                checked = !isScanningPaused,
+                checked = scanStrategy != com.meshlink.app.domain.model.ScanStrategy.PAUSED,
                 onCheckedChange = { onToggleScan() },
                 modifier = Modifier.padding(end = 8.dp)
             )
@@ -281,7 +278,6 @@ private fun NetworkStatusSection(
     peerCount: Int, 
     pendingCount: Int,
     networkState: MeshNetworkState,
-    scanStrategy: com.meshlink.app.domain.model.ScanStrategy,
     onResumeClick: () -> Unit
 ) {
     Column(
@@ -353,7 +349,7 @@ private fun NetworkStatusSection(
         }
         
         AnimatedVisibility(
-            visible = scanStrategy == com.meshlink.app.domain.model.ScanStrategy.PAUSED,
+            visible = networkState == MeshNetworkState.PAUSED,
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically()
         ) {

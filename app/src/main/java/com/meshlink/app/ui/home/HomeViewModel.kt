@@ -75,23 +75,36 @@ class HomeViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    private fun calculatePeerCount(states: Map<String, ConnectionState>): Int {
+        return states.count { it.value == ConnectionState.CONNECTED || it.value == ConnectionState.AUTHENTICATED }
+    }
+
     /** Number of currently CONNECTED (post-handshake) peers. */
     val peerCount: StateFlow<Int> = nearbyRepository.connectionStates
-        .map { states -> states.count { it.value == ConnectionState.CONNECTED || it.value == ConnectionState.AUTHENTICATED } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+        .map { calculatePeerCount(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), calculatePeerCount(nearbyRepository.connectionStates.value))
+
+    private fun calculateNetworkState(
+        states: Map<String, ConnectionState>,
+        strategy: com.meshlink.app.domain.model.ScanStrategy
+    ): MeshNetworkState {
+        return when {
+            states.values.any { it == ConnectionState.AUTHENTICATED } -> MeshNetworkState.SECURE_ACTIVE
+            states.values.any { it == ConnectionState.CONNECTED } -> MeshNetworkState.CONNECTED
+            states.values.any { it == ConnectionState.CONNECTING || it == ConnectionState.HANDSHAKING } -> MeshNetworkState.CONNECTING
+            strategy != com.meshlink.app.domain.model.ScanStrategy.PAUSED -> MeshNetworkState.SCANNING
+            else -> MeshNetworkState.PAUSED
+        }
+    }
 
     val networkState: StateFlow<MeshNetworkState> = combine(
         nearbyRepository.connectionStates,
         nearbyRepository.scanStrategy
     ) { states, strategy ->
-        when {
-            states.values.any { it == ConnectionState.AUTHENTICATED } -> MeshNetworkState.SECURE_ACTIVE
-            states.values.any { it == ConnectionState.CONNECTED } -> MeshNetworkState.CONNECTED
-            states.values.any { it == ConnectionState.CONNECTING || it == ConnectionState.HANDSHAKING || it == ConnectionState.DISCOVERED } -> MeshNetworkState.CONNECTING
-            strategy != com.meshlink.app.domain.model.ScanStrategy.PAUSED -> MeshNetworkState.SCANNING
-            else -> MeshNetworkState.PAUSED
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MeshNetworkState.SCANNING)
+        calculateNetworkState(states, strategy)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 
+        calculateNetworkState(nearbyRepository.connectionStates.value, nearbyRepository.scanStrategy.value)
+    )
 
     val pendingMessageCount: StateFlow<Int> = pendingMessageRepository.getPendingCountFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)

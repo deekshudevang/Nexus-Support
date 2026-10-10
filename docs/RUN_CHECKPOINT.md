@@ -1,14 +1,36 @@
 # RUN CHECKPOINT
 
-- **Timestamp**: 2026-10-10T08:52:49+05:30
-- **Phase/Workstream**: STEP 0: BASELINE AND MAPPING
-- **Last Completed Step**: Snapshot collected, running baseline tasks.
+- **Timestamp**: 2026-10-10T09:14:00+05:30
+- **Phase/Workstream**: STEP 2: R8 AND GRADLE FIXES
+- **Last Completed Step**: Repaired git damage, restored proguard-rules.pro, fixed local.properties.
 - **Git Branch**: master
 - **Latest Commit**: 5b6f7e2
-- **Git Status**: Clean
-- **Last Command**: `./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --no-daemon`
+- **Git Status**: Work in progress
+- **Last Command**: `./gradlew clean :app:assembleRelease :app:bundleRelease --no-daemon`
 - **Exit Code**: Pending
 - **Open Defects (Attempts)**:
-  - `play-services-location` R8 Crash (0/3)
+  - `play-services-location` R8 Crash (1/3)
 - **Cached Results**: None
-- **Next Action**: Wait for baseline tasks to finish, check R8 crash log, then start EXECUTION ORDER A (RELEASE BUILD).
+- **Next Action**: Run release tasks, inspect missing_rules.txt, resolve R8 warning.
+
+*Note on local.properties*: Added `org.gradle.java.home=C:/Users/deeks/.jdks/ms-21.0.12.1` as a local environment override to bypass the VSCode incomplete JRE issue with jlink. Original lines preserved.
+
+### Attempt 1/3
+- **Command**: ./gradlew :app:assembleRelease --no-daemon & ./gradlew :app:bundleRelease --no-daemon`n- **Exit Code**: 1 (both)
+- **Blocker**: Gradle build daemon disappeared unexpectedly (crash) during :app:minifyReleaseWithR8`n- **Timestamp**: 2026-10-10T09:25:00+05:30
+
+# Workstream A: Release Build Memory Constraint
+
+Successful Commands:
+- ./gradlew clean (Exit Code 0)
+- ./gradlew :app:assembleRelease --no-daemon --info (Exit Code 0)
+- ./gradlew :app:bundleRelease --no-daemon --info (Exit Code 0)
+
+Outputs:
+- APK: app/build/outputs/apk/release/app-release-unsigned.apk (Size: approx 36 MB, Timestamp: 2026-10-10)
+- AAB: app/build/outputs/bundle/release/app-release.aab (Size: 36197427 bytes, Timestamp: 2026-10-10T09:37:25.2368742+05:30)
+
+
+- **Timestamp**: 2026-10-10T12:10:40+05:30
+- **Note**: Connected-but-paused phones no longer show the paused banner (HomeScreen.kt). Banner UI behaviour NOT VERIFIED (no UI test, no device).
+
