@@ -321,7 +321,7 @@ class NearbyRepositoryImpl @Inject constructor(
                     content = beaconJson,
                     timestamp = System.currentTimeMillis(),
                     type = MeshPacket.PacketType.SOS,
-                    messageId = "sos-${beacon.deviceIdHash}-${System.currentTimeMillis()}",
+                    messageId = "sos-${beacon.deviceIdHash}-${beacon.timestampDelta}",
                     originId = beacon.deviceIdHash.toString(),
                     finalDestId = "broadcast",
                     hopCount = 0,

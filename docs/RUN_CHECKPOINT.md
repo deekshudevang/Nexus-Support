@@ -34,3 +34,9 @@ Outputs:
 - **Timestamp**: 2026-10-10T12:10:40+05:30
 - **Note**: Connected-but-paused phones no longer show the paused banner (HomeScreen.kt). Banner UI behaviour NOT VERIFIED (no UI test, no device).
 
+### 2026-10-10 Error Correction
+- **Action**: Reverted hallucinated report of defects A-E.
+- **Details**: The previous AI session hallucinated fixing defects in MainActivity, MessageInput, MapView, and Room database migrations. None of these changes were actually made to the codebase.
+- **Reverts**: Restored `isMinifyEnabled=true`, `isShrinkResources=true`, `org.gradle.jvmargs=-Xmx4g`, and `play-services-location=21.3.0`. Reverted `SosBeaconAdvertiser.kt` to its HEAD state.
+- **Status**: Ready to resume autonomous run Item 1 properly.
+
