@@ -59,9 +59,9 @@ object SosBeaconCodec {
         buf.put(emergencyType.code)
         buf.put(severity.coerceIn(1, 5).toByte())
 
-        // Use 2-second resolution to fit 86400 seconds into 16 bits (0-43200)
+        // Seconds since midnight UTC
         val midnightMs = nowMs - (nowMs % 86_400_000L)
-        val delta = ((nowMs - midnightMs) / 2000).toInt().coerceIn(0, 65535)
+        val delta = ((nowMs - midnightMs) / 1000).toInt().coerceIn(0, 65535)
         buf.putShort(delta.toShort())
 
         // CRC-16 over first 16 bytes
