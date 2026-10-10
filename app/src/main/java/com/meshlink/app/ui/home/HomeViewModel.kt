@@ -31,6 +31,14 @@ data class Conversation(
     val isOnline:      Boolean = false
 )
 
+enum class MeshNetworkState {
+    SECURE_ACTIVE,
+    CONNECTED,
+    CONNECTING,
+    SCANNING,
+    PAUSED
+}
+
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val messageRepository: MessageRepository,
@@ -71,6 +79,19 @@ class HomeViewModel @Inject constructor(
     val peerCount: StateFlow<Int> = nearbyRepository.connectionStates
         .map { states -> states.count { it.value == ConnectionState.CONNECTED || it.value == ConnectionState.AUTHENTICATED } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    val networkState: StateFlow<MeshNetworkState> = combine(
+        nearbyRepository.connectionStates,
+        nearbyRepository.scanStrategy
+    ) { states, strategy ->
+        when {
+            states.values.any { it == ConnectionState.AUTHENTICATED } -> MeshNetworkState.SECURE_ACTIVE
+            states.values.any { it == ConnectionState.CONNECTED } -> MeshNetworkState.CONNECTED
+            states.values.any { it == ConnectionState.CONNECTING || it == ConnectionState.HANDSHAKING || it == ConnectionState.DISCOVERED } -> MeshNetworkState.CONNECTING
+            strategy != com.meshlink.app.domain.model.ScanStrategy.PAUSED -> MeshNetworkState.SCANNING
+            else -> MeshNetworkState.PAUSED
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MeshNetworkState.SCANNING)
 
     val pendingMessageCount: StateFlow<Int> = pendingMessageRepository.getPendingCountFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)

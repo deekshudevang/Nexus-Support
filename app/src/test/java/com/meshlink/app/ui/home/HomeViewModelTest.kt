@@ -195,4 +195,36 @@ class HomeViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+    @Test
+    fun `networkState reflects highest priority connection state`() = runTest {
+        val states = MutableStateFlow(
+            mapOf(
+                "ep-1" to ConnectionState.CONNECTING,
+                "ep-2" to ConnectionState.DISCOVERED
+            )
+        )
+        every { nearbyRepo.connectionStates } returns states
+        every { nearbyRepo.scanStrategy } returns MutableStateFlow(com.meshlink.app.domain.model.ScanStrategy.CONTINUOUS)
+        every { messageRepo.getLatestMessagePerConversation() } returns flowOf(emptyList())
+        every { deviceRepo.getAllDevices() }                    returns flowOf(emptyList())
+
+        viewModel = HomeViewModel(messageRepo, deviceRepo, nearbyRepo, pendingMessageRepo, localDeviceId)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.networkState.test {
+            var state = awaitItem()
+            if (state == MeshNetworkState.SCANNING) state = awaitItem()
+            assertEquals(MeshNetworkState.CONNECTING, state)
+
+            // Upgrade to CONNECTED
+            states.value = mapOf("ep-1" to ConnectionState.CONNECTED)
+            assertEquals(MeshNetworkState.CONNECTED, awaitItem())
+
+            // Upgrade to AUTHENTICATED
+            states.value = mapOf("ep-1" to ConnectionState.AUTHENTICATED)
+            assertEquals(MeshNetworkState.SECURE_ACTIVE, awaitItem())
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }

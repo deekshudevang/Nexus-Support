@@ -59,6 +59,7 @@ fun HomeScreen(
     val peerCount     by viewModel.peerCount.collectAsStateWithLifecycle()
     val pendingCount  by viewModel.pendingMessageCount.collectAsStateWithLifecycle()
     val scanStrategy  by viewModel.scanStrategy.collectAsStateWithLifecycle()
+    val networkState  by viewModel.networkState.collectAsStateWithLifecycle()
 
     val isScanningPaused = scanStrategy == com.meshlink.app.domain.model.ScanStrategy.PAUSED
 
@@ -69,6 +70,7 @@ fun HomeScreen(
     ) {
         ChatListHeader(
             isScanningPaused = isScanningPaused,
+            networkState = networkState,
             onToggleScan = { viewModel.toggleScanning() },
             onSettingsClick = onSettingsClick
         )
@@ -93,6 +95,7 @@ fun HomeScreen(
                 NetworkStatusSection(
                     peerCount = peerCount, 
                     pendingCount = pendingCount,
+                    networkState = networkState,
                     scanStrategy = scanStrategy,
                     onResumeClick = { viewModel.forceResumeScanning() }
                 ) 
@@ -139,6 +142,7 @@ private fun Divider() {
 @Composable
 private fun ChatListHeader(
     isScanningPaused: Boolean,
+    networkState: MeshNetworkState,
     onToggleScan: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
@@ -151,6 +155,14 @@ private fun ChatListHeader(
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
+        val (headerColor, headerText) = when (networkState) {
+            MeshNetworkState.SECURE_ACTIVE -> MaterialTheme.colorScheme.primary to "SECURE MESH"
+            MeshNetworkState.CONNECTED -> MaterialTheme.colorScheme.primary to "MESH ACTIVE"
+            MeshNetworkState.CONNECTING -> MaterialTheme.colorScheme.secondary to "CONNECTING"
+            MeshNetworkState.SCANNING -> MaterialTheme.colorScheme.onSurfaceVariant to "SCANNING"
+            MeshNetworkState.PAUSED -> Color.Gray to "MESH PAUSED"
+        }
+
         Row(
             verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -158,13 +170,13 @@ private fun ChatListHeader(
             Icon(
                 Icons.Default.WifiTethering,
                 contentDescription = null,
-                tint     = if (isScanningPaused) Color.Gray else MaterialTheme.colorScheme.primary,
+                tint     = headerColor,
                 modifier = Modifier.size(22.dp)
             )
             Text(
-                text       = if (isScanningPaused) "MESH PAUSED" else "MESH ACTIVE",
+                text       = headerText,
                 style      = MaterialTheme.typography.titleMedium,
-                color      = if (isScanningPaused) Color.Gray else MaterialTheme.colorScheme.primary,
+                color      = headerColor,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 1.sp
             )
@@ -268,6 +280,7 @@ private fun EmptyBroadcastRow() {
 private fun NetworkStatusSection(
     peerCount: Int, 
     pendingCount: Int,
+    networkState: MeshNetworkState,
     scanStrategy: com.meshlink.app.domain.model.ScanStrategy,
     onResumeClick: () -> Unit
 ) {
@@ -295,16 +308,23 @@ private fun NetworkStatusSection(
             verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            val (statusColor, statusText) = when (networkState) {
+                MeshNetworkState.SECURE_ACTIVE -> MaterialTheme.colorScheme.tertiary to "SECURE MESH ACTIVE"
+                MeshNetworkState.CONNECTED -> MaterialTheme.colorScheme.primary to "MESH CONNECTED"
+                MeshNetworkState.CONNECTING -> MaterialTheme.colorScheme.secondary to "CONNECTING..."
+                MeshNetworkState.SCANNING -> MaterialTheme.colorScheme.onSurfaceVariant to "SCANNING FOR PEERS"
+                MeshNetworkState.PAUSED -> Color.Gray to "OFFLINE (PAUSED)"
+            }
             Box(
                 modifier = Modifier
                     .size(8.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.tertiary)
+                    .background(statusColor)
             )
             Text(
-                text       = "SECURE MESH ACTIVE",
+                text       = statusText,
                 style      = MaterialTheme.typography.labelLarge,
-                color      = MaterialTheme.colorScheme.tertiary,
+                color      = statusColor,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.8.sp
             )
