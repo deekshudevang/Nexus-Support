@@ -34,11 +34,15 @@ class SpeechManager @Inject constructor(
 
     init {
         tts = TextToSpeech(context, this)
-        if (SpeechRecognizer.isRecognitionAvailable(context)) {
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S &&
+            SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+        ) {
+            speechRecognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
             speechRecognizer?.setRecognitionListener(this)
+            AiLogger.i("On-device speech recognizer initialized successfully.")
         } else {
-            AiLogger.w("Speech recognition is not available on this device")
+            speechRecognizer = null
+            AiLogger.w("On-device speech recognition is not supported or not installed on this device. Network speech is strictly forbidden offline; voice recognition disabled.")
         }
     }
 
@@ -72,6 +76,7 @@ class SpeechManager @Inject constructor(
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         }
         speechRecognizer?.startListening(intent)
