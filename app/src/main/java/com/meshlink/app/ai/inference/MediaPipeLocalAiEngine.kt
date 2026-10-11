@@ -35,6 +35,14 @@ class MediaPipeLocalAiEngine @Inject constructor(
                     return@withContext AiResult.Failure(AiError.ModelMissing)
                 }
 
+                val ext = modelFile.extension.lowercase()
+                if (ext != "task" && ext != "bin") {
+                    AiLogger.w("Incompatible model extension '$ext' for MediaPipe Tasks GenAI runtime")
+                    return@withContext AiResult.Failure(
+                        AiError.RuntimeError("Incompatible model format '.$ext'. MediaPipe Tasks GenAI runtime requires .task or .bin")
+                    )
+                }
+
                 val startTime = System.currentTimeMillis()
                 AiLogger.i("Initializing MediaPipe LlmInference runtime with model at ${modelFile.name}")
 

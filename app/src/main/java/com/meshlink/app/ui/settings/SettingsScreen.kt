@@ -222,6 +222,40 @@ fun SettingsScreen(
                         }
                     }
 
+                    val pendingHash by viewModel.pendingHashConfirmation.collectAsState()
+                    if (pendingHash != null) {
+                        AlertDialog(
+                            onDismissRequest = { viewModel.cancelPendingModelHash() },
+                            title = { Text("Confirm Model Integrity", fontWeight = FontWeight.Bold) },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("Computed SHA-256 Checksum:")
+                                    Text(
+                                        text = pendingHash!!,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "Verify this checksum against the official model provider before loading into memory.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            },
+                            confirmButton = {
+                                Button(onClick = { viewModel.confirmPendingModelHash() }) {
+                                    Text("Confirm & Load")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { viewModel.cancelPendingModelHash() }) {
+                                    Text("Reject")
+                                }
+                            }
+                        )
+                    }
+
                     if (importStatus != null) {
                         Text(
                             text = importStatus!!,

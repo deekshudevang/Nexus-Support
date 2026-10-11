@@ -38,4 +38,19 @@ interface ModelAssetManager {
      * Safely deletes the installed model and reclaims disk storage.
      */
     suspend fun deleteInstalledModel(): AiResult<Unit>
+
+    /**
+     * Computes the SHA-256 checksum of the target file using buffered streaming.
+     */
+    suspend fun computeSha256(file: File): String
+
+    /**
+     * Explicitly records that the user inspected and confirmed the computed model hash.
+     */
+    suspend fun confirmModelHash(hash: String)
+
+    /**
+     * Returns true if the given hash has been explicitly confirmed by the user.
+     */
+    suspend fun isHashConfirmed(hash: String): Boolean
 }

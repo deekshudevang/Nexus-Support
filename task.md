@@ -220,7 +220,25 @@
   - `4349257`: `test(ai): add onTrimMemory handling unit tests for ai coordinator`
   - `884be9b`: `test(sos): add sos preemption and coordinator notification unit tests`
 
-## Open questions for the human
-- Physical Device: Model weights file (e.g. Gemma 2B CPU/GPU) can be imported via Settings -> Import Model file picker whenever on-device LLM generation is desired. Model absence path is fully verified.
+## Device Verification & Live Model Inference (Part F)
+- Model Archive: `C:\Users\deeks\Downloads\gemma-3-tflite-gemma3-1b-it-int4-v1.tar.gz`
+- Extracted Model Container: `gemma3-1B-it-int4.task` / `model.task` (Size: 554,661,243 bytes / 529 MB)
+- Verified SHA-256 Checksum: `e3d981c01aeaaac69a84ffa0d4be13281b3176731063f1bea1c9fe6887bd9dee`
+- Provisioning Location: `/data/user/0/com.meshlink.app.debug/files/ai_models/` (`model.task`, `confirmed_hash.txt`, `manifest.json`)
+- Runtime: MediaPipe Tasks GenAI `0.10.35` (`LlmInference`) on Android 16 (Snapdragon 7 Gen 3, Adreno 720 GPU)
+- Verification Evidence:
+  - Checksum Verification Log: `OfflineAi: Model candidate successfully verified via pinned manifest SHA-256`
+  - Engine Initialization: `OfflineAi: Initializing MediaPipe LlmInference runtime with model at gemma3-1B-it-int4.task`
+  - Engine Ready: `OfflineAi: event=model_initialized, latency=3885ms` -> `LocalAiEngine initialized successfully. State: READY`
+  - Query Sent: `"How to treat bleeding?"`
+  - Inference Execution: `OfflineAi: event=inference_complete, latency=7791ms`
+  - Live Generated Output:
+    `"Apply direct pressure with an unblended clean cloth or bandage while squeezing firmly. If bleeding can’t be stopped after 10 minutes, don’t hesitate. Apply an tourniquet. Tighten your tourniquet until bleeding stops. Keep your person warm and lying down. Monitor for signs of shock."`
+    `"[Emergency Notice: AI-generated guidance. Verify with qualified first responders before taking critical action.]"`
+  - Verified Sources Cited: `• Severe Bleeding Control [Emergency Steps & Warnings]`, `Source ID: bleeding • Rev: v1.0 (AOSP Bundled)`
+  - Screenshots & Dumps Saved:
+    - `build/offline-ai-logs/ai_screen_ready.png`
+    - `build/offline-ai-logs/ai_inference_response.png`
+  - Crash/ANR Audit: 0 crashes, 0 ANRs, clean logcat.
 
 

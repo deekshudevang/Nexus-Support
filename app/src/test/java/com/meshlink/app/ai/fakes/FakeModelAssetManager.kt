@@ -35,4 +35,14 @@ class FakeModelAssetManager : ModelAssetManager {
         modelFileToReturn = null
         return AiResult.Success(Unit)
     }
+
+    override suspend fun computeSha256(file: File): String = "mock_computed_hash_sha256"
+
+    private var confirmedHash: String? = null
+
+    override suspend fun confirmModelHash(hash: String) {
+        confirmedHash = hash
+    }
+
+    override suspend fun isHashConfirmed(hash: String): Boolean = confirmedHash == hash
 }

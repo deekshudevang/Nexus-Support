@@ -6,6 +6,7 @@ import com.meshlink.app.location.LocationTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 
 import androidx.lifecycle.viewModelScope
@@ -42,6 +43,9 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    private val _pendingHashConfirmation = MutableStateFlow<String?>(null)
+    val pendingHashConfirmation: StateFlow<String?> = _pendingHashConfirmation.asStateFlow()
+
     fun triggerAiKillSwitch() {
         viewModelScope.launch {
             aiCoordinator.triggerKillSwitch()
@@ -54,14 +58,39 @@ class SettingsViewModel @Inject constructor(
             val result = modelAssetManager.importModelFromUri(uri, expectedSha256)
             when (result) {
                 is com.meshlink.app.ai.model.AiResult.Success -> {
-                    _importStatus.value = "Model imported successfully. Verifying..."
-                    aiCoordinator.initialize()
-                    _importStatus.value = "Ready: ${result.data.name}"
+                    if (expectedSha256.isNotBlank()) {
+                        _importStatus.value = "Model verified with pinned SHA-256. Initializing..."
+                        aiCoordinator.initialize()
+                        _importStatus.value = "Ready: ${result.data.name}"
+                    } else {
+                        val computed = modelAssetManager.computeSha256(result.data)
+                        _pendingHashConfirmation.value = computed
+                        _importStatus.value = "Awaiting confirmation for computed hash: $computed"
+                    }
                 }
                 is com.meshlink.app.ai.model.AiResult.Failure -> {
                     _importStatus.value = "Import failed: ${result.error.userRecoveryText}"
                 }
             }
+        }
+    }
+
+    fun confirmPendingModelHash() {
+        val hash = _pendingHashConfirmation.value ?: return
+        viewModelScope.launch {
+            modelAssetManager.confirmModelHash(hash)
+            _pendingHashConfirmation.value = null
+            _importStatus.value = "Model hash confirmed by user. Initializing..."
+            aiCoordinator.initialize()
+            _importStatus.value = "Ready: on-device model active"
+        }
+    }
+
+    fun cancelPendingModelHash() {
+        viewModelScope.launch {
+            _pendingHashConfirmation.value = null
+            modelAssetManager.deleteInstalledModel()
+            _importStatus.value = "Model import cancelled"
         }
     }
 

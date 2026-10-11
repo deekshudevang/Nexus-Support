@@ -45,12 +45,80 @@ class ModelAssetManagerTest {
     }
 
     @Test
-    fun getVerifiedModelFile_whenFileExistsInModelsDir_returnsFile() = runTest {
+    fun getVerifiedModelFile_whenUnverifiedAndUnconfirmed_returnsNull() = runTest {
         val modelsSubDir = File(tempDir, "ai_models").apply { mkdirs() }
-        val modelFile = File(modelsSubDir, "gemma.bin").apply {
-            writeText("dummy-model-content")
+        File(modelsSubDir, "gemma.bin").apply {
+            writeText("unverified-model-bytes")
         }
 
+        // Neither pinned in manifest nor confirmed by user -> must refuse to load
+        val result = assetManager.getVerifiedModelFile()
+        assertNull("Unverified model must never load", result)
+    }
+
+    @Test
+    fun getVerifiedModelFile_whenPinnedSha256InManifestMatches_returnsFile() = runTest {
+        val modelsSubDir = File(tempDir, "ai_models").apply { mkdirs() }
+        val modelBytes = "verified-pinned-model-bytes"
+        val modelFile = File(modelsSubDir, "gemma.task").apply {
+            writeText(modelBytes)
+        }
+
+        val expectedSha256 = MessageDigest.getInstance("SHA-256")
+            .digest(modelBytes.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+
+        // Create manifest with pinnedSha256
+        val manifestJson = org.json.JSONObject().apply {
+            put("modelId", "gemma-3-1b-it")
+            put("fileName", "gemma.task")
+            put("pinnedSha256", expectedSha256)
+            put("sha256", expectedSha256)
+        }
+        File(modelsSubDir, "manifest.json").writeText(manifestJson.toString())
+
+        val result = assetManager.getVerifiedModelFile()
+        assertNotNull(result)
+        assertEquals(modelFile.absolutePath, result?.absolutePath)
+    }
+
+    @Test
+    fun getVerifiedModelFile_whenPinnedSha256Mismatches_returnsNull() = runTest {
+        val modelsSubDir = File(tempDir, "ai_models").apply { mkdirs() }
+        File(modelsSubDir, "gemma.task").apply {
+            writeText("tampered-model-bytes")
+        }
+
+        val manifestJson = org.json.JSONObject().apply {
+            put("modelId", "gemma-3-1b-it")
+            put("fileName", "gemma.task")
+            put("pinnedSha256", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+        }
+        File(modelsSubDir, "manifest.json").writeText(manifestJson.toString())
+
+        val result = assetManager.getVerifiedModelFile()
+        assertNull("Mismatched hash against pinned manifest must return null", result)
+    }
+
+    @Test
+    fun getVerifiedModelFile_whenUserExplicitlyConfirmsComputedHash_returnsFile() = runTest {
+        val modelsSubDir = File(tempDir, "ai_models").apply { mkdirs() }
+        val modelBytes = "user-imported-model-content"
+        val modelFile = File(modelsSubDir, "gemma.task").apply {
+            writeText(modelBytes)
+        }
+
+        val computedSha256 = assetManager.computeSha256(modelFile)
+        assertTrue(computedSha256.isNotBlank())
+
+        // Before confirmation -> returns null
+        assertNull(assetManager.getVerifiedModelFile())
+
+        // User inspects computed hash in confirmation dialog and confirms
+        assetManager.confirmModelHash(computedSha256)
+        assertTrue(assetManager.isHashConfirmed(computedSha256))
+
+        // After user confirmation -> returns verified file
         val result = assetManager.getVerifiedModelFile()
         assertNotNull(result)
         assertEquals(modelFile.absolutePath, result?.absolutePath)
@@ -74,49 +142,21 @@ class ModelAssetManagerTest {
     }
 
     @Test
-    fun getVerifiedModelFile_whenLitertlmFileExists_returnsLitertlmFile() = runTest {
+    fun deleteInstalledModel_removesFileAndConfirmationFromStorage() = runTest {
         val modelsSubDir = File(tempDir, "ai_models").apply { mkdirs() }
-        val modelFile = File(modelsSubDir, "model.litertlm").apply {
-            writeText("dummy-litertlm-content")
-        }
-
-        val result = assetManager.getVerifiedModelFile()
-        assertNotNull(result)
-        assertEquals(modelFile.absolutePath, result?.absolutePath)
-
-        val manifest = assetManager.getInstalledManifest()
-        assertNotNull(manifest)
-        assertEquals("litertlm", manifest?.format)
-        assertEquals("litert-lm", manifest?.runtime)
-    }
-
-    @Test
-    fun getVerifiedModelFile_whenTaskFileExists_returnsTaskFile() = runTest {
-        val modelsSubDir = File(tempDir, "ai_models").apply { mkdirs() }
-        val modelFile = File(modelsSubDir, "gemma.task").apply {
-            writeText("dummy-task-content")
-        }
-
-        val result = assetManager.getVerifiedModelFile()
-        assertNotNull(result)
-        assertEquals(modelFile.absolutePath, result?.absolutePath)
-
-        val manifest = assetManager.getInstalledManifest()
-        assertNotNull(manifest)
-        assertEquals("mediapipe_task", manifest?.format)
-        assertEquals("tasks-genai", manifest?.runtime)
-    }
-
-    @Test
-    fun deleteInstalledModel_removesFileFromStorage() = runTest {
-        val modelsSubDir = File(tempDir, "ai_models").apply { mkdirs() }
-        val modelFile = File(modelsSubDir, "model.litertlm").apply {
+        val modelFile = File(modelsSubDir, "model.task").apply {
             writeText("dummy-content")
         }
+        val confirmationFile = File(modelsSubDir, "confirmed_hash.txt").apply {
+            writeText("somehash")
+        }
+
         assertTrue(modelFile.exists())
+        assertTrue(confirmationFile.exists())
 
         val result = assetManager.deleteInstalledModel()
         assertTrue(result.isSuccess)
         assertFalse(modelFile.exists())
+        assertFalse(confirmationFile.exists())
     }
 }

@@ -22,7 +22,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -103,17 +104,72 @@ class SettingsViewModelAiTest {
     }
 
     @Test
-    fun importModel_onSuccess_initializesCoordinator() = runTest(testDispatcher) {
+    fun importModel_withPinnedSha256_verifiesAndInitializesDirectly() = runTest(testDispatcher) {
         val vm = createViewModel()
         val mockUri: Uri = mockk()
         val targetFile = File("gemma.bin")
-        coEvery { mockAssetManager.importModelFromUri(mockUri, any()) } returns AiResult.Success(targetFile)
+        val pinnedHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+        coEvery { mockAssetManager.importModelFromUri(mockUri, pinnedHash) } returns AiResult.Success(targetFile)
+
+        vm.importModel(mockUri, expectedSha256 = pinnedHash)
+        advanceUntilIdle()
+
+        coVerify { mockCoordinator.initialize() }
+        assertNull(vm.pendingHashConfirmation.value)
+        assertTrue(vm.importStatus.value!!.contains("Ready: gemma.bin"))
+    }
+
+    @Test
+    fun importModel_withoutPinnedSha256_requestsConfirmation_thenConfirmsAndInitializes() = runTest(testDispatcher) {
+        val vm = createViewModel()
+        val mockUri: Uri = mockk()
+        val targetFile = File("gemma.bin")
+        val computedHash = "abc123computedhash"
+
+        coEvery { mockAssetManager.importModelFromUri(mockUri, "") } returns AiResult.Success(targetFile)
+        coEvery { mockAssetManager.computeSha256(targetFile) } returns computedHash
+        coEvery { mockAssetManager.confirmModelHash(computedHash) } returns Unit
+
+        vm.importModel(mockUri, expectedSha256 = "")
+        advanceUntilIdle()
+
+        // Confirmation dialog state is populated
+        assertEquals(computedHash, vm.pendingHashConfirmation.value)
+        assertTrue(vm.importStatus.value!!.contains("Awaiting confirmation"))
+
+        // User confirms dialog
+        vm.confirmPendingModelHash()
+        advanceUntilIdle()
+
+        coVerify { mockAssetManager.confirmModelHash(computedHash) }
+        coVerify { mockCoordinator.initialize() }
+        assertNull(vm.pendingHashConfirmation.value)
+        assertTrue(vm.importStatus.value!!.contains("Ready: on-device model active"))
+    }
+
+    @Test
+    fun cancelPendingModelHash_deletesInstalledModelAndClearsPending() = runTest(testDispatcher) {
+        val vm = createViewModel()
+        val mockUri: Uri = mockk()
+        val targetFile = File("gemma.bin")
+        val computedHash = "abc123computedhash"
+
+        coEvery { mockAssetManager.importModelFromUri(mockUri, "") } returns AiResult.Success(targetFile)
+        coEvery { mockAssetManager.computeSha256(targetFile) } returns computedHash
+        coEvery { mockAssetManager.deleteInstalledModel() } returns AiResult.Success(Unit)
 
         vm.importModel(mockUri)
         advanceUntilIdle()
 
-        coVerify { mockCoordinator.initialize() }
-        assertTrue(vm.importStatus.value!!.contains("Ready: gemma.bin"))
+        assertNotNull(vm.pendingHashConfirmation.value)
+
+        vm.cancelPendingModelHash()
+        advanceUntilIdle()
+
+        assertNull(vm.pendingHashConfirmation.value)
+        coVerify { mockAssetManager.deleteInstalledModel() }
+        assertEquals("Model import cancelled", vm.importStatus.value)
     }
 
     @Test

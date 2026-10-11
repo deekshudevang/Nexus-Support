@@ -36,35 +36,68 @@ class ModelAssetManagerImpl @Inject constructor(
         "model.bin"
     )
 
-    override suspend fun getVerifiedModelFile(): File? = withContext(Dispatchers.IO) {
-        // 1. Check models directory for any supported model file
+    private val confirmationFile: File
+        get() = File(modelsDir, "confirmed_hash.txt")
+
+    fun findCandidateModelFile(): File? {
         val existingFile = modelsDir.listFiles()?.firstOrNull { file ->
             file.isFile && file.length() > 0L && (
-                file.name.endsWith(".litertlm") ||
                 file.name.endsWith(".task") ||
-                file.name.endsWith(".bin")
+                file.name.endsWith(".bin") ||
+                file.name.endsWith(".litertlm")
             )
         }
-        if (existingFile != null) {
-            return@withContext existingFile
-        }
+        if (existingFile != null) return existingFile
 
-        // 2. Fall back to standard supported model names in modelsDir
         for (name in supportedModelNames) {
             val file = File(modelsDir, name)
-            if (file.exists() && file.length() > 0L) {
-                return@withContext file
-            }
+            if (file.exists() && file.length() > 0L) return file
         }
 
-        // 3. Fall back to legacy root filesDir location
         for (name in supportedModelNames) {
             val legacyFile = File(context.filesDir, name)
-            if (legacyFile.exists() && legacyFile.length() > 0L) {
-                return@withContext legacyFile
+            if (legacyFile.exists() && legacyFile.length() > 0L) return legacyFile
+        }
+
+        return null
+    }
+
+    override suspend fun getVerifiedModelFile(): File? = withContext(Dispatchers.IO) {
+        val candidate = findCandidateModelFile() ?: return@withContext null
+
+        val manifestFile = File(modelsDir, "manifest.json")
+        val pinnedSha256 = if (manifestFile.exists()) {
+            try {
+                val json = org.json.JSONObject(manifestFile.readText())
+                val p = json.optString("pinnedSha256", "").ifBlank { json.optString("sha256", "") }
+                p.trim()
+            } catch (e: Exception) { "" }
+        } else ""
+
+        val computedHash = computeSha256(candidate)
+        if (computedHash.isBlank()) {
+            AiLogger.w("Unable to compute SHA-256 for model candidate at ${candidate.name}")
+            return@withContext null
+        }
+
+        // Path 1: Pinned SHA-256 in manifest
+        if (pinnedSha256.isNotBlank()) {
+            if (computedHash.equals(pinnedSha256, ignoreCase = true)) {
+                AiLogger.i("Model candidate successfully verified via pinned manifest SHA-256")
+                return@withContext candidate
+            } else {
+                AiLogger.w("Model checksum mismatch against pinned manifest! Expected: $pinnedSha256, computed: $computedHash")
+                return@withContext null
             }
         }
 
+        // Path 2: Explicit user confirmation
+        if (isHashConfirmed(computedHash)) {
+            AiLogger.i("Model candidate verified via explicit user confirmation: $computedHash")
+            return@withContext candidate
+        }
+
+        AiLogger.w("Model loading blocked: hash $computedHash is neither pinned in manifest nor confirmed by user.")
         null
     }
 
@@ -186,6 +219,9 @@ class ModelAssetManagerImpl @Inject constructor(
                     put("modelId", "gemma-3-1b-it")
                     put("fileName", targetFileName)
                     put("sha256", computedChecksum)
+                    if (expectedSha256.isNotBlank()) {
+                        put("pinnedSha256", expectedSha256.trim())
+                    }
                     put("sizeBytes", targetFile.length())
                     put("format", targetExtension.removePrefix("."))
                     put("timestamp", System.currentTimeMillis())
@@ -204,8 +240,8 @@ class ModelAssetManagerImpl @Inject constructor(
         }
     }
 
-    override suspend fun verifyChecksum(file: File, expectedSha256: String): Boolean = withContext(Dispatchers.IO) {
-        if (!file.exists() || file.length() == 0L || expectedSha256.isBlank()) return@withContext false
+    override suspend fun computeSha256(file: File): String = withContext(Dispatchers.IO) {
+        if (!file.exists() || file.length() == 0L) return@withContext ""
         try {
             val digest = MessageDigest.getInstance("SHA-256")
             val buffer = ByteArray(65536)
@@ -215,22 +251,44 @@ class ModelAssetManagerImpl @Inject constructor(
                     digest.update(buffer, 0, bytesRead)
                 }
             }
-            val computed = digest.digest().joinToString("") { "%02x".format(it) }
-            computed.equals(expectedSha256.trim(), ignoreCase = true)
+            digest.digest().joinToString("") { "%02x".format(it) }
         } catch (e: Exception) {
-            AiLogger.e(e, "Checksum verification failed")
-            false
+            AiLogger.e(e, "Error computing SHA-256 for ${file.name}")
+            ""
         }
+    }
+
+    override suspend fun confirmModelHash(hash: String) = withContext(Dispatchers.IO) {
+        if (hash.isNotBlank()) {
+            confirmationFile.writeText(hash.trim().lowercase())
+            AiLogger.i("User confirmed model hash: ${hash.trim().lowercase()}")
+        }
+    }
+
+    override suspend fun isHashConfirmed(hash: String): Boolean = withContext(Dispatchers.IO) {
+        if (hash.isBlank() || !confirmationFile.exists()) return@withContext false
+        val saved = confirmationFile.readText().trim().lowercase()
+        saved.equals(hash.trim().lowercase(), ignoreCase = true)
+    }
+
+    override suspend fun verifyChecksum(file: File, expectedSha256: String): Boolean = withContext(Dispatchers.IO) {
+        if (!file.exists() || file.length() == 0L || expectedSha256.isBlank()) return@withContext false
+        val computed = computeSha256(file)
+        computed.equals(expectedSha256.trim(), ignoreCase = true)
     }
 
     override suspend fun deleteInstalledModel(): AiResult<Unit> = withContext(Dispatchers.IO) {
         try {
+            if (confirmationFile.exists()) {
+                confirmationFile.delete()
+            }
             modelsDir.listFiles()?.forEach { file ->
                 if (file.isFile && (
                     file.name.endsWith(".litertlm") ||
                     file.name.endsWith(".task") ||
                     file.name.endsWith(".bin") ||
                     file.name == "manifest.json" ||
+                    file.name == "confirmed_hash.txt" ||
                     file.name.endsWith(".tmp")
                 )) {
                     file.delete()
@@ -242,7 +300,7 @@ class ModelAssetManagerImpl @Inject constructor(
                     legacyFile.delete()
                 }
             }
-            AiLogger.i("Installed model and manifest deleted from storage")
+            AiLogger.i("Installed model, manifest, and confirmations deleted from storage")
             AiResult.Success(Unit)
         } catch (e: Exception) {
             AiLogger.e(e, "Error deleting installed model")
