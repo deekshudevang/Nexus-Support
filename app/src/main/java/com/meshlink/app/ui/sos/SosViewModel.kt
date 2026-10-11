@@ -122,20 +122,27 @@ class SosViewModel @Inject constructor(
             val incidentStr = if (_incidentType.value != IncidentType.NONE) "[${_incidentType.value.name}] " else ""
             var message = "SOS! ${incidentStr}I need help!"
 
-            var lat = 0.0
-            var lon = 0.0
+            var lat: Double? = null
+            var lon: Double? = null
 
             if (_includeGps.value) {
                 val location = locationTracker.getCurrentLocation(timeoutMs = 3000)
                 if (location != null && _isBroadcasting.value) {
-                    lat = location.latitude
-                    lon = location.longitude
-                    val mapsUrl = locationTracker.formatLocationUrl(location)
-                    if (lat != 0.0 || lon != 0.0) {
+                    val candidateLat = location.latitude
+                    val candidateLon = location.longitude
+                    if (!candidateLat.isNaN() && !candidateLon.isNaN() &&
+                        candidateLat in -90.0..90.0 && candidateLon in -180.0..180.0 &&
+                        (candidateLat != 0.0 || candidateLon != 0.0)) {
+                        lat = candidateLat
+                        lon = candidateLon
+                        val mapsUrl = locationTracker.formatLocationUrl(location)
                         message += "\nLocation: $mapsUrl"
+                    } else {
+                        message += "\nLocation: unavailable"
                     }
                 } else if (_isBroadcasting.value) {
                     Timber.w("Failed to get location for SOS")
+                    message += "\nLocation: unavailable"
                 }
             }
 

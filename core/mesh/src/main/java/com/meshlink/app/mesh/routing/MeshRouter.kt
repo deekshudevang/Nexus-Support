@@ -644,8 +644,18 @@ class MeshRouter @Inject constructor(
         }
 
         if (extractedLat != null && extractedLon != null) {
-            deviceRepository.updateLocation(packet.originId, extractedLat, extractedLon)
-            Timber.i("MeshRouter: extracted location for ${packet.originId} -> $extractedLat, $extractedLon")
+            val isValidLat = !extractedLat.isNaN() && !extractedLat.isInfinite() && extractedLat in -90.0..90.0
+            val isValidLon = !extractedLon.isNaN() && !extractedLon.isInfinite() && extractedLon in -180.0..180.0
+            val isNullIsland = extractedLat == 0.0 && extractedLon == 0.0
+
+            if (isValidLat && isValidLon && !isNullIsland) {
+                deviceRepository.updateLocation(packet.originId, extractedLat, extractedLon)
+                Timber.i("MeshRouter: extracted valid location for ${packet.originId} -> $extractedLat, $extractedLon")
+            } else if (isNullIsland) {
+                Timber.i("MeshRouter: ignored placeholder 0.0, 0.0 location for ${packet.originId}")
+            } else {
+                Timber.w("MeshRouter: rejected out-of-bounds location for ${packet.originId} -> $extractedLat, $extractedLon")
+            }
         }
 
         // Update the sender's known display name if provided
