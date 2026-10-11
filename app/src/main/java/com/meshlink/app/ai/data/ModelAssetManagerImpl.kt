@@ -27,18 +27,42 @@ class ModelAssetManagerImpl @Inject constructor(
     private val modelsDir: File
         get() = File(context.filesDir, "ai_models").apply { if (!exists()) mkdirs() }
 
-    private val primaryModelName = "gemma.bin"
+    private val supportedModelNames = listOf(
+        "model.litertlm",
+        "gemma.litertlm",
+        "gemma.task",
+        "model.task",
+        "gemma.bin",
+        "model.bin"
+    )
 
     override suspend fun getVerifiedModelFile(): File? = withContext(Dispatchers.IO) {
-        val modelFile = File(modelsDir, primaryModelName)
-        if (modelFile.exists() && modelFile.length() > 0L) {
-            return@withContext modelFile
+        // 1. Check models directory for any supported model file
+        val existingFile = modelsDir.listFiles()?.firstOrNull { file ->
+            file.isFile && file.length() > 0L && (
+                file.name.endsWith(".litertlm") ||
+                file.name.endsWith(".task") ||
+                file.name.endsWith(".bin")
+            )
+        }
+        if (existingFile != null) {
+            return@withContext existingFile
         }
 
-        // Also check legacy root filesDir location for backward compatibility
-        val legacyFile = File(context.filesDir, primaryModelName)
-        if (legacyFile.exists() && legacyFile.length() > 0L) {
-            return@withContext legacyFile
+        // 2. Fall back to standard supported model names in modelsDir
+        for (name in supportedModelNames) {
+            val file = File(modelsDir, name)
+            if (file.exists() && file.length() > 0L) {
+                return@withContext file
+            }
+        }
+
+        // 3. Fall back to legacy root filesDir location
+        for (name in supportedModelNames) {
+            val legacyFile = File(context.filesDir, name)
+            if (legacyFile.exists() && legacyFile.length() > 0L) {
+                return@withContext legacyFile
+            }
         }
 
         null
@@ -46,17 +70,30 @@ class ModelAssetManagerImpl @Inject constructor(
 
     override suspend fun getInstalledManifest(): ModelManifest? = withContext(Dispatchers.IO) {
         val file = getVerifiedModelFile() ?: return@withContext null
+        val manifestFile = File(modelsDir, "manifest.json")
+        val sha256 = if (manifestFile.exists()) {
+            try {
+                org.json.JSONObject(manifestFile.readText()).optString("sha256", "")
+            } catch (e: Exception) { "" }
+        } else ""
+
+        val format = when {
+            file.name.endsWith(".litertlm") -> "litertlm"
+            file.name.endsWith(".task") -> "mediapipe_task"
+            else -> "binary_flatbuffer"
+        }
+
         ModelManifest(
             schemaVersion = 1,
-            modelId = "gemma-2b-it",
-            revision = "v1.1",
-            format = "mediapipe_task",
-            runtime = "tasks-genai",
+            modelId = "gemma-3-1b-it",
+            revision = "v1.0",
+            format = format,
+            runtime = if (format == "litertlm") "litert-lm" else "tasks-genai",
             files = listOf(
                 ModelFileDescriptor(
                     fileName = file.name,
                     sizeBytes = file.length(),
-                    sha256Checksum = ""
+                    sha256Checksum = sha256
                 )
             ),
             licence = "Gemma Terms of Use",
@@ -71,8 +108,7 @@ class ModelAssetManagerImpl @Inject constructor(
         expectedSha256: String,
         manifest: ModelManifest?
     ): AiResult<File> = withContext(Dispatchers.IO) {
-        val targetFile = File(modelsDir, primaryModelName)
-        val tempFile = File(modelsDir, "$primaryModelName.tmp")
+        val tempFile = File(modelsDir, "import_staging.tmp")
 
         try {
             val contentResolver = context.contentResolver
@@ -117,6 +153,22 @@ class ModelAssetManagerImpl @Inject constructor(
                 )
             }
 
+            // Extract file extension and name from URI if queryable, else default to .litertlm or .task
+            val queryName = context.contentResolver.query(sourceUri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (nameIndex != -1 && cursor.moveToFirst()) cursor.getString(nameIndex) else null
+            } ?: sourceUri.lastPathSegment ?: "model.litertlm"
+
+            val targetExtension = when {
+                queryName.endsWith(".litertlm") -> ".litertlm"
+                queryName.endsWith(".task") -> ".task"
+                queryName.endsWith(".bin") -> ".bin"
+                else -> ".litertlm"
+            }
+
+            val targetFileName = "model$targetExtension"
+            val targetFile = File(modelsDir, targetFileName)
+
             // Atomic install via file rename
             if (targetFile.exists()) {
                 targetFile.delete()
@@ -128,7 +180,22 @@ class ModelAssetManagerImpl @Inject constructor(
                 return@withContext AiResult.Failure(AiError.RuntimeError("Failed to rename temporary model file"))
             }
 
-            AiLogger.i("Model successfully imported and verified: ${targetFile.length()} bytes")
+            // Write or update manifest.json with SHA-256 and metadata
+            try {
+                val manifestJson = org.json.JSONObject().apply {
+                    put("modelId", "gemma-3-1b-it")
+                    put("fileName", targetFileName)
+                    put("sha256", computedChecksum)
+                    put("sizeBytes", targetFile.length())
+                    put("format", targetExtension.removePrefix("."))
+                    put("timestamp", System.currentTimeMillis())
+                }
+                File(modelsDir, "manifest.json").writeText(manifestJson.toString(2))
+            } catch (e: Exception) {
+                AiLogger.w("Failed to persist manifest.json: ${e.message}")
+            }
+
+            AiLogger.i("Model successfully imported and verified: ${targetFile.length()} bytes (SHA-256: $computedChecksum)")
             AiResult.Success(targetFile)
         } catch (e: Exception) {
             tempFile.delete()
@@ -158,15 +225,24 @@ class ModelAssetManagerImpl @Inject constructor(
 
     override suspend fun deleteInstalledModel(): AiResult<Unit> = withContext(Dispatchers.IO) {
         try {
-            val file = File(modelsDir, primaryModelName)
-            if (file.exists()) {
-                file.delete()
+            modelsDir.listFiles()?.forEach { file ->
+                if (file.isFile && (
+                    file.name.endsWith(".litertlm") ||
+                    file.name.endsWith(".task") ||
+                    file.name.endsWith(".bin") ||
+                    file.name == "manifest.json" ||
+                    file.name.endsWith(".tmp")
+                )) {
+                    file.delete()
+                }
             }
-            val legacyFile = File(context.filesDir, primaryModelName)
-            if (legacyFile.exists()) {
-                legacyFile.delete()
+            for (name in supportedModelNames) {
+                val legacyFile = File(context.filesDir, name)
+                if (legacyFile.exists()) {
+                    legacyFile.delete()
+                }
             }
-            AiLogger.i("Installed model deleted from storage")
+            AiLogger.i("Installed model and manifest deleted from storage")
             AiResult.Success(Unit)
         } catch (e: Exception) {
             AiLogger.e(e, "Error deleting installed model")

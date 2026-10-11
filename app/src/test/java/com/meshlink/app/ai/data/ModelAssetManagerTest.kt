@@ -74,9 +74,43 @@ class ModelAssetManagerTest {
     }
 
     @Test
+    fun getVerifiedModelFile_whenLitertlmFileExists_returnsLitertlmFile() = runTest {
+        val modelsSubDir = File(tempDir, "ai_models").apply { mkdirs() }
+        val modelFile = File(modelsSubDir, "model.litertlm").apply {
+            writeText("dummy-litertlm-content")
+        }
+
+        val result = assetManager.getVerifiedModelFile()
+        assertNotNull(result)
+        assertEquals(modelFile.absolutePath, result?.absolutePath)
+
+        val manifest = assetManager.getInstalledManifest()
+        assertNotNull(manifest)
+        assertEquals("litertlm", manifest?.format)
+        assertEquals("litert-lm", manifest?.runtime)
+    }
+
+    @Test
+    fun getVerifiedModelFile_whenTaskFileExists_returnsTaskFile() = runTest {
+        val modelsSubDir = File(tempDir, "ai_models").apply { mkdirs() }
+        val modelFile = File(modelsSubDir, "gemma.task").apply {
+            writeText("dummy-task-content")
+        }
+
+        val result = assetManager.getVerifiedModelFile()
+        assertNotNull(result)
+        assertEquals(modelFile.absolutePath, result?.absolutePath)
+
+        val manifest = assetManager.getInstalledManifest()
+        assertNotNull(manifest)
+        assertEquals("mediapipe_task", manifest?.format)
+        assertEquals("tasks-genai", manifest?.runtime)
+    }
+
+    @Test
     fun deleteInstalledModel_removesFileFromStorage() = runTest {
         val modelsSubDir = File(tempDir, "ai_models").apply { mkdirs() }
-        val modelFile = File(modelsSubDir, "gemma.bin").apply {
+        val modelFile = File(modelsSubDir, "model.litertlm").apply {
             writeText("dummy-content")
         }
         assertTrue(modelFile.exists())

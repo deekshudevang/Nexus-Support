@@ -215,7 +215,7 @@ fun SettingsScreen(
 
                     val importStatus by viewModel.importStatus.collectAsState()
                     val modelPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-                        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+                        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
                     ) { uri ->
                         if (uri != null) {
                             viewModel.importModel(uri)
@@ -236,7 +236,16 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedButton(
-                            onClick = { modelPickerLauncher.launch("*/*") },
+                            onClick = {
+                                // Accept all binary containers (.litertlm, .task, .bin, octet-stream)
+                                modelPickerLauncher.launch(
+                                    arrayOf(
+                                        "application/octet-stream",
+                                        "application/*",
+                                        "*/*"
+                                    )
+                                )
+                            },
                             modifier = Modifier.weight(1f)
                         ) {
                             Text("Import Model (SAF)", style = MaterialTheme.typography.labelMedium)
