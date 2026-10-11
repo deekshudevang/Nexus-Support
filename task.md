@@ -167,6 +167,55 @@
   - `.\gradlew.bat :app:testDebugUnitTest --tests "com.meshlink.app.ai.AiAssistantViewModelTest"` (Exit code: 0, BUILD SUCCESSFUL, 8 passed)
   - `.\gradlew.bat :app:compileDebugAndroidTestKotlin` (Exit code: 0, BUILD SUCCESSFUL)
 
+## Part B: Bottom Navigation AI Integration
+- Date: 2026-10-11
+- Status: VERIFIED_UNIT
+- Summary: Added canonical AI destination to the bottom navigation bar.
+  1. Tab-count safety gate evaluated: Existing bottom tabs were 4 (CHATS, DISCOVER, MAP, SOS). Adding AI results in 5 tabs, which complies with the Material 3 limit (<= 5 tabs). No tabs were removed or hidden.
+  2. Tab order: `CHATS`, `DISCOVER`, `MAP`, `AI`, `SOS`. SOS is preserved at the far-right/high-priority position with `isSos = true`.
+  3. Route: Reused canonical route constant `Screen.AiAssistant.route` ("ai_assistant").
+  4. String resource: Added `<string name="nav_ai">AI</string>` in `app/src/main/res/values/strings.xml`, mapped via `labelRes` to prevent duplicate hardcoded labels.
+  5. Icons: Utilized `Icons.Filled.AutoAwesome` (selected) and `Icons.Outlined.AutoAwesome` (unselected).
+  6. Back-stack & state preservation: `MainActivity` dynamically includes AI in `bottomNavRoutes` with `popUpTo(startDestinationId) { saveState = true }`, `launchSingleTop = true`, and `restoreState = true`.
+  7. Safe back behavior: `onNavigateBack` pops the back-stack, safely falling back to `Screen.Home.route` if the stack is at root.
+  8. Feature flag off: AI tab remains visible and navigable; shows "Offline AI is disabled" banner with "Enable Offline AI" button.
+- Source files modified:
+  - `app/src/main/res/values/strings.xml`
+  - `app/src/main/java/com/meshlink/app/ui/navigation/BottomNavBar.kt`
+  - `app/src/main/java/com/meshlink/app/ui/navigation/MeshLinkNavHost.kt`
+  - `app/src/main/java/com/meshlink/app/ai/AiAssistantScreen.kt`
+- Tests added:
+  - `app/src/androidTest/java/com/meshlink/app/ui/navigation/BottomNavigationAiTest.kt`: Added instrumented navigation tests:
+    - `tabCount_satisfiesSafetyGate_hasFiveOrFewerTabs`
+    - `canonicalAiRoute_existsExactlyOnce`
+    - `tabOrder_preservesSosHighPriorityPosition`
+    - `bottomBar_tabSelectionDispatchesExpectedRoutes`
+    - `aiTab_remainsVisible_andOpensDisabledBannerWhenFlagIsOff`
+- Verification commands & real exit codes:
+  - `.\gradlew.bat :app:compileDebugKotlin` (Exit code: 0, BUILD SUCCESSFUL)
+  - `.\gradlew.bat testDebugUnitTest` (Exit code: 0, BUILD SUCCESSFUL, 146 baseline + new tests passing)
+  - `.\gradlew.bat :app:assembleDebug` (Exit code: 0, BUILD SUCCESSFUL, APK size 88.9 MB)
+  - `.\gradlew.bat :app:assembleDebugAndroidTest` (Exit code: 0, BUILD SUCCESSFUL, APK size 9.2 MB)
+  - `adb -s ZD222M3BNH shell am instrument -w -e class com.meshlink.app.ai.AiAssistantScreenTest com.meshlink.app.debug.test/com.meshlink.app.HiltTestRunner` (Exit code: 0, 2 tests run, 2 passed)
+  - `adb -s ZD222M3BNH shell am instrument -w -e class com.meshlink.app.ui.navigation.BottomNavigationAiTest com.meshlink.app.debug.test/com.meshlink.app.HiltTestRunner` (Exit code: 0, 5 tests run, 5 passed)
+
+## Device Verification & Missing-Model Observation (Part E)
+- Physical Device: Motorola edge 50 pro (`ZD222M3BNH`), Android 16 (SDK 36, arm64-v8a).
+- Installed Debug APK: `app/build/outputs/apk/debug/app-debug.apk` (`com.meshlink.app.debug`).
+- Installed Test APK: `app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk` (`com.meshlink.app.debug.test`).
+- Model Absent State: Confirmed `files/ai_models/` is empty on device storage. Model file not installed.
+- Genuine Offline Guide Behavior:
+  - Query submitted when model absent invokes genuine local knowledge-base retrieval (`EmergencyRagServiceImpl.answerQuery`).
+  - Output displays exact label: `AI model not installed: showing guide excerpts only`.
+  - Genuine guide excerpts with titles, sections, and source citations displayed.
+  - Model generation was not invoked; fake/canned AI generation was strictly avoided.
+  - Model install / import button presented in UI leading to Settings flow.
+  - Composer remains editable and usable for subsequent queries.
+- Two Git Commits:
+  - Commit 1 (Part A): `345e7b4` `fix(ai): keep emergency assistant usable without model`
+  - Commit 2 (Part B): `feat(navigation): add AI bottom navigation destination`
+
 ## Open questions for the human
-- Physical Device (Motorola edge 50 pro `ZD222M3BNH`): Awaiting model weights file placement by user (license acceptance required). Once placed on device, on-device inference and airplane-mode verification will be executed via `adb` to record `VERIFIED_DEVICE` evidence. Phase 12 remains `NOT_STARTED` until physical device execution.
+- Physical Device: Model weights file (e.g. Gemma 2B CPU/GPU) can be imported via Settings -> Import Model file picker whenever on-device LLM generation is desired. Model absence path is fully verified.
+
 

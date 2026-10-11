@@ -133,39 +133,7 @@ fun AiAssistantScreen(
 
             // Feature flag OFF banner with exact "Enable Offline AI" button
             if (!isAiEnabled) {
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Offline AI is disabled",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                            Text(
-                                text = "Enable Offline AI to process queries and summarize incidents on-device.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-                        Button(
-                            onClick = onNavigateToSettings,
-                            modifier = Modifier.padding(start = 8.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text("Enable Offline AI", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                }
+                OfflineAiDisabledBanner(onNavigateToSettings = onNavigateToSettings)
             }
 
             LazyColumn(
@@ -361,6 +329,43 @@ fun CitationItem(citation: EmergencySourceCitation, textColor: androidx.compose.
                 color = textColor.copy(alpha = 0.85f),
                 modifier = Modifier.padding(start = 8.dp, top = 2.dp)
             )
+        }
+    }
+}
+
+@Composable
+fun OfflineAiDisabledBanner(onNavigateToSettings: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Offline AI is disabled",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Text(
+                    text = "Offline AI is currently disabled in Settings. Enable Offline AI to process queries and summarize incidents on-device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+            Button(
+                onClick = onNavigateToSettings,
+                modifier = Modifier.padding(start = 8.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text("Enable Offline AI", style = MaterialTheme.typography.labelMedium)
+            }
         }
     }
 }

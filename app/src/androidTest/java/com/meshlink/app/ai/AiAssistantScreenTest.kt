@@ -3,6 +3,7 @@ package com.meshlink.app.ai
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -148,9 +149,10 @@ class AiAssistantScreenTest {
         }
 
         // Type query and trigger IME action
-        val inputNode = composeRule.onNodeWithText("Ask emergency response...")
-        inputNode.performTextInput(query)
-        inputNode.performImeAction()
+        composeRule.onNodeWithText("Ask emergency response...")
+            .performTextInput(query)
+        composeRule.onNode(hasSetTextAction())
+            .performImeAction()
 
         // Verify message appeared and ViewModel was invoked
         composeRule.onNodeWithText(query)

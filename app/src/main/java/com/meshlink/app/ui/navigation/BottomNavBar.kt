@@ -16,10 +16,12 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WifiTethering
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.WifiTethering
@@ -35,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,7 +48,8 @@ data class BottomNavItem(
     val label:          String,
     val selectedIcon:   ImageVector,
     val unselectedIcon: ImageVector,
-    val isSos:          Boolean = false
+    val isSos:          Boolean = false,
+    val labelRes:       Int? = null
 )
 
 val bottomNavItems = listOf(
@@ -66,6 +70,13 @@ val bottomNavItems = listOf(
         label          = "MAP",
         selectedIcon   = Icons.Filled.Map,
         unselectedIcon = Icons.Outlined.Map
+    ),
+    BottomNavItem(
+        route          = Screen.AiAssistant.route,
+        label          = "AI",
+        selectedIcon   = Icons.Filled.AutoAwesome,
+        unselectedIcon = Icons.Outlined.AutoAwesome,
+        labelRes       = com.meshlink.app.R.string.nav_ai
     ),
     BottomNavItem(
         route          = Screen.Sos.route,
@@ -154,9 +165,10 @@ private fun NavItem(
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
+            val labelText = item.labelRes?.let { stringResource(it) } ?: item.label
             Icon(
                 imageVector        = if (selected) item.selectedIcon else item.unselectedIcon,
-                contentDescription = item.label,
+                contentDescription = labelText,
                 tint               = iconColor,
                 modifier           = Modifier.size(24.dp)
             )

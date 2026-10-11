@@ -120,7 +120,13 @@ fun MeshLinkNavHost(
 
         composable(Screen.AiAssistant.route) {
             com.meshlink.app.ai.AiAssistantScreen(
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = {
+                    if (!navController.popBackStack()) {
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo(Screen.Home.route) { inclusive = true }
+                        }
+                    }
+                },
                 onNavigateToSettings = { navController.navigate("settings") }
             )
         }
