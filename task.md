@@ -193,11 +193,11 @@
     - `aiTab_remainsVisible_andOpensDisabledBannerWhenFlagIsOff`
 - Verification commands & real exit codes:
   - `.\gradlew.bat :app:compileDebugKotlin` (Exit code: 0, BUILD SUCCESSFUL)
-  - `.\gradlew.bat testDebugUnitTest` (Exit code: 0, BUILD SUCCESSFUL, 146 baseline + new tests passing)
+  - `.\gradlew.bat testDebugUnitTest --rerun-tasks` (Exit code: 0, BUILD SUCCESSFUL; 39 test suites, 188 tests total: 187 passed, 0 failures, 0 errors, 1 skipped [`com.meshlink.app.data.local.MigrationTest.migrate5To14`])
   - `.\gradlew.bat :app:assembleDebug` (Exit code: 0, BUILD SUCCESSFUL, APK size 88.9 MB)
   - `.\gradlew.bat :app:assembleDebugAndroidTest` (Exit code: 0, BUILD SUCCESSFUL, APK size 9.2 MB)
-  - `adb -s ZD222M3BNH shell am instrument -w -e class com.meshlink.app.ai.AiAssistantScreenTest com.meshlink.app.debug.test/com.meshlink.app.HiltTestRunner` (Exit code: 0, 2 tests run, 2 passed)
-  - `adb -s ZD222M3BNH shell am instrument -w -e class com.meshlink.app.ui.navigation.BottomNavigationAiTest com.meshlink.app.debug.test/com.meshlink.app.HiltTestRunner` (Exit code: 0, 5 tests run, 5 passed)
+  - `adb -s ZD222M3BNH shell am instrument -w -e class com.meshlink.app.ai.AiAssistantScreenTest com.meshlink.app.debug.test/com.meshlink.app.HiltTestRunner` (Exit code: 0, 2 tests run, 2 passed; output saved to `build/offline-ai-logs/am_instrument_AiAssistantScreenTest.txt`)
+  - `adb -s ZD222M3BNH shell am instrument -w -e class com.meshlink.app.ui.navigation.BottomNavigationAiTest com.meshlink.app.debug.test/com.meshlink.app.HiltTestRunner` (Exit code: 0, 5 tests run, 5 passed; output saved to `build/offline-ai-logs/am_instrument_BottomNavigationAiTest.txt`)
 
 ## Device Verification & Missing-Model Observation (Part E)
 - Physical Device: Motorola edge 50 pro (`ZD222M3BNH`), Android 16 (SDK 36, arm64-v8a).
@@ -211,9 +211,14 @@
   - Model generation was not invoked; fake/canned AI generation was strictly avoided.
   - Model install / import button presented in UI leading to Settings flow.
   - Composer remains editable and usable for subsequent queries.
-- Two Git Commits:
-  - Commit 1 (Part A): `345e7b4` `fix(ai): keep emergency assistant usable without model`
-  - Commit 2 (Part B): `feat(navigation): add AI bottom navigation destination`
+  - Screenshot captured at `build/offline-ai-logs/device_model_absent_fallback.png`.
+- Git Commits:
+  - `345e7b4`: `fix(ai): keep emergency assistant usable without model`
+  - `3c91b50`: `feat(navigation): add AI bottom navigation destination`
+  - `1792549`: `feat(ai): restrict speech recognition to on-device only without network fallback`
+  - `a48fff0`: `test(ai): expand rag eval set to 45 queries and restore original injection test`
+  - `4349257`: `test(ai): add onTrimMemory handling unit tests for ai coordinator`
+  - `884be9b`: `test(sos): add sos preemption and coordinator notification unit tests`
 
 ## Open questions for the human
 - Physical Device: Model weights file (e.g. Gemma 2B CPU/GPU) can be imported via Settings -> Import Model file picker whenever on-device LLM generation is desired. Model absence path is fully verified.
