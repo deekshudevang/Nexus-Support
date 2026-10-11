@@ -126,7 +126,7 @@ object SosBeaconCodec {
         return SosBeacon(hash, lat, lon, type, sev, delta, nonce)
     }
 
-    private fun crc32(data: ByteArray): Int {
+    fun crc32(data: ByteArray): Int {
         val crc = java.util.zip.CRC32()
         crc.update(data)
         return crc.value.toInt()

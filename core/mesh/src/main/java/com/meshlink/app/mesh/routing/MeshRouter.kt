@@ -56,9 +56,10 @@ class MeshRouter @Inject constructor(
     private val messageRepository: MessageRepository,
     private val deviceRepository: DeviceRepository,
     private val pendingMessageRepository: PendingMessageRepository,
-    private val userProfileManager: UserProfileManager
+    private val userProfileManager: UserProfileManager,
+    private val notificationManager: NotificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager,
+    private val seenBeaconCache: SeenMessageCache = SeenMessageCache()
 ) {
-    private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     init {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             val channel = NotificationChannel("sos_channel", "Emergency SOS", NotificationManager.IMPORTANCE_HIGH)
@@ -75,6 +76,21 @@ class MeshRouter @Inject constructor(
     /** Rate-limit table: peerDeviceId → timestamp of last accepted heartbeat. */
     private val heartbeatLastSeen = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
+    data class AuthenticatedSosRecord(
+        val messageId: String,
+        val originId: String,
+        val beaconKey: String?,
+        val timestamp: Long
+    )
+
+    data class UnverifiedBeaconRecord(
+        val messageId: String,
+        val deviceHash: Int,
+        val timestamp: Long
+    )
+
+    private val activeAuthenticatedSos = java.util.concurrent.CopyOnWriteArrayList<AuthenticatedSosRecord>()
+    private val unverifiedBeaconAlerts = java.util.concurrent.CopyOnWriteArrayList<UnverifiedBeaconRecord>()
 
     /**
      * Process an incoming [packet] received from [fromEndpointId].
@@ -92,8 +108,59 @@ class MeshRouter @Inject constructor(
         connectedPeers: Map<String, String>    // endpointId → peerDeviceId
     ): RoutingResult = withContext(Dispatchers.IO) {
 
+        // PATH A: Unauthenticated BLE SOS Beacon
+        // A beacon is unauthenticated and must never share a deduplication namespace with authenticated packets.
+        if (fromEndpointId == "sos-beacon") {
+            if (seenBeaconCache.isAlreadySeen(packet.messageId, isCritical = true)) {
+                Timber.d("MeshRouter: DROP duplicate beacon messageId=${packet.messageId}")
+                return@withContext RoutingResult.Drop
+            }
+            seenBeaconCache.markSeen(packet.messageId)
+
+            val parts = packet.messageId.split("-")
+            val idHash = if (parts.size >= 2) parts[1].toIntOrNull() ?: 0 else 0
+            val originHash = packet.originId.toIntOrNull() ?: idHash
+            val beaconDeviceHash = originHash
+
+            // Matching rule: B matches E iff:
+            // (1) E carries beaconKey equal to B's triple (packet.messageId);
+            // (2) E's authenticated sender maps to B's deviceHash;
+            // (3) B's declared origin maps to the ID hash;
+            // (4) exactly 1 such E exists in the dedup window.
+            val matchingAuth = activeAuthenticatedSos.filter { auth ->
+                auth.beaconKey != null &&
+                    auth.beaconKey == packet.messageId &&
+                    com.meshlink.app.mesh.transport.SosBeaconCodec.crc32(auth.originId.toByteArray()) == beaconDeviceHash &&
+                    beaconDeviceHash == idHash
+            }
+
+            if (matchingAuth.size == 1) {
+                // S2 / S8: Linked to existing authenticated alert. No new alert created, no ACK, no forward.
+                Timber.i("MeshRouter: Beacon ${packet.messageId} linked to authenticated alert ${matchingAuth.first().messageId}")
+                return@withContext RoutingResult.Processed(localMessage = null, forwardTargets = emptyList())
+            }
+
+            // Unverified beacon alert (or ambiguous). Keep separate as an unverified alert.
+            unverifiedBeaconAlerts.add(
+                UnverifiedBeaconRecord(
+                    messageId = packet.messageId,
+                    deviceHash = beaconDeviceHash,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+
+            val unverifiedPacket = packet.copy(senderName = "Unverified Nearby SOS")
+            val localMessage = decryptAndPersist(unverifiedPacket)
+
+            // Invariants: A beacon NEVER generates an ACK, and NEVER forwards/floods to mesh peers.
+            return@withContext RoutingResult.Processed(
+                localMessage = localMessage,
+                forwardTargets = emptyList()
+            )
+        }
+
+        // PATH B: Authenticated / Standard Mesh Traffic
         // 1. Deduplication — drop packets we've already seen (loop prevention)
-        // NOTE: Relying strictly on messageId for dedup. A malicious node could pre-flood fake messageIds to suppress delivery of real messages later.
         val isCritical = packet.type == PacketType.SOS || packet.priority >= 10
         if (seenMessageCache.isAlreadySeen(packet.messageId, isCritical)) {
             Timber.d("MeshRouter: DROP duplicate messageId=${packet.messageId}")
@@ -125,6 +192,38 @@ class MeshRouter @Inject constructor(
         var localMessage: Message? = null
         if (isForMe || isBroadcast) {
             localMessage = decryptAndPersist(packet)
+        }
+
+        // Correlation and merging for incoming authenticated mesh SOS
+        if (packet.type == PacketType.SOS) {
+            val beaconKey = try {
+                org.json.JSONObject(packet.content).optString("beaconKey").ifEmpty { null }
+            } catch (_: Exception) { null }
+
+            val originHash = com.meshlink.app.mesh.transport.SosBeaconCodec.crc32(packet.originId.toByteArray())
+            val authRecord = AuthenticatedSosRecord(
+                messageId = packet.messageId,
+                originId = packet.originId,
+                beaconKey = beaconKey,
+                timestamp = System.currentTimeMillis()
+            )
+            activeAuthenticatedSos.add(authRecord)
+
+            if (beaconKey != null) {
+                val candidateBeacons = unverifiedBeaconAlerts.filter { b ->
+                    b.messageId == beaconKey && b.deviceHash == originHash
+                }
+                val candidateAuthEvents = activeAuthenticatedSos.filter { a ->
+                    a.beaconKey == beaconKey && com.meshlink.app.mesh.transport.SosBeaconCodec.crc32(a.originId.toByteArray()) == originHash
+                }
+                // Only merge if exactly ONE beacon matches and exactly ONE auth event matches (unambiguous)
+                if (candidateBeacons.size == 1 && candidateAuthEvents.size == 1) {
+                    val matchingBeacon = candidateBeacons.first()
+                    Timber.i("MeshRouter: Merging unverified beacon ${matchingBeacon.messageId} into authenticated SOS ${packet.messageId}")
+                    messageRepository.deleteMessage(matchingBeacon.messageId)
+                    unverifiedBeaconAlerts.remove(matchingBeacon)
+                }
+            }
         }
 
         // 4. Forward / flood

@@ -201,15 +201,17 @@ class MeshRouterTest {
 
     @Test
     fun `route incoming SOS from beacon and mesh creates single authoritative ACK and alerts`() = runTest {
+        val deviceBHash = com.meshlink.app.mesh.transport.SosBeaconCodec.crc32("DEVICE_B".toByteArray())
+        val beaconId = "sos-$deviceBHash-500-1"
         // Beacon alert arrives first
         val beaconPacket = MeshPacket(
-            senderId = "12345678",
+            senderId = deviceBHash.toString(),
             receiverId = MeshPacket.BROADCAST_DEST,
             content = """{"emergencyType":"MEDICAL","severity":5,"lat":12.9716,"lon":77.5946}""",
             timestamp = 1000L,
             type = MeshPacket.PacketType.SOS,
-            messageId = "sos-12345678-500-1",
-            originId = "12345678",
+            messageId = beaconId,
+            originId = deviceBHash.toString(),
             finalDestId = MeshPacket.BROADCAST_DEST,
             priority = 100
         )
@@ -217,12 +219,14 @@ class MeshRouterTest {
         val beaconResult = meshRouter.route("sos-beacon", beaconPacket, mapOf("ep_b" to "DEVICE_B"))
         assertTrue(beaconResult is RoutingResult.Processed)
         val beaconTargets = (beaconResult as RoutingResult.Processed).forwardTargets
+        // Beacon is unauthenticated: NO ACK, NO relay targets
+        assertEquals(0, beaconTargets.size)
 
-        // Structured authenticated SOS arrives from same sender over mesh
+        // Structured authenticated SOS arrives from same sender over mesh carrying matching beaconKey
         val meshSosPacket = MeshPacket(
             senderId = "DEVICE_B",
             receiverId = MeshPacket.BROADCAST_DEST,
-            content = """{"uuid":"SOS-UUID-AUTH-999","senderId":"DEVICE_B","emergencyType":"MEDICAL","severity":5,"latitude":12.9716,"longitude":77.5946,"message":"Help!"}""",
+            content = """{"uuid":"SOS-UUID-AUTH-999","senderId":"DEVICE_B","emergencyType":"MEDICAL","severity":5,"latitude":12.9716,"longitude":77.5946,"message":"Help!","beaconKey":"$beaconId"}""",
             timestamp = 1010L,
             type = MeshPacket.PacketType.SOS,
             messageId = "SOS-UUID-AUTH-999",
@@ -241,8 +245,9 @@ class MeshRouterTest {
         assertEquals("SOS-UUID-AUTH-999", ackTarget!!.packet.content)
         assertEquals("DEVICE_B", ackTarget.packet.receiverId)
 
-        // Verify both payloads were persisted into Room without corruption
-        io.mockk.coVerify { messageRepository.insertMessage(match { it.id == "sos-12345678-500-1" }) }
+        // Verify beacon was persisted as unverified, then deleted when merged into authenticated SOS
+        io.mockk.coVerify { messageRepository.insertMessage(match { it.id == beaconId }) }
         io.mockk.coVerify { messageRepository.insertMessage(match { it.id == "SOS-UUID-AUTH-999" }) }
+        io.mockk.coVerify { messageRepository.deleteMessage(beaconId) }
     }
 }

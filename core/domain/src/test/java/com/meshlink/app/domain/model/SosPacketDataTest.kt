@@ -162,7 +162,8 @@ class SosPacketDataTest {
             message = "Need oxygen\nBlood: A+\nPath: C:\\Logs\\sos.txt",
             timestamp = 1770000000L,
             hopCount = 2,
-            status = SosPacketData.SosStatus.DELIVERED
+            status = SosPacketData.SosStatus.DELIVERED,
+            beaconKey = "sos-123456-100-42"
         )
 
         val newJson = packet.toJson()
@@ -180,6 +181,7 @@ class SosPacketDataTest {
         assertEquals(1770000000L, jsonElement.get("timestamp").asLong)
         assertEquals(2, jsonElement.get("hopCount").asInt)
         assertEquals("DELIVERED", jsonElement.get("status").asString)
+        assertEquals("sos-123456-100-42", jsonElement.get("beaconKey").asString)
     }
 
     @Test
@@ -207,6 +209,7 @@ class SosPacketDataTest {
         assertFalse(parsedMinimal.hasValidLocation)
         assertEquals(0, parsedMinimal.hopCount)
         assertEquals(SosPacketData.SosStatus.PENDING, parsedMinimal.status)
+        assertNull(parsedMinimal.beaconKey)
 
         // Old payload with unknown extra fields (forward compatibility)
         val futureJson = """

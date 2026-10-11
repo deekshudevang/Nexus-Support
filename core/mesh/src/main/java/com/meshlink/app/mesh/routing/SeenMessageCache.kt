@@ -20,7 +20,9 @@ import javax.inject.Singleton
  * Thread safety: all public methods are @Synchronized.
  */
 @Singleton
-class SeenMessageCache @Inject constructor() {
+class SeenMessageCache @Inject constructor(
+    private val clock: () -> Long = { System.currentTimeMillis() }
+) {
 
     companion object {
         private const val LRU_CAPACITY   = 200
@@ -47,7 +49,7 @@ class SeenMessageCache @Inject constructor() {
         // Fast check: LRU exact match (handles TTL expiry)
         val entry = lruCache[messageId]
         if (entry != null) {
-            val age = System.currentTimeMillis() - entry.seenAt
+            val age = clock() - entry.seenAt
             if (age > DEFAULT_TTL_MS) {
                 lruCache.remove(messageId)
                 // Don't return false yet — Bloom may still catch it
@@ -69,7 +71,7 @@ class SeenMessageCache @Inject constructor() {
      */
     @Synchronized
     fun markSeen(messageId: String) {
-        lruCache[messageId] = Entry(seenAt = System.currentTimeMillis())
+        lruCache[messageId] = Entry(seenAt = clock())
         bloomFilter.put(messageId)
         Timber.v("SeenCache: marked seen $messageId (lru=${lruCache.size})")
     }

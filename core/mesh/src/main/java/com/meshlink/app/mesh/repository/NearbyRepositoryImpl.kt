@@ -665,13 +665,14 @@ class NearbyRepositoryImpl @Inject constructor(
 
     override fun sendSos(content: String) {
         scope.launch(Dispatchers.IO) {
-            val peers  = getConnectedPeers()
-            val result = meshRouter.buildSos(content, peers)
-            if (result is RoutingResult.Processed) {
-                result.forwardTargets.forEach { dispatchToNearby(it) }
-            }
-            
-            // Phase 8: Start BLE beacon advertising using authoritative parameters from payload if present
+            val nowMs = System.currentTimeMillis()
+            val midnightMs = nowMs - (nowMs % 86_400_000L)
+            val delta = ((nowMs - midnightMs) / 1000).toInt().coerceIn(0, 65535)
+            val nonce = sosNonceGenerator.nextNonce()
+            val deviceHash = com.meshlink.app.mesh.transport.SosBeaconCodec.crc32(localDeviceId.toByteArray())
+            val generatedBeaconKey = "sos-$deviceHash-$delta-$nonce"
+
+            var finalContent = content
             var beaconLat: Double? = null
             var beaconLon: Double? = null
             var emergencyType = com.meshlink.app.mesh.transport.SosBeaconCodec.EmergencyType.MEDICAL
@@ -681,6 +682,10 @@ class NearbyRepositoryImpl @Inject constructor(
             if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
                 try {
                     val json = org.json.JSONObject(trimmed)
+                    if (!json.has("beaconKey")) {
+                        json.put("beaconKey", generatedBeaconKey)
+                        finalContent = json.toString()
+                    }
                     if (json.has("lat") || json.has("latitude")) {
                         val parsedLat = if (json.has("lat")) json.optDouble("lat", Double.NaN) else json.optDouble("latitude", Double.NaN)
                         if (!parsedLat.isNaN() && !parsedLat.isInfinite() && parsedLat in -90.0..90.0) {
@@ -720,13 +725,20 @@ class NearbyRepositoryImpl @Inject constructor(
                 }
             }
 
-            val nonce = sosNonceGenerator.nextNonce()
+            val peers  = getConnectedPeers()
+            val result = meshRouter.buildSos(finalContent, peers)
+            if (result is RoutingResult.Processed) {
+                result.forwardTargets.forEach { dispatchToNearby(it) }
+            }
+
+            // Phase 8: Start BLE beacon advertising using authoritative parameters from payload
             val encoded = com.meshlink.app.mesh.transport.SosBeaconCodec.encode(
                 deviceId = localDeviceId,
                 latitude = beaconLat,
                 longitude = beaconLon,
                 emergencyType = emergencyType,
                 severity = severity,
+                nowMs = nowMs,
                 nonce = nonce
             )
             sosBeaconAdvertiser.startAdvertising(encoded)

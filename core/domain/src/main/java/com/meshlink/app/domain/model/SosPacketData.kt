@@ -19,7 +19,8 @@ data class SosPacketData(
     val message: String = "",
     val timestamp: Long = System.currentTimeMillis(),
     val hopCount: Int = 0,
-    val status: SosStatus = SosStatus.PENDING
+    val status: SosStatus = SosStatus.PENDING,
+    val beaconKey: String? = null
 ) {
     enum class EmergencyType {
         MEDICAL, FIRE, FLOOD, EARTHQUAKE, SECURITY, TRAPPED, LOST, OTHER
@@ -53,6 +54,9 @@ data class SosPacketData(
             addProperty("timestamp", timestamp)
             addProperty("hopCount", hopCount)
             addProperty("status", status.name)
+            if (!beaconKey.isNullOrBlank()) {
+                addProperty("beaconKey", beaconKey)
+            }
         }
 
         var jsonStr = GSON.toJson(jsonObj)
@@ -143,6 +147,10 @@ data class SosPacketData(
                     SosStatus.PENDING
                 }
 
+                val beaconKey = if (obj.has("beaconKey") && !obj.get("beaconKey").isJsonNull) {
+                    obj.get("beaconKey").asString
+                } else null
+
                 SosPacketData(
                     uuid = obj.get("uuid")?.asString ?: UUID.randomUUID().toString(),
                     senderId = obj.get("senderId")?.asString ?: "",
@@ -154,7 +162,8 @@ data class SosPacketData(
                     message = obj.get("message")?.asString ?: "",
                     timestamp = obj.get("timestamp")?.asLong ?: System.currentTimeMillis(),
                     hopCount = obj.get("hopCount")?.asInt ?: 0,
-                    status = status
+                    status = status,
+                    beaconKey = beaconKey
                 )
             } catch (e: Exception) {
                 null

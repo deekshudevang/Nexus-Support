@@ -111,3 +111,60 @@ Governing standard: Execution Control F. All entries must reflect actual command
 - **Candidate Commit Message:** `fix(sos): N2 explicit nullable location, coordinate bounds validation, and sentinel encoding`
 
 ---
+
+## Step 3: N3 One Event, Two Paths
+
+- **Data Path Trace & Authenticity Separation:**
+  1. *Unauthenticated Beacon Path:*
+     `SosBeaconAdvertiser.detectedBeacons -> NearbyRepositoryImpl -> MeshRouter.route(fromEndpointId = "sos-beacon", domainPacket, ...)`
+     - *Authenticity Boundary:* `packet.fromEndpointId == "sos-beacon"` marks the packet as an unauthenticated BLE beacon.
+     - *Namespace Separation:* Beacon IDs are checked and cached exclusively in `seenBeaconCache: SeenMessageCache` (separate from `seenMessageCache`).
+     - *ACK Invariant:* `isSosFromPeer` specifically excludes `isBeacon`, guaranteeing **0 ACKs are ever created or dispatched for beacons**.
+     - *Relay Invariant:* `forwardTargets` is strictly set to `emptyList()`, guaranteeing beacons are **never relayed/flooded as authenticated mesh packets**.
+     - *UI Invariant:* Stored with `senderName = "Unverified Nearby SOS"`.
+  2. *Authenticated Mesh SOS Path:*
+     `NearbyRepositoryImpl.onPayloadReceived -> MeshRouter.route(fromEndpointId = peerId, domainPacket, ...)`
+     - *Authentication Boundary:* Verified cryptographic mesh packet from authenticated origin.
+     - *ACK Handling:* Creates and queues an authenticated ACK to sender (`ACK_RECEIVED` / `AckManager`).
+     - *Relay Handling:* Forwards to other connected peers if TTL / hopCount allows.
+     - *UI Status:* Displayed as fully authenticated emergency alert with verified sender identity.
+  3. *Correlation Key (`beaconKey`):*
+     - Single authoritative generator in `NearbyRepositoryImpl.sendSos()` creates the beacon triple `beaconKey = "sos-$deviceHash-$delta-$nonce"` once.
+     - Sent as an optional additive field `beaconKey` in `SosPacketData` JSON over mesh.
+     - Golden tests prove existing/old JSON parsers ignore `beaconKey` without error.
+  4. *Matching & Merging Invariants:*
+     - Beacon $B$ matches authenticated event $E$ iff: (1) `E.beaconKey == B.messageId`; (2) `crc32(E.originId) == B.deviceHash`; (3) declared origin equals ID hash; (4) exactly 1 matching $E$ exists in dedup window.
+     - If matched: linked without duplicate alert.
+     - If beacon arrives before mesh SOS: persisted as unverified alert. When matching authenticated mesh SOS arrives, beacon message is removed from Room via `messageRepository.deleteMessage(matchingBeacon.messageId)`, upgrading to single authenticated alert.
+     - If ambiguous (e.g. multiple events with same key) or forged: kept separate as unverified alert; authenticated alert is never suppressed.
+- **Hypotheses Tested & Results:**
+  - *Beacon path feeds same route() as PacketType.SOS triggering ACKs:* REPRODUCED & FIXED. Before fix, `MeshRouter.route()` treated beacons as standard SOS from peers and sent ACKs (`ackManager.sendAck(...)` / `RoutingResult.Processed(ackPacket = ...)`). Now fixed with `val isBeacon = (fromEndpointId == "sos-beacon")` and `if (isSosFromPeer && !isBeacon)`.
+  - *Beacon relayed to connected peers:* REPRODUCED & FIXED. Before fix, beacons were flooded to connected peers. Now `forwardTargets = if (isBeacon) emptyList() else ...`.
+  - *Single alert claim was false (inserted 2 IDs via MockK):* REPRODUCED & FIXED. Verified with production `AppDatabase` Room integration tests that previous code inserted two distinct alerts into Room. Now properly upgrades beacon to single authenticated alert on mesh SOS arrival.
+- **Before-Fix Failure Evidence:**
+  - `SosTwoPathsIntegrationTest` failed on unmodified code:
+    `java.lang.AssertionError: S1 - Beacons must NEVER generate ACKs (expected: 0, actual: 1)`
+    `java.lang.AssertionError: S1 - Expected exactly 1 visible alert after mesh arrival (expected: 1, actual: 2)`
+- **After-Fix Verification Evidence:**
+  - Command: `.\gradlew.bat :core:domain:test :core:data:testDebugUnitTest :core:mesh:testDebugUnitTest --console=plain` (task-7010)
+  - Exit Code: 0 (BUILD SUCCESSFUL in 29s)
+  - Actionable Tasks: 20 executed, 86 up-to-date
+- **Fresh JUnit Test Results (`core/mesh/build/test-results/testDebugUnitTest/TEST-com.meshlink.app.mesh.repository.SosTwoPathsIntegrationTest.xml`):**
+  - Total Tests: 12
+  - Failures: 0
+  - Errors: 0
+  - Skipped: 0
+  - Integration Tests Executed:
+    1. `S1 - beacon then matching mesh produces 1 alert and 1 ACK for mesh only` (Passed)
+    2. `S2 - mesh then matching beacon produces 1 alert and 1 ACK` (Passed)
+    3. `S3 - beacon only produces 1 unverified alert and 0 ACKs` (Passed)
+    4. `S4 - mesh only produces 1 authenticated alert and 1 ACK` (Passed)
+    5. `S5 - old-version sender without beaconKey produces 2 alerts and 1 ACK for mesh only` (Passed)
+    6. `S6 - duplicate beacon triple produces 1 unverified alert and 0 ACKs` (Passed)
+    7. `S7 - duplicate authenticated mesh SOS produces 1 alert and 1 ACK` (Passed)
+    8. `S8 - replay of genuine beacon after S1 or S2 creates no new alert and 0 ACKs` (Passed)
+    9. `S9 - forged beacon with never-seen triple produces 1 unverified alert without changing authenticated alert` (Passed)
+    10. `S10 - forged beacon with real event beaconKey but different deviceHash does not match or suppress authenticated alert` (Passed)
+    11. `S11 - two authenticated events with same beaconKey followed by beacon are ambiguous and produce 3 alerts without suppression` (Passed)
+    12. `S12 - beacon expires before matching mesh SOS arrives leaving 1 authenticated alert` (Passed)
+- **Candidate Commit Message:** `fix(sos): N3 beacon authenticity separation, beaconKey correlation, and integration scenarios`
