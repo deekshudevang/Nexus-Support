@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import timber.log.Timber
+import com.meshlink.app.ai.security.AiLogger
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -38,7 +38,7 @@ class SpeechManager @Inject constructor(
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
             speechRecognizer?.setRecognitionListener(this)
         } else {
-            Timber.w("Speech recognition is not available on this device")
+            AiLogger.w("Speech recognition is not available on this device")
         }
     }
 
@@ -46,12 +46,12 @@ class SpeechManager @Inject constructor(
         if (status == TextToSpeech.SUCCESS) {
             val result = tts?.setLanguage(Locale.US)
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                Timber.e("TTS: Language not supported")
+                AiLogger.e("TTS: Language not supported")
             } else {
                 isTtsInitialized = true
             }
         } else {
-            Timber.e("TTS Initialization failed")
+            AiLogger.e("TTS Initialization failed")
         }
     }
 
@@ -92,7 +92,7 @@ class SpeechManager @Inject constructor(
         _isListening.value = false
     }
     override fun onError(error: Int) {
-        Timber.e("Speech recognition error: $error")
+        AiLogger.e("Speech recognition error: $error")
         _isListening.value = false
     }
     override fun onResults(results: Bundle?) {

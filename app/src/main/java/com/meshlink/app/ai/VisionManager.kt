@@ -4,8 +4,8 @@ import android.graphics.Bitmap
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.label.ImageLabeling
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
+import com.meshlink.app.ai.security.AiLogger
 import kotlinx.coroutines.tasks.await
-import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,7 +25,7 @@ class VisionManager @Inject constructor() {
             val labels = labeler.process(image).await()
             labels.map { it.text }
         } catch (e: Exception) {
-            Timber.e(e, "Error processing image with ML Kit Vision")
+            AiLogger.e(e, "Error processing image with ML Kit Vision")
             emptyList()
         }
     }
