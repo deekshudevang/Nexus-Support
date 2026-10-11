@@ -28,15 +28,30 @@ object AiSafetyGuard {
 
     // 2. Prohibited Dangerous and Harmful Assistance:
     // Direct requests to construct lethal weapons, explosive devices, synthesize deadly poisons,
-    // execute severe medical malpractice, or build cyber weapons.
+    // or execute severe medical malpractice.
     private val harmfulPatterns = listOf(
         Regex("""(?i)\b(?:how\s+to\s+make|build|synthesize|create)\s+(?:a\s+)?(?:bomb|explosive|dirty\s+bomb|pipe\s+bomb|weapon\s+of\s+mass\s+destruction)\b"""),
         Regex("""(?i)\b(?:lethal\s+poisoning\s+instructions|how\s+to\s+poison\s+someone)\b"""),
         Regex("""(?i)\b(?:synthesize|produce|make)\s+(?:ricin|sarin|cyanide|nerve\s+agent|mustard\s+gas)\b"""),
-        Regex("""(?i)\b(?:create|write|generate)\s+(?:a\s+)?(?:ransomware|keylogger|malware\s+payload|ddos\s+bot|trojan|zero-day\s+exploit)\b"""),
         Regex("""(?i)\b(?:perform\s+surgery\s+at\s+home|kitchen\s+knife\s+surgery|amputate\s+(?:limb|leg|arm)\s+at\s+home)\b"""),
         Regex("""(?i)\b(?:inject|drink|consume)\s+(?:bleach|disinfectant|ammonia|drain\s+cleaner)\b"""),
         Regex("""(?i)\b(?:how\s+to\s+overdose|lethal\s+dose\s+of)\b""")
+    )
+
+    // 3. Prohibited Offensive Cyberattacks, Exploitation, and Hacking Assistance:
+    // Targets requests to attack or hack systems, exploit SQL/databases, generate exploit payloads,
+    // crack credentials, or produce malware.
+    private val cyberAttackPatterns = listOf(
+        Regex("""(?i)\b(?:how\s+to\s+)?(?:hack|exploit|penetrate|breach)\s+(?:into\s+)?(?:a\s+)?(?:sql|databases?|db|websites?|servers?|networks?|wifi|routers?|passwords?|accounts?|systems?)\b"""),
+        Regex("""(?i)\b(?:write|create|generate|provide|run)\s+(?:a\s+)?(?:python\s+|bash\s+)?(?:code|script|payload|tool)?\s*(?:to|for)?\s*(?:hack|exploit|attack|crack)\s+(?:a\s+)?(?:sql|databases?|db|websites?|servers?|networks?|passwords?)\b"""),
+        Regex("""(?i)\b(?:sql\s+injection|sqli)\s+(?:exploit|attack|payload|script|tool)\b"""),
+        Regex("""(?i)\b(?:create|write|generate|provide)\s+(?:a\s+)?(?:ransomware|keylogger|malware\s+payload|ddos\s+bot|trojan|zero-day\s+exploit|reverse\s+shell|rootkit|credential\s+harvester|password\s+cracker|brute\s+force\s+tool)\b"""),
+        Regex("""(?i)\b(?:how\s+to\s+exploit)\s+(?:a\s+)?(?:sql|database|vulnerability|endpoint|cve)\b""")
+    )
+
+    // Defensive and remediation keywords that should NOT be blocked (dual-use defense)
+    private val defensiveIndicators = listOf(
+        Regex("""(?i)\b(?:prevent|preventing|prevention|protect(?:ion)?(?:\s+against)?|defend(?:\s+against)?|defense|mitigate|mitigating|mitigation|fix(?:ing)?|stop(?:ping)?|remediat(?:e|ion)|secur(?:e|ing)|sanitize|sanitization|parameteriz(?:ed|ation)|prepared\s+statements?)\b""")
     )
 
     const val INJECTION_REFUSAL_MESSAGE =
@@ -44,6 +59,9 @@ object AiSafetyGuard {
 
     const val HARMFUL_CONTENT_REFUSAL =
         "I cannot assist with dangerous, harmful, or hazardous activities. For safety and emergency preparedness, please consult verified community resources."
+
+    const val CYBER_ATTACK_REFUSAL =
+        "I cannot assist with hacking, exploiting vulnerabilities, or generating offensive attack code. I can, however, explain defensive security best practices such as parameterized queries, prepared statements, and input validation to secure SQL databases against injection attacks."
 
     /**
      * Returns true if query contains an adversarial prompt injection or override attempt.
@@ -53,10 +71,24 @@ object AiSafetyGuard {
     }
 
     /**
-     * Returns true if query explicitly asks for hazardous, weaponized, or lethal activities.
+     * Returns true if query asks for offensive cyberattacks, exploits, or malicious hacking payloads,
+     * while allowing benign defensive and educational queries.
+     */
+    fun isCyberAttackRequest(text: String): Boolean {
+        if (defensiveIndicators.any { it.containsMatchIn(text) }) {
+            val overtExploitScript = Regex("""(?i)\b(?:write|generate|give\s+me)\s+(?:a\s+)?(?:exploit|attack|hack(?:ing)?)\s+(?:script|payload|code)\b""")
+            if (!overtExploitScript.containsMatchIn(text)) {
+                return false
+            }
+        }
+        return cyberAttackPatterns.any { it.containsMatchIn(text) }
+    }
+
+    /**
+     * Returns true if query explicitly asks for hazardous, weaponized, lethal, or cyberattack activities.
      */
     fun isHarmfulRequest(text: String): Boolean {
-        return harmfulPatterns.any { it.containsMatchIn(text) }
+        return harmfulPatterns.any { it.containsMatchIn(text) } || isCyberAttackRequest(text)
     }
 
     /**

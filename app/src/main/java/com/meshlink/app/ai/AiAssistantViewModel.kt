@@ -155,7 +155,19 @@ class AiAssistantViewModel @Inject constructor(
             return
         }
 
-        // 2. Safety filter checks for harmful content
+        // 2. Safety filter checks for cyber attacks & offensive hacking
+        if (AiSafetyGuard.isCyberAttackRequest(query)) {
+            val userMsg = ChatMessage(text = query, isUser = true)
+            val warningMsg = ChatMessage(
+                text = AiSafetyGuard.CYBER_ATTACK_REFUSAL,
+                isUser = false,
+                isWarning = true
+            )
+            _messages.value = _messages.value + userMsg + warningMsg
+            return
+        }
+
+        // 3. Safety filter checks for harmful physical content
         if (AiSafetyGuard.isHarmfulRequest(query)) {
             val userMsg = ChatMessage(text = query, isUser = true)
             val warningMsg = ChatMessage(

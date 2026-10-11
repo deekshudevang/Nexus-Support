@@ -1,6 +1,7 @@
 package com.meshlink.app.ai.coordinator
 
 import android.content.ComponentCallbacks2
+import android.content.Context
 import com.meshlink.app.ai.domain.LocalAiEngine
 import com.meshlink.app.ai.domain.ModelAssetManager
 import com.meshlink.app.ai.domain.OfflineAiCoordinator
@@ -8,6 +9,7 @@ import com.meshlink.app.ai.model.AiCapabilityState
 import com.meshlink.app.ai.model.AiError
 import com.meshlink.app.ai.model.AiResult
 import com.meshlink.app.ai.security.AiLogger
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,23 +30,41 @@ import javax.inject.Singleton
 class OfflineAiCoordinatorImpl(
     private val modelAssetManager: ModelAssetManager,
     private val localAiEngine: LocalAiEngine,
-    private val dispatcher: CoroutineDispatcher
+    private val dispatcher: CoroutineDispatcher,
+    private val context: Context? = null
 ) : OfflineAiCoordinator {
 
     @Inject
     constructor(
+        @ApplicationContext context: Context,
         modelAssetManager: ModelAssetManager,
         localAiEngine: LocalAiEngine
-    ) : this(modelAssetManager, localAiEngine, Dispatchers.Default)
+    ) : this(modelAssetManager, localAiEngine, Dispatchers.Default, context)
+
+    constructor(
+        modelAssetManager: ModelAssetManager,
+        localAiEngine: LocalAiEngine,
+        dispatcher: CoroutineDispatcher = Dispatchers.Default
+    ) : this(modelAssetManager, localAiEngine, dispatcher, null)
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
     private val _state = MutableStateFlow(AiCapabilityState.NOT_INSTALLED)
     override val state: StateFlow<AiCapabilityState> = _state.asStateFlow()
 
-    // Default off per strict safety rules
+    // Default off per strict safety rules, unless previously enabled by user
     private val _isAiEnabled = MutableStateFlow(false)
     override val isAiEnabled: StateFlow<Boolean> = _isAiEnabled.asStateFlow()
+
+    init {
+        if (context != null) {
+            val prefs = context.getSharedPreferences("offline_ai_prefs", Context.MODE_PRIVATE)
+            val savedEnabled = prefs.getBoolean("ai_enabled", false)
+            if (savedEnabled) {
+                _isAiEnabled.value = true
+            }
+        }
+    }
 
     private val isSosActive = AtomicBoolean(false)
     private val killSwitchActive = AtomicBoolean(false)
@@ -88,6 +108,7 @@ class OfflineAiCoordinatorImpl(
         AiLogger.w("EMERGENCY KILL SWITCH TRIGGERED: Disabling AI and releasing all resources")
         killSwitchActive.set(true)
         _isAiEnabled.value = false
+        context?.getSharedPreferences("offline_ai_prefs", Context.MODE_PRIVATE)?.edit()?.putBoolean("ai_enabled", false)?.apply()
 
         // Cancel running work immediately
         activeInferenceJob?.cancel()
@@ -100,6 +121,7 @@ class OfflineAiCoordinatorImpl(
     override suspend fun enableAi(): Unit = withContext(dispatcher) {
         killSwitchActive.set(false)
         _isAiEnabled.value = true
+        context?.getSharedPreferences("offline_ai_prefs", Context.MODE_PRIVATE)?.edit()?.putBoolean("ai_enabled", true)?.apply()
         initialize()
         Unit
     }

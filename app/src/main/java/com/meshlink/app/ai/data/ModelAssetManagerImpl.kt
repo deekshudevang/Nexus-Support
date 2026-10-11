@@ -39,24 +39,32 @@ class ModelAssetManagerImpl @Inject constructor(
     private val confirmationFile: File
         get() = File(modelsDir, "confirmed_hash.txt")
 
+    private val candidateDirs: List<File>
+        get() = listOf(
+            modelsDir,
+            File(context.filesDir, "models"),
+            context.filesDir
+        )
+
     fun findCandidateModelFile(): File? {
-        val existingFile = modelsDir.listFiles()?.firstOrNull { file ->
-            file.isFile && file.length() > 0L && (
-                file.name.endsWith(".task") ||
-                file.name.endsWith(".bin") ||
-                file.name.endsWith(".litertlm")
-            )
-        }
-        if (existingFile != null) return existingFile
-
-        for (name in supportedModelNames) {
-            val file = File(modelsDir, name)
-            if (file.exists() && file.length() > 0L) return file
+        for (dir in candidateDirs) {
+            if (!dir.exists() || !dir.isDirectory) continue
+            val existingFile = dir.listFiles()?.firstOrNull { file ->
+                file.isFile && file.length() > 0L && (
+                    file.name.endsWith(".task") ||
+                    file.name.endsWith(".bin") ||
+                    file.name.endsWith(".litertlm")
+                )
+            }
+            if (existingFile != null) return existingFile
         }
 
-        for (name in supportedModelNames) {
-            val legacyFile = File(context.filesDir, name)
-            if (legacyFile.exists() && legacyFile.length() > 0L) return legacyFile
+        for (dir in candidateDirs) {
+            if (!dir.exists() || !dir.isDirectory) continue
+            for (name in supportedModelNames) {
+                val file = File(dir, name)
+                if (file.exists() && file.length() > 0L) return file
+            }
         }
 
         return null
@@ -65,8 +73,11 @@ class ModelAssetManagerImpl @Inject constructor(
     override suspend fun getVerifiedModelFile(): File? = withContext(Dispatchers.IO) {
         val candidate = findCandidateModelFile() ?: return@withContext null
 
-        val manifestFile = File(modelsDir, "manifest.json")
-        val pinnedSha256 = if (manifestFile.exists()) {
+        val manifestFile = listOf(
+            File(modelsDir, "manifest.json"),
+            File(candidate.parentFile, "manifest.json")
+        ).firstOrNull { it.exists() }
+        val pinnedSha256 = if (manifestFile != null && manifestFile.exists()) {
             try {
                 val json = org.json.JSONObject(manifestFile.readText())
                 val p = json.optString("pinnedSha256", "").ifBlank { json.optString("sha256", "") }
@@ -298,14 +309,32 @@ class ModelAssetManagerImpl @Inject constructor(
     override suspend fun confirmModelHash(hash: String) = withContext(Dispatchers.IO) {
         if (hash.isNotBlank()) {
             confirmationFile.writeText(hash.trim().lowercase())
+            val altModelsDir = File(context.filesDir, "models")
+            if (altModelsDir.exists() && altModelsDir.isDirectory) {
+                try {
+                    File(altModelsDir, "confirmed_hash.txt").writeText(hash.trim().lowercase())
+                } catch (_: Exception) {}
+            }
             AiLogger.i("User confirmed model hash: ${hash.trim().lowercase()}")
         }
     }
 
     override suspend fun isHashConfirmed(hash: String): Boolean = withContext(Dispatchers.IO) {
-        if (hash.isBlank() || !confirmationFile.exists()) return@withContext false
-        val saved = confirmationFile.readText().trim().lowercase()
-        saved.equals(hash.trim().lowercase(), ignoreCase = true)
+        if (hash.isBlank()) return@withContext false
+        val candidateConfirmFiles = listOf(
+            confirmationFile,
+            File(File(context.filesDir, "models"), "confirmed_hash.txt"),
+            File(context.filesDir, "confirmed_hash.txt")
+        )
+        for (file in candidateConfirmFiles) {
+            if (file.exists()) {
+                val saved = file.readText().trim().lowercase()
+                if (saved.equals(hash.trim().lowercase(), ignoreCase = true)) {
+                    return@withContext true
+                }
+            }
+        }
+        false
     }
 
     override suspend fun verifyChecksum(file: File, expectedSha256: String): Boolean = withContext(Dispatchers.IO) {
