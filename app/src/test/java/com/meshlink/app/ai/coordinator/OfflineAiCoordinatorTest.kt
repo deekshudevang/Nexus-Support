@@ -167,6 +167,39 @@ class OfflineAiCoordinatorTest {
     }
 
     @Test
+    @Suppress("DEPRECATION")
+    fun onTrimMemory_whenModerate_doesNotUnloadEngineAndRemainsReady() = testScope.runTest {
+        val tempFile = File.createTempFile("test_gemma", ".bin")
+        tempFile.deleteOnExit()
+        fakeAssetManager.modelFileToReturn = tempFile
+        coordinator.enableAi()
+
+        coordinator.onTrimMemory(ComponentCallbacks2.TRIM_MEMORY_RUNNING_MODERATE)
+
+        assertEquals(AiCapabilityState.READY, coordinator.state.value)
+        assertFalse(fakeEngine.unloadCalled)
+
+        val result = coordinator.executeInference {
+            AiResult.Success("output")
+        }
+        assertTrue(result.isSuccess)
+    }
+
+    @Test
+    @Suppress("DEPRECATION")
+    fun onTrimMemory_whenCritical_unloadsEngine() = testScope.runTest {
+        val tempFile = File.createTempFile("test_gemma", ".bin")
+        tempFile.deleteOnExit()
+        fakeAssetManager.modelFileToReturn = tempFile
+        coordinator.enableAi()
+
+        coordinator.onTrimMemory(ComponentCallbacks2.TRIM_MEMORY_COMPLETE)
+
+        assertEquals(AiCapabilityState.LOW_MEMORY, coordinator.state.value)
+        assertTrue(fakeEngine.unloadCalled)
+    }
+
+    @Test
     fun executeInference_timesOutProperly() = testScope.runTest {
         val tempFile = File.createTempFile("test_gemma", ".bin")
         tempFile.deleteOnExit()
