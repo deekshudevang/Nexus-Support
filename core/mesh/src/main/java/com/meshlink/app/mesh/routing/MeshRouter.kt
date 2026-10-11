@@ -45,7 +45,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
  *   BROADCAST     → no encryption (public announcement)
  */
 @Singleton
-class MeshRouter @Inject constructor(
+class MeshRouter(
     @ApplicationContext private val context: Context,
     @Named("localDeviceId") private val myDeviceId: String,
     private val routingTable: RoutingTable,
@@ -57,10 +57,39 @@ class MeshRouter @Inject constructor(
     private val deviceRepository: DeviceRepository,
     private val pendingMessageRepository: PendingMessageRepository,
     private val userProfileManager: UserProfileManager,
-    private val notificationManager: NotificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager,
     private val seenBeaconCache: SeenMessageCache = SeenMessageCache(),
     private val clock: () -> Long = { System.currentTimeMillis() }
 ) {
+    @Inject
+    constructor(
+        @ApplicationContext context: Context,
+        @Named("localDeviceId") myDeviceId: String,
+        routingTable: RoutingTable,
+        seenMessageCache: SeenMessageCache,
+        encryptionService: EncryptionService,
+        eciesService: EciesService,
+        sessionKeyStore: SessionKeyStore,
+        messageRepository: MessageRepository,
+        deviceRepository: DeviceRepository,
+        pendingMessageRepository: PendingMessageRepository,
+        userProfileManager: UserProfileManager
+    ) : this(
+        context = context,
+        myDeviceId = myDeviceId,
+        routingTable = routingTable,
+        seenMessageCache = seenMessageCache,
+        encryptionService = encryptionService,
+        eciesService = eciesService,
+        sessionKeyStore = sessionKeyStore,
+        messageRepository = messageRepository,
+        deviceRepository = deviceRepository,
+        pendingMessageRepository = pendingMessageRepository,
+        userProfileManager = userProfileManager,
+        seenBeaconCache = SeenMessageCache(),
+        clock = { System.currentTimeMillis() }
+    )
+
+    private val notificationManager: NotificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     init {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             val channel = NotificationChannel("sos_channel", "Emergency SOS", NotificationManager.IMPORTANCE_HIGH)

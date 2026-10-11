@@ -20,9 +20,11 @@ import javax.inject.Singleton
  * Thread safety: all public methods are @Synchronized.
  */
 @Singleton
-class SeenMessageCache @Inject constructor(
-    private val clock: () -> Long = { System.currentTimeMillis() }
+class SeenMessageCache(
+    private val clock: () -> Long
 ) {
+    @Inject
+    constructor() : this({ System.currentTimeMillis() })
 
     companion object {
         private const val LRU_CAPACITY   = 200
