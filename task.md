@@ -77,11 +77,21 @@
   - `app/src/main/java/com/meshlink/app/ai/rag/LocalEmbeddingServiceImpl.kt`
   - `app/src/main/java/com/meshlink/app/ai/rag/EmergencyRagServiceImpl.kt`
   - `app/src/test/java/com/meshlink/app/ai/rag/RagEvaluationHarnessTest.kt`
-- Benchmark Results:
-  - In-Scope Recall@3: 100% (5/5)
-  - Correct Abstention Rate: 100% (6/6)
-  - Citation Correctness: 100% (11/11 produced citations verified against official guidelines)
+### Phase 4: Emergency Knowledge Base & RAG
+- Files added:
+  - `app/src/main/java/com/meshlink/app/ai/rag/RagConstants.kt`
+  - `app/src/main/java/com/meshlink/app/ai/rag/LocalEmbeddingServiceImpl.kt`
+  - `app/src/main/java/com/meshlink/app/ai/rag/EmergencyRagServiceImpl.kt`
+  - `app/src/test/java/com/meshlink/app/ai/rag/RagEvaluationHarnessTest.kt`
+- Benchmark Results (45-query benchmark dataset across 6 categories):
+  - In-Scope Recall@3: 100.0% (20/20)
+  - Correct Abstention Rate: 100.0% (25/25)
+  - Citation Correctness: 100.0% (29/29 produced citations verified against official guidelines)
   - Adversarial prompt injection rejected and abstained with `RagConstants.ABSTENTION_MESSAGE`.
+- Held-Out Unseen Evaluation Set (10 queries):
+  - Held-Out In-Scope Recall@3: 100.0% (5/5)
+  - Held-Out Correct Abstention Rate: 100.0% (5/5)
+  - Held-Out Citation Correctness: 100.0% (8/8)
 
 ### Phase 5: Mesh Message and Incident Summarization
 - Files added:
@@ -101,18 +111,20 @@
 
 ### Phase 11: Automated Unit & ViewModel Testing
 - Test suites added:
-  - `OfflineAiCoordinatorTest.kt`: 9 tests (100% pass)
+  - `OfflineAiCoordinatorTest.kt`: 11 tests (100% pass, includes onTrimMemory MODERATE and CRITICAL tests)
+  - `SosViewModelTest.kt`: 4 tests (100% pass, covers incoming SOS preemption and toggleSos AI preemption)
   - `ModelAssetManagerTest.kt`: 4 tests (100% pass)
-  - `RagEvaluationHarnessTest.kt`: 3 tests (Benchmark RAG recall/abstention, Held-Out unseen set, Adversarial prompt injection)
+  - `RagEvaluationHarnessTest.kt`: 3 tests (45-query Benchmark RAG recall/abstention, 10-query Held-Out unseen set, Adversarial prompt injection)
   - `MessageSummaryServiceTest.kt`: 4 tests (Deduplication, chronological ordering, SOS flag isolation, preemption failure)
   - `AiAssistantViewModelTest.kt`: 5 tests (Initialization, query handling, citations, blank input, incident summarization)
   - `SettingsViewModelAiTest.kt`: 6 tests (Toggle AI, kill switch, clear AI data, SAF model import, error recovery)
 
 ### Phase 13 & 15: Verification and Packaging Gate
 - Full JVM Test Suite: `.\gradlew.bat testDebugUnitTest --console=plain` passed.
-  - Log: `build/offline-ai-logs/testDebugUnitTest.log` (20,366 bytes)
-  - Real totals: **177 passed**, **0 failures**, **0 errors**, **1 skipped** (across 38 XML test suites).
-  - Baseline comparison: Phase 0 baseline was **146 tests**. New total is 177 tests (+31 tests added, 0 regressions).
+  - Log: `build/offline-ai-logs/testDebugUnitTest.log`
+  - Real totals: **183 passed**, **0 failures**, **0 errors**, **1 skipped** (across 39 XML test suites).
+  - Skipped test: `com.meshlink.app.data.local.MigrationTest.migrate5To14` (`@Ignore("Missing schema files for versions 5 through 13")` pre-existing in repository).
+  - Baseline comparison: Phase 0 baseline was **146 tests**. New total is 183 tests (+37 tests added, 0 regressions).
 - Release Build Packaging: `.\gradlew.bat :app:assembleRelease --console=plain` passed.
   - Log: `build/offline-ai-logs/assembleRelease.log` (23,472 bytes)
   - Output artifact: `app/build/outputs/apk/release/app-release-unsigned.apk` (**65,884,395 bytes** / 62.8 MB).
@@ -122,5 +134,39 @@
 - Original failures: 0.
 - Current failures: 0.
 
+## Part A: Emergency AI Send & Model-Absent Fix
+- Date: 2026-10-11
+- Status: VERIFIED_UNIT
+- Summary: Fixed Emergency AI send blocking and genuine offline fallback.
+  1. Text field remains editable regardless of AI feature flag, model availability, or coordinator state.
+  2. Send button is enabled whenever query is non-blank and request is not currently running.
+  3. When Offline AI is disabled via feature flag, user draft/query is retained, and clear banner with "Enable Offline AI" button guides user to Settings without invoking the model.
+  4. When model is missing or coordinator not READY, sending a query initiates genuine local Emergency Guide knowledge-base retrieval, displaying matching guide excerpts with exact status label: "AI model not installed: showing guide excerpts only", real source citations, and an "Install / Import Model in Settings" action button. LLM generation is never invoked without installed model.
+  5. If evidence is insufficient, standard abstention message is displayed without fabricated content.
+  6. Request lifecycle guarantees loading state reset in `finally` blocks for success, missing model, errors, and coroutine cancellation.
+  7. Keyboard and accessibility handling updated: `imePadding()` applied, minimum 48x48dp touch target with `contentDescription = "Send message"`, and `ImeAction.Send` + `KeyboardActions` wired to identical send action.
+- Source files modified:
+  - `app/src/main/java/com/meshlink/app/ai/rag/RagConstants.kt`
+  - `app/src/main/java/com/meshlink/app/ai/rag/EmergencyRagServiceImpl.kt`
+  - `app/src/main/java/com/meshlink/app/ai/AiAssistantViewModel.kt`
+  - `app/src/main/java/com/meshlink/app/ai/AiAssistantScreen.kt`
+  - `app/src/main/java/com/meshlink/app/ui/navigation/MeshLinkNavHost.kt`
+- Tests added/extended:
+  - `app/src/test/java/com/meshlink/app/ai/AiAssistantViewModelTest.kt`: Added 6 mandatory scenario tests:
+    - `sendMessage_featureFlagOff_doesNotInvokeModel_retainsQueryAndShowsDisabledNotice`
+    - `sendMessage_modelMissingOrNotReady_showsGuideExcerptsAndImportPrompt`
+    - `sendMessage_noEvidence_showsAbstentionMessage`
+    - `sendMessage_cancellation_propagatesAndResetsLoadingState`
+    - `sendMessage_loadingReset_allowsSubsequentSendsAfterSuccessErrorOrCancellation`
+    - `sendMessage_validQuery_postsUserAndAiMessagesWithCitations`
+  - `app/src/androidTest/java/com/meshlink/app/ai/AiAssistantScreenTest.kt`: Added instrumented Compose UI tests:
+    - `sendQuestion_viaSendButton_displaysUserMessageAndTriggersViewModel`
+    - `sendQuestion_viaImeSendAction_triggersSendAndDisplaysMessage`
+- Verification commands & real exit codes:
+  - `.\gradlew.bat :app:compileDebugKotlin` (Exit code: 0, BUILD SUCCESSFUL)
+  - `.\gradlew.bat :app:testDebugUnitTest --tests "com.meshlink.app.ai.AiAssistantViewModelTest"` (Exit code: 0, BUILD SUCCESSFUL, 8 passed)
+  - `.\gradlew.bat :app:compileDebugAndroidTestKotlin` (Exit code: 0, BUILD SUCCESSFUL)
+
 ## Open questions for the human
 - Physical Device (Motorola edge 50 pro `ZD222M3BNH`): Awaiting model weights file placement by user (license acceptance required). Once placed on device, on-device inference and airplane-mode verification will be executed via `adb` to record `VERIFIED_DEVICE` evidence. Phase 12 remains `NOT_STARTED` until physical device execution.
+

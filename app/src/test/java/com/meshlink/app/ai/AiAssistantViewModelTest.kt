@@ -156,6 +156,131 @@ class AiAssistantViewModelTest {
     }
 
     @Test
+    fun sendMessage_featureFlagOff_doesNotInvokeModel_retainsQueryAndShowsDisabledNotice() = runTest(testDispatcher) {
+        isAiEnabled.value = false
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.sendMessage("How to treat a burn?")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { mockRagService.answerQuery(any()) }
+        val messages = vm.messages.value
+        assertEquals(3, messages.size) // Welcome + User + Disabled Notice
+        assertEquals("How to treat a burn?", messages[1].text)
+        assertTrue(messages[1].isUser)
+
+        assertFalse(messages[2].isUser)
+        assertTrue(messages[2].isWarning)
+        assertTrue(messages[2].text.contains("Offline AI is currently disabled"))
+        assertFalse(vm.isGenerating.value)
+    }
+
+    @Test
+    fun sendMessage_modelMissingOrNotReady_showsGuideExcerptsAndImportPrompt() = runTest(testDispatcher) {
+        coordinatorState.value = AiCapabilityState.NOT_INSTALLED
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val citation = EmergencySourceCitation(
+            guideId = "burns",
+            title = "Thermal Burns First Aid",
+            section = "Cooling & Dressing",
+            revisionOrDate = "v1.0",
+            relevanceScore = 0.88f
+        )
+        val excerptText = "${com.meshlink.app.ai.rag.RagConstants.GUIDE_EXCERPT_PREFIX}\n1. Cool under clean running water for 20 minutes."
+        val ragResponse = RagResponse(
+            answer = excerptText,
+            citations = listOf(citation),
+            hasSufficientEvidence = true,
+            latencyMs = 30L
+        )
+        coEvery { mockRagService.answerQuery("How to treat a burn?") } returns AiResult.Success(ragResponse)
+
+        vm.sendMessage("How to treat a burn?")
+        advanceUntilIdle()
+
+        val messages = vm.messages.value
+        assertEquals(3, messages.size)
+        assertEquals("How to treat a burn?", messages[1].text)
+        assertTrue(messages[1].isUser)
+
+        val aiMsg = messages[2]
+        assertFalse(aiMsg.isUser)
+        assertTrue(aiMsg.isExcerptOnly)
+        assertTrue(aiMsg.showModelImport)
+        assertTrue(aiMsg.text.contains("AI model not installed: showing guide excerpts only"))
+        assertEquals(1, aiMsg.citations.size)
+        assertEquals("burns", aiMsg.citations[0].guideId)
+        assertEquals("Thermal Burns First Aid", aiMsg.citations[0].title)
+        assertFalse(vm.isGenerating.value)
+    }
+
+    @Test
+    fun sendMessage_noEvidence_showsAbstentionMessage() = runTest(testDispatcher) {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val ragResponse = RagResponse(
+            answer = com.meshlink.app.ai.rag.RagConstants.ABSTENTION_MESSAGE,
+            citations = emptyList(),
+            hasSufficientEvidence = false,
+            latencyMs = 15L
+        )
+        coEvery { mockRagService.answerQuery("What is quantum computing?") } returns AiResult.Success(ragResponse)
+
+        vm.sendMessage("What is quantum computing?")
+        advanceUntilIdle()
+
+        val messages = vm.messages.value
+        assertEquals(3, messages.size)
+        assertEquals(com.meshlink.app.ai.rag.RagConstants.ABSTENTION_MESSAGE, messages[2].text)
+        assertTrue(messages[2].citations.isEmpty())
+        assertFalse(vm.isGenerating.value)
+    }
+
+    @Test
+    fun sendMessage_cancellation_propagatesAndResetsLoadingState() = runTest(testDispatcher) {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        coEvery { mockRagService.answerQuery(any()) } throws kotlinx.coroutines.CancellationException("Coroutines cancelled")
+
+        try {
+            vm.sendMessage("Test query")
+            advanceUntilIdle()
+        } catch (_: kotlinx.coroutines.CancellationException) {
+            // expected
+        }
+
+        assertFalse(vm.isGenerating.value)
+    }
+
+    @Test
+    fun sendMessage_loadingReset_allowsSubsequentSendsAfterSuccessErrorOrCancellation() = runTest(testDispatcher) {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        // 1. First send fails
+        coEvery { mockRagService.answerQuery("Query 1") } returns AiResult.Failure(AiError.RuntimeError("Corrupt"))
+        vm.sendMessage("Query 1")
+        advanceUntilIdle()
+        assertFalse(vm.isGenerating.value)
+
+        // 2. Second send succeeds because loading was reset in finally
+        coEvery { mockRagService.answerQuery("Query 2") } returns AiResult.Success(
+            RagResponse(answer = "Answer 2", citations = emptyList(), hasSufficientEvidence = true, latencyMs = 10L)
+        )
+        vm.sendMessage("Query 2")
+        advanceUntilIdle()
+        assertFalse(vm.isGenerating.value)
+
+        val messages = vm.messages.value
+        assertTrue(messages.any { it.text == "Answer 2" })
+    }
+
+    @Test
     fun summarizeRecentMeshMessages_fetchesAndSummarizes() = runTest(testDispatcher) {
         val vm = createViewModel()
         advanceUntilIdle()

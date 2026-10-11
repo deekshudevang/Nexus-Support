@@ -36,7 +36,8 @@ import com.meshlink.app.ai.model.EmergencySourceCitation
 @Composable
 fun AiAssistantScreen(
     viewModel: AiAssistantViewModel = hiltViewModel(),
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToSettings: () -> Unit = {}
 ) {
     val messages by viewModel.messages.collectAsState()
     val isGenerating by viewModel.isGenerating.collectAsState()
@@ -59,6 +60,14 @@ fun AiAssistantScreen(
     ) { isGranted ->
         if (isGranted) {
             viewModel.startListening()
+        }
+    }
+
+    val onSendAction: () -> Unit = {
+        if (inputText.isNotBlank() && !isGenerating) {
+            val toSend = inputText
+            inputText = ""
+            viewModel.sendMessage(toSend)
         }
     }
 
@@ -96,6 +105,7 @@ fun AiAssistantScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .imePadding()
         ) {
             // Life-safety Emergency Disclaimer Banner
             Surface(
@@ -121,6 +131,43 @@ fun AiAssistantScreen(
                 }
             }
 
+            // Feature flag OFF banner with exact "Enable Offline AI" button
+            if (!isAiEnabled) {
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Offline AI is disabled",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Text(
+                                text = "Enable Offline AI to process queries and summarize incidents on-device.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                        Button(
+                            onClick = onNavigateToSettings,
+                            modifier = Modifier.padding(start = 8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text("Enable Offline AI", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+            }
+
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
@@ -129,7 +176,7 @@ fun AiAssistantScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(messages) { msg ->
-                    ChatBubble(message = msg)
+                    ChatBubble(message = msg, onNavigateToSettings = onNavigateToSettings)
                 }
                 if (isGenerating) {
                     item {
@@ -176,6 +223,7 @@ fun AiAssistantScreen(
                             }
                         }
                     },
+                    modifier = Modifier.size(48.dp),
                     colors = IconButtonDefaults.iconButtonColors(
                         contentColor = if (isListening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                     )
@@ -185,6 +233,7 @@ fun AiAssistantScreen(
 
                 IconButton(
                     onClick = { takePictureLauncher.launch(null) },
+                    modifier = Modifier.size(48.dp),
                     colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Icon(Icons.Default.CameraAlt, "Analyze Scene Hazard")
@@ -195,19 +244,25 @@ fun AiAssistantScreen(
                     onValueChange = { inputText = it },
                     modifier = Modifier.weight(1f),
                     placeholder = { Text("Ask emergency response...") },
-                    maxLines = 3
+                    maxLines = 3,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Send
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                        onSend = { onSendAction() }
+                    )
                 )
 
                 IconButton(
-                    onClick = {
-                        if (inputText.isNotBlank()) {
-                            viewModel.sendMessage(inputText)
-                            inputText = ""
-                        }
-                    },
-                    enabled = inputText.isNotBlank() && !isGenerating && isAiEnabled
+                    onClick = onSendAction,
+                    enabled = inputText.isNotBlank() && !isGenerating,
+                    modifier = Modifier.size(48.dp)
                 ) {
-                    Icon(Icons.Default.Send, "Send", tint = MaterialTheme.colorScheme.primary)
+                    Icon(
+                        Icons.Default.Send,
+                        contentDescription = "Send message",
+                        tint = if (inputText.isNotBlank() && !isGenerating) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                    )
                 }
             }
         }
@@ -215,7 +270,7 @@ fun AiAssistantScreen(
 }
 
 @Composable
-fun ChatBubble(message: ChatMessage) {
+fun ChatBubble(message: ChatMessage, onNavigateToSettings: () -> Unit = {}) {
     val isUser = message.isUser
     val bgColor = when {
         isUser -> MaterialTheme.colorScheme.primary
@@ -263,6 +318,21 @@ fun ChatBubble(message: ChatMessage) {
                         for (citation in message.citations) {
                             CitationItem(citation = citation, textColor = textColor)
                         }
+                    }
+                }
+
+                // Model Missing Install/Import Action Button
+                if (message.showModelImport) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = onNavigateToSettings,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text("Install / Import Model in Settings", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

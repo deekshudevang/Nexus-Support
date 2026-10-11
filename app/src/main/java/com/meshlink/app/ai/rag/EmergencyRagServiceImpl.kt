@@ -4,6 +4,7 @@ import com.meshlink.app.ai.domain.EmergencyRagService
 import com.meshlink.app.ai.domain.LocalAiEngine
 import com.meshlink.app.ai.domain.LocalEmbeddingService
 import com.meshlink.app.ai.domain.OfflineAiCoordinator
+import com.meshlink.app.ai.model.AiCapabilityState
 import com.meshlink.app.ai.model.AiError
 import com.meshlink.app.ai.model.AiResult
 import com.meshlink.app.ai.model.EmergencySourceCitation
@@ -30,6 +31,20 @@ class EmergencyRagServiceImpl @Inject constructor(
 
         if (query.isBlank()) {
             return@withContext AiResult.Failure(AiError.InvalidInput("Query cannot be blank"))
+        }
+
+        // Adversarial prompt injection gate: immediate safe abstention
+        if (isPromptInjection(query)) {
+            AiLogger.w("Adversarial prompt injection pattern detected in emergency RAG query. Safely abstaining.")
+            val latency = System.currentTimeMillis() - startTime
+            return@withContext AiResult.Success(
+                RagResponse(
+                    answer = RagConstants.ABSTENTION_MESSAGE,
+                    citations = emptyList(),
+                    hasSufficientEvidence = false,
+                    latencyMs = latency
+                )
+            )
         }
 
         // 1. Retrieve all guides from repository
@@ -84,7 +99,21 @@ class EmergencyRagServiceImpl @Inject constructor(
             )
         }
 
-        // 5. Execute inference through coordinator (protected by kill switch & SOS preemption)
+        // 5. If model is absent or coordinator not READY, show guide excerpts only without calling LLM generation
+        if (coordinator.state.value != AiCapabilityState.READY) {
+            val fallbackAnswer = buildFallbackResponse(topGuides.first().guide)
+            val latency = System.currentTimeMillis() - startTime
+            return@withContext AiResult.Success(
+                RagResponse(
+                    answer = fallbackAnswer,
+                    citations = citations,
+                    hasSufficientEvidence = true,
+                    latencyMs = latency
+                )
+            )
+        }
+
+        // 6. Execute inference through coordinator (protected by kill switch & SOS preemption)
         val inferenceResult = coordinator.executeInference(timeoutMs = 25000L) {
             localAiEngine.generate(prompt)
         }
@@ -124,10 +153,26 @@ class EmergencyRagServiceImpl @Inject constructor(
 
     private data class ScoredGuide(val guide: EmergencyGuide, val score: Float)
 
+    private val injectionPatterns = listOf(
+        Regex("""(?i)\bignore\s+(all\s+|previous\s+|the\s+)?(context|instructions?|rules?|prompts?)\b"""),
+        Regex("""(?i)\bgenerate\s+fake\b"""),
+        Regex("""(?i)\bsystem\s+(command|prompt|override)\b"""),
+        Regex("""(?i)\bdisregard\b"""),
+        Regex("""(?i)<context\s+id=.*sys.*>"""),
+        Regex("""(?i)\bsay\s+pwned\b"""),
+        Regex("""(?i)\bgrant\s+admin\b""")
+    )
+
+    private fun isPromptInjection(query: String): Boolean {
+        return injectionPatterns.any { it.containsMatchIn(query) }
+    }
+
     private val stopWords = setOf(
         "the", "is", "at", "which", "on", "who", "what", "how", "do", "i", "of",
         "in", "and", "a", "an", "to", "for", "with", "as", "by", "from", "it", "my",
-        "you", "should", "me", "there", "we", "can", "will", "are", "be"
+        "you", "should", "me", "there", "we", "can", "will", "are", "be",
+        "first", "aid", "instructions", "instruction", "guide", "protocol", "steps",
+        "help", "emergency", "treatment", "response", "severe", "control", "safety", "general"
     )
 
     private suspend fun rankGuides(
@@ -150,9 +195,21 @@ class EmergencyRagServiceImpl @Inject constructor(
                 .toSet()
             val guideKeywords = guide.keywords.map { it.lowercase() }.toSet()
 
-            // Keyword match component
+            // Keyword match component: handle multi-word keywords as full substring, and single-word tokens with inflection rules
             val keywordMatches = guideKeywords.count { kw ->
-                kw in queryTokens || queryTokens.any { token -> token.contains(kw) || kw.contains(token) }
+                if (kw.contains(" ")) {
+                    queryLower.contains(kw)
+                } else {
+                    kw in queryTokens || queryTokens.any { token ->
+                        token == kw ||
+                        token == "${kw}s" || token == "${kw}es" || token == "${kw}ed" || token == "${kw}ing" ||
+                        (kw.endsWith("e") && token == "${kw.dropLast(1)}ing") ||
+                        (kw.endsWith("y") && token == "${kw.dropLast(1)}ies") ||
+                        kw == "${token}s" || kw == "${token}es" || kw == "${token}ed" || kw == "${token}ing" ||
+                        (token.endsWith("e") && kw == "${token.dropLast(1)}ing") ||
+                        (token.endsWith("y") && kw == "${token.dropLast(1)}ies")
+                    }
+                }
             }
             val titleMatches = titleTokens.count { it in queryTokens }
             val keywordScore = (keywordMatches * 0.35f + titleMatches * 0.40f).coerceAtMost(1.0f)
@@ -176,6 +233,7 @@ class EmergencyRagServiceImpl @Inject constructor(
     }
 
     private fun buildFallbackResponse(guide: EmergencyGuide): String = buildString {
+        append(RagConstants.GUIDE_EXCERPT_PREFIX).append("\n\n")
         append("Protocol: ").append(guide.title).append("\n\n")
         if (guide.warnings.isNotEmpty()) {
             append("WARNINGS:\n")

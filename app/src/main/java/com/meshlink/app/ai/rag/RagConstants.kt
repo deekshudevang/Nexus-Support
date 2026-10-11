@@ -12,6 +12,8 @@ object RagConstants {
     const val ABSTENTION_MESSAGE =
         "I do not have verified emergency guidance for that question in my offline knowledge base. Please refer to standard emergency protocols or contact qualified emergency personnel."
 
+    const val GUIDE_EXCERPT_PREFIX = "AI model not installed: showing guide excerpts only"
+
     const val MEDICAL_SAFETY_DISCLAIMER =
         "\n\n[Emergency Notice: AI-generated guidance. Verify with qualified first responders before taking critical action.]"
 
