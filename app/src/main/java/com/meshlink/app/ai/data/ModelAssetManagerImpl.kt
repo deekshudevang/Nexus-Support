@@ -202,18 +202,38 @@ class ModelAssetManagerImpl @Inject constructor(
             val targetFileName = "model$targetExtension"
             val targetFile = File(modelsDir, targetFileName)
 
-            // Atomic install via file rename
+            val backupFile = File(modelsDir, "$targetFileName.bak")
+            val manifestFile = File(modelsDir, "manifest.json")
+            val manifestBackupFile = File(modelsDir, "manifest.json.bak")
+
+            // Safe staged swap:
+            // 1. If existing model file exists, move to backup file first (do NOT delete!)
             if (targetFile.exists()) {
-                targetFile.delete()
+                if (backupFile.exists()) backupFile.delete()
+                val backedUp = targetFile.renameTo(backupFile)
+                if (!backedUp) {
+                    tempFile.delete()
+                    return@withContext AiResult.Failure(AiError.RuntimeError("Failed to backup existing model file"))
+                }
             }
 
+            if (manifestFile.exists()) {
+                if (manifestBackupFile.exists()) manifestBackupFile.delete()
+                try { manifestFile.copyTo(manifestBackupFile, overwrite = true) } catch (e: Exception) {}
+            }
+
+            // 2. Rename staged temp file to target file
             val renamed = tempFile.renameTo(targetFile)
             if (!renamed) {
+                // Rollback model file immediately
+                if (backupFile.exists()) {
+                    backupFile.renameTo(targetFile)
+                }
                 tempFile.delete()
-                return@withContext AiResult.Failure(AiError.RuntimeError("Failed to rename temporary model file"))
+                return@withContext AiResult.Failure(AiError.RuntimeError("Failed to install staged model file"))
             }
 
-            // Write or update manifest.json with SHA-256 and metadata
+            // 3. Write or update manifest.json with SHA-256 and metadata
             try {
                 val manifestJson = org.json.JSONObject().apply {
                     put("modelId", "gemma-3-1b-it")
@@ -226,10 +246,27 @@ class ModelAssetManagerImpl @Inject constructor(
                     put("format", targetExtension.removePrefix("."))
                     put("timestamp", System.currentTimeMillis())
                 }
-                File(modelsDir, "manifest.json").writeText(manifestJson.toString(2))
+                manifestFile.writeText(manifestJson.toString(2))
             } catch (e: Exception) {
-                AiLogger.w("Failed to persist manifest.json: ${e.message}")
+                AiLogger.w("Failed to persist manifest.json, rolling back model install: ${e.message}")
+                // Rollback on failure!
+                targetFile.delete()
+                if (backupFile.exists()) {
+                    backupFile.renameTo(targetFile)
+                }
+                if (manifestBackupFile.exists()) {
+                    try {
+                        manifestBackupFile.copyTo(manifestFile, overwrite = true)
+                        manifestBackupFile.delete()
+                    } catch (ex: Exception) {}
+                }
+                tempFile.delete()
+                return@withContext AiResult.Failure(AiError.RuntimeError("Failed to persist manifest: ${e.message}"))
             }
+
+            // 4. Install succeeded! Clean up backup files.
+            if (backupFile.exists()) backupFile.delete()
+            if (manifestBackupFile.exists()) manifestBackupFile.delete()
 
             AiLogger.i("Model successfully imported and verified: ${targetFile.length()} bytes (SHA-256: $computedChecksum)")
             AiResult.Success(targetFile)

@@ -54,6 +54,19 @@ class EmergencyRagServiceImpl @Inject constructor(
             )
         }
 
+        if (com.meshlink.app.ai.security.AiSafetyGuard.isHarmfulRequest(query)) {
+            AiLogger.w("Harmful/dangerous request detected in emergency query. Safely refusing.")
+            val latency = System.currentTimeMillis() - startTime
+            return@withContext AiResult.Success(
+                RagResponse(
+                    answer = com.meshlink.app.ai.security.AiSafetyGuard.HARMFUL_CONTENT_REFUSAL,
+                    citations = emptyList(),
+                    hasSufficientEvidence = false,
+                    latencyMs = latency
+                )
+            )
+        }
+
         // 1. Retrieve all guides from repository
         val allGuides = guideRepository.getAllGuides().first()
         if (allGuides.isEmpty()) {

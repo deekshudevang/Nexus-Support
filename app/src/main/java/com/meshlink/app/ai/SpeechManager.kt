@@ -46,7 +46,14 @@ class SpeechManager @Inject constructor(
         }
     }
 
+    private val prefs by lazy {
+        context.getSharedPreferences("ai_speech_prefs", Context.MODE_PRIVATE)
+    }
+
     private var speechRate: Float = DEFAULT_SPEECH_RATE
+
+    val isSpeaking: Boolean
+        get() = tts?.isSpeaking == true
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
@@ -54,6 +61,7 @@ class SpeechManager @Inject constructor(
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                 AiLogger.e("TTS: Language not supported")
             } else {
+                speechRate = prefs.getFloat(KEY_SPEECH_RATE, DEFAULT_SPEECH_RATE).coerceIn(0.5f, 2.0f)
                 tts?.setSpeechRate(speechRate)
                 tts?.setPitch(1.0f)
                 isTtsInitialized = true
@@ -66,6 +74,7 @@ class SpeechManager @Inject constructor(
 
     fun setSpeechRate(rate: Float) {
         speechRate = rate.coerceIn(0.5f, 2.0f)
+        prefs.edit().putFloat(KEY_SPEECH_RATE, speechRate).apply()
         if (isTtsInitialized) {
             tts?.setSpeechRate(speechRate)
         }
@@ -111,6 +120,7 @@ class SpeechManager @Inject constructor(
 
     companion object {
         const val DEFAULT_SPEECH_RATE = 0.85f // Calibrated calm conversational pacing (prevents 2x rushed speech)
+        const val KEY_SPEECH_RATE = "pref_speech_rate"
     }
     
     fun stopSpeaking() {

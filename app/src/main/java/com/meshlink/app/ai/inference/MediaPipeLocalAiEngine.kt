@@ -8,9 +8,12 @@ import com.meshlink.app.ai.model.AiResult
 import com.meshlink.app.ai.security.AiLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
+import com.google.mediapipe.tasks.genai.llminference.ProgressListener
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -49,6 +52,8 @@ class MediaPipeLocalAiEngine @Inject constructor(
                 val options = LlmInference.LlmInferenceOptions.builder()
                     .setModelPath(modelFile.absolutePath)
                     .setMaxTokens(2048)
+                    .setMaxTopK(40)
+                    .setPreferredBackend(LlmInference.Backend.GPU)
                     .build()
 
                 llmInference?.close()
@@ -97,9 +102,38 @@ class MediaPipeLocalAiEngine @Inject constructor(
         }
     }
 
-    override fun generateStream(prompt: String): Flow<AiResult<String>> = flow {
-        // Fallback for standard generate when streaming callback is handled synchronously
-        emit(generate(prompt))
+    override fun generateStream(prompt: String): Flow<AiResult<String>> = kotlinx.coroutines.flow.callbackFlow {
+        val engine = synchronized(inferenceLock) { llmInference }
+        if (engine == null) {
+            trySend(AiResult.Failure(AiError.ModelMissing))
+            close()
+            return@callbackFlow
+        }
+
+        try {
+            val listener = com.google.mediapipe.tasks.genai.llminference.ProgressListener<String> { partialResult, done ->
+                if (!partialResult.isNullOrEmpty()) {
+                    trySend(AiResult.Success(partialResult))
+                }
+                if (done) {
+                    close()
+                }
+            }
+
+            val future = engine.generateResponseAsync(prompt, listener)
+
+            awaitClose {
+                try {
+                    future.cancel(true)
+                } catch (e: Throwable) {
+                    AiLogger.w("Failed to cancel native streaming future: ${e.message}")
+                }
+            }
+        } catch (e: Throwable) {
+            AiLogger.e(e, "Error initiating streaming generation")
+            trySend(AiResult.Failure(AiError.RuntimeError(e.message ?: "Streaming error")))
+            close()
+        }
     }
 
     override suspend fun unload() = withContext(Dispatchers.IO) {

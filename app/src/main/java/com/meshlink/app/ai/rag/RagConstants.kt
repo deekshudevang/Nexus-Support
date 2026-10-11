@@ -87,35 +87,49 @@ object RagConstants {
                     list
                 }
             }
-            .takeLast(maxTurns * 2)
+        // Budget-based context selection:
+        // Rather than hard-coded 350-char truncation, retain complete turns within a character budget (approx 3500 chars / ~900 tokens)
+        val candidateTurns = priorHistory.takeLast(maxTurns * 2)
+        val budgetedTurns = mutableListOf<Pair<String, Boolean>>()
+        var charCount = 0
+        val maxBudgetChars = 3500
 
-        if (priorHistory.isEmpty()) {
+        // Select turns from newest to oldest up to budget
+        for (turn in candidateTurns.reversed()) {
+            val turnLength = turn.first.length
+            if (charCount + turnLength <= maxBudgetChars || budgetedTurns.isEmpty()) {
+                budgetedTurns.add(0, turn)
+                charCount += turnLength
+            } else {
+                break
+            }
+        }
+
+        if (budgetedTurns.isEmpty()) {
             append("### USER QUERY:\n")
             append(query.trim())
             append("<end_of_turn>\n")
             append("<start_of_turn>model\n")
         } else {
-            // Replay prior alternating turns, compactly bounding prior model responses
-            val firstIsUser = priorHistory.first().second
+            // Replay prior alternating turns, maintaining full response fidelity within budget
+            val firstIsUser = budgetedTurns.first().second
             if (firstIsUser) {
                 append("### USER QUERY:\n")
-                append(priorHistory.first().first.trim())
+                append(budgetedTurns.first().first.trim())
                 append("<end_of_turn>\n")
-                for (i in 1 until priorHistory.size) {
-                    val (rawText, isUser) = priorHistory[i]
-                    val text = if (!isUser && rawText.length > 350) rawText.take(350) + "..." else rawText
+                for (i in 1 until budgetedTurns.size) {
+                    val (rawText, isUser) = budgetedTurns[i]
                     val role = if (isUser) "user" else "model"
                     append("<start_of_turn>$role\n")
-                    append(text.trim())
+                    append(rawText.trim())
                     append("<end_of_turn>\n")
                 }
             } else {
                 append("Session active.<end_of_turn>\n")
-                for ((rawText, isUser) in priorHistory) {
-                    val text = if (!isUser && rawText.length > 350) rawText.take(350) + "..." else rawText
+                for ((rawText, isUser) in budgetedTurns) {
                     val role = if (isUser) "user" else "model"
                     append("<start_of_turn>$role\n")
-                    append(text.trim())
+                    append(rawText.trim())
                     append("<end_of_turn>\n")
                 }
             }

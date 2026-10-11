@@ -22,6 +22,8 @@ import javax.inject.Inject
 import com.meshlink.app.ai.domain.AiRoute
 import com.meshlink.app.ai.domain.AiRoutingPolicy
 import com.meshlink.app.ai.domain.LocalAiEngine
+import com.meshlink.app.ai.model.AiError
+import com.meshlink.app.ai.security.AiLogger
 import com.meshlink.app.ai.security.AiSafetyGuard
 import java.io.File
 
@@ -106,9 +108,41 @@ class AiAssistantViewModel @Inject constructor(
         }
     }
 
+    private var currentGenerationJob: kotlinx.coroutines.Job? = null
+
+    fun cancelGeneration() {
+        currentGenerationJob?.cancel()
+        currentGenerationJob = null
+        _isGenerating.value = false
+        speechManager.stopSpeaking()
+    }
+
+    fun stopSpeaking() {
+        speechManager.stopSpeaking()
+    }
+
+    fun setSpeechRate(rate: Float) {
+        speechManager.setSpeechRate(rate)
+    }
+
+    fun getSpeechRate(): Float = speechManager.getSpeechRate()
+
+    fun clearConversation() {
+        cancelGeneration()
+        _messages.value = listOf(
+            ChatMessage(
+                text = "Welcome to Nexus Offline Emergency AI. Ask any question, emergency guidance, or technical assistance.",
+                isUser = false
+            )
+        )
+    }
+
     fun sendMessage(query: String) {
         if (query.isBlank() || _isGenerating.value) return
+        submitQueryInternal(query)
+    }
 
+    private fun submitQueryInternal(query: String) {
         // 1. If Offline AI feature flag is OFF, post clear user feedback without invoking the model
         if (!isAiEnabled.value) {
             val userMsg = ChatMessage(text = query, isUser = true)
@@ -133,99 +167,213 @@ class AiAssistantViewModel @Inject constructor(
             return
         }
 
+        // 3. Prompt injection check
+        if (AiSafetyGuard.isPromptInjection(query)) {
+            val userMsg = ChatMessage(text = query, isUser = true)
+            val aiMsg = ChatMessage(
+                text = AiSafetyGuard.INJECTION_REFUSAL_MESSAGE,
+                isUser = false,
+                isWarning = true
+            )
+            _messages.value = _messages.value + userMsg + aiMsg
+            return
+        }
+
         val userMsg = ChatMessage(text = query, isUser = true)
         _messages.value = _messages.value + userMsg
         _isGenerating.value = true
 
         val decision = routingPolicy.route(query, _messages.value)
 
-        viewModelScope.launch {
+        currentGenerationJob = viewModelScope.launch {
             try {
-                if (decision.route == AiRoute.EMERGENCY_GUIDANCE) {
-                    val result = ragService.answerQuery(query)
-                    when (result) {
-                        is AiResult.Success -> {
-                            val response = result.data
-                            val isExcerpt = response.answer.startsWith(RagConstants.GUIDE_EXCERPT_PREFIX)
+                when (decision.route) {
+                    AiRoute.EMERGENCY_GUIDANCE -> {
+                        val result = ragService.answerQuery(query)
+                        when (result) {
+                            is AiResult.Success -> {
+                                val response = result.data
+                                val isExcerpt = response.answer.startsWith(RagConstants.GUIDE_EXCERPT_PREFIX)
+                                val aiMsg = ChatMessage(
+                                    text = response.answer,
+                                    isUser = false,
+                                    citations = response.citations,
+                                    isExcerptOnly = isExcerpt,
+                                    showModelImport = isExcerpt
+                                )
+                                _messages.value = _messages.value + aiMsg
+                                speechManager.speak(response.answer)
+                            }
+                            is AiResult.Failure -> {
+                                val errorMsg = ChatMessage(
+                                    text = "[AI Error]: ${result.error.userRecoveryText}. Please consult verified emergency protocols directly.",
+                                    isUser = false,
+                                    isWarning = true
+                                )
+                                _messages.value = _messages.value + errorMsg
+                            }
+                        }
+                    }
+
+                    AiRoute.MIXED -> {
+                        // Mixed: Retrieve verified local emergency knowledge
+                        val ragResult = ragService.answerQuery(query)
+                        val (contextPassages, citations) = if (ragResult is AiResult.Success && ragResult.data.hasSufficientEvidence) {
+                            listOf(ragResult.data.answer) to ragResult.data.citations
+                        } else {
+                            emptyList<String>() to emptyList()
+                        }
+
+                        if (coordinator.state.value != AiCapabilityState.READY) {
+                            // If model is not ready, surface grounded guide excerpt directly
+                            if (ragResult is AiResult.Success && ragResult.data.hasSufficientEvidence) {
+                                val aiMsg = ChatMessage(
+                                    text = ragResult.data.answer,
+                                    isUser = false,
+                                    citations = citations,
+                                    isExcerptOnly = true,
+                                    showModelImport = true
+                                )
+                                _messages.value = _messages.value + aiMsg
+                                speechManager.speak(ragResult.data.answer)
+                            } else {
+                                val aiMsg = ChatMessage(
+                                    text = "AI model not installed: Please install or import the Gemma model in Settings to enable combined general and emergency offline reasoning.",
+                                    isUser = false,
+                                    isExcerptOnly = true,
+                                    showModelImport = true
+                                )
+                                _messages.value = _messages.value + aiMsg
+                            }
+                            return@launch
+                        }
+
+                        // Local model is ready: build conversation prompt incorporating verified emergency passages
+                        val historyPairs = _messages.value.map { it.text to it.isUser }
+                        val prompt = RagConstants.buildConversationPrompt(
+                            query = query,
+                            history = historyPairs,
+                            contextPassages = contextPassages
+                        )
+
+                        executeStreamingGeneration(prompt, citations)
+                    }
+
+                    AiRoute.GENERAL_CONVERSATION -> {
+                        if (coordinator.state.value != AiCapabilityState.READY) {
                             val aiMsg = ChatMessage(
-                                text = response.answer,
+                                text = "AI model not installed: Please install or import the Gemma model in Settings to enable general-purpose offline conversation.",
                                 isUser = false,
-                                citations = response.citations,
-                                isExcerptOnly = isExcerpt,
-                                showModelImport = isExcerpt
+                                isExcerptOnly = true,
+                                showModelImport = true
                             )
                             _messages.value = _messages.value + aiMsg
-                            speechManager.speak(response.answer)
+                            return@launch
                         }
-                        is AiResult.Failure -> {
-                            val errorMsg = ChatMessage(
-                                text = "[AI Error]: ${result.error.userRecoveryText}. Please consult verified emergency protocols directly.",
-                                isUser = false,
-                                isWarning = true
-                            )
-                            _messages.value = _messages.value + errorMsg
-                        }
-                    }
-                } else {
-                    // Route A: General Conversation (and Route C mixed general handling)
-                    if (AiSafetyGuard.isPromptInjection(query)) {
-                        val aiMsg = ChatMessage(
-                            text = AiSafetyGuard.INJECTION_REFUSAL_MESSAGE,
-                            isUser = false,
-                            isWarning = true
-                        )
-                        _messages.value = _messages.value + aiMsg
-                        return@launch
-                    }
 
-                    if (coordinator.state.value != AiCapabilityState.READY) {
-                        val aiMsg = ChatMessage(
-                            text = "AI model not installed: Please install or import the Gemma model in Settings to enable general-purpose offline conversation.",
-                            isUser = false,
-                            isExcerptOnly = true,
-                            showModelImport = true
-                        )
-                        _messages.value = _messages.value + aiMsg
-                        return@launch
-                    }
+                        val historyPairs = _messages.value.map { it.text to it.isUser }
+                        val prompt = RagConstants.buildConversationPrompt(query, historyPairs)
 
-                    val historyPairs = _messages.value.map { it.text to it.isUser }
-                    val prompt = RagConstants.buildConversationPrompt(query, historyPairs)
-
-                    val inferenceResult = coordinator.executeInference(timeoutMs = 120000L) {
-                        localAiEngine.generate(prompt)
-                    }
-
-                    when (inferenceResult) {
-                        is AiResult.Success -> {
-                            val aiMsg = ChatMessage(
-                                text = inferenceResult.data,
-                                isUser = false,
-                                citations = emptyList()
-                            )
-                            _messages.value = _messages.value + aiMsg
-                            speechManager.speak(inferenceResult.data)
-                        }
-                        is AiResult.Failure -> {
-                            val errorMsg = ChatMessage(
-                                text = "[AI Error]: ${inferenceResult.error.userRecoveryText}. Tap to retry.",
-                                isUser = false,
-                                isWarning = true
-                            )
-                            _messages.value = _messages.value + errorMsg
-                        }
+                        executeStreamingGeneration(prompt, emptyList())
                     }
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
+                AiLogger.i("Generation coroutine cancelled")
                 throw e
             } catch (e: Exception) {
                 _messages.value = _messages.value + ChatMessage(
-                    text = "[Error]: Failed to process emergency guidance. Tap to retry.",
+                    text = "[Error]: Failed to process request. Tap to retry.",
                     isUser = false,
                     isWarning = true
                 )
             } finally {
                 _isGenerating.value = false
+                currentGenerationJob = null
+            }
+        }
+    }
+
+    private suspend fun executeStreamingGeneration(
+        prompt: String,
+        citations: List<EmergencySourceCitation>
+    ) {
+        val placeholder = ChatMessage(
+            text = "",
+            isUser = false,
+            citations = citations
+        )
+        _messages.value = _messages.value + placeholder
+
+        val accumulated = StringBuilder()
+
+        val inferenceResult = coordinator.executeInference(timeoutMs = 120000L) {
+            var streamFailure: AiError? = null
+            try {
+                localAiEngine.generateStream(prompt).collect { chunkResult ->
+                    when (chunkResult) {
+                        is AiResult.Success -> {
+                            accumulated.append(chunkResult.data)
+                            val currentList = _messages.value
+                            if (currentList.isNotEmpty() && !currentList.last().isUser) {
+                                _messages.value = currentList.dropLast(1) + currentList.last().copy(text = accumulated.toString())
+                            }
+                        }
+                        is AiResult.Failure -> {
+                            streamFailure = chunkResult.error
+                        }
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                streamFailure = AiError.RuntimeError(e.message ?: "Streaming error")
+            }
+
+            val failure = streamFailure
+            if (failure != null && accumulated.isEmpty()) {
+                AiResult.Failure(failure)
+            } else if (accumulated.isNotEmpty()) {
+                AiResult.Success(accumulated.toString())
+            } else {
+                // If stream emitted no text (e.g. mocked or non-streaming engine), delegate to generate
+                val fallbackResult = localAiEngine.generate(prompt)
+                if (fallbackResult is AiResult.Success) {
+                    accumulated.append(fallbackResult.data)
+                    val currentList = _messages.value
+                    if (currentList.isNotEmpty() && !currentList.last().isUser) {
+                        _messages.value = currentList.dropLast(1) + currentList.last().copy(text = fallbackResult.data)
+                    }
+                }
+                fallbackResult
+            }
+        }
+
+        when (inferenceResult) {
+            is AiResult.Success -> {
+                val finalText = inferenceResult.data.ifBlank { accumulated.toString() }
+                val currentList = _messages.value
+                if (currentList.isNotEmpty() && !currentList.last().isUser) {
+                    _messages.value = currentList.dropLast(1) + currentList.last().copy(
+                        text = finalText,
+                        citations = citations
+                    )
+                }
+                if (finalText.isNotBlank()) {
+                    speechManager.speak(finalText)
+                }
+            }
+            is AiResult.Failure -> {
+                val currentList = _messages.value
+                val errorMsg = ChatMessage(
+                    text = "[AI Error]: ${inferenceResult.error.userRecoveryText}. Tap to retry.",
+                    isUser = false,
+                    isWarning = true
+                )
+                if (currentList.isNotEmpty() && !currentList.last().isUser && currentList.last().text.isEmpty()) {
+                    _messages.value = currentList.dropLast(1) + errorMsg
+                } else {
+                    _messages.value = currentList + errorMsg
+                }
             }
         }
     }
@@ -297,12 +445,15 @@ class AiAssistantViewModel @Inject constructor(
                         text = "No clear hazard identified in the picture. Please describe your situation directly.",
                         isUser = false
                     )
+                    _isGenerating.value = false
                     return@launch
                 }
 
                 val query = "Detected: ${labels.joinToString(", ")}. What emergency steps should be taken?"
-                sendMessage(query)
+                _isGenerating.value = false
+                submitQueryInternal(query)
             } catch (e: kotlinx.coroutines.CancellationException) {
+                _isGenerating.value = false
                 throw e
             } catch (e: Exception) {
                 _messages.value = _messages.value + ChatMessage(
@@ -310,7 +461,6 @@ class AiAssistantViewModel @Inject constructor(
                     isUser = false,
                     isWarning = true
                 )
-            } finally {
                 _isGenerating.value = false
             }
         }
@@ -318,6 +468,7 @@ class AiAssistantViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
+        cancelGeneration()
         speechManager.cleanup()
     }
 }

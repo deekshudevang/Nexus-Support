@@ -14,6 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Send
@@ -76,11 +78,26 @@ fun AiAssistantScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Nexus Offline Emergency AI", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Nexus Offline AI Assistant", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        val statusText = when {
+                            !isAiEnabled -> "AI Disabled (Enable in Settings)"
+                            isGenerating -> "Generating local response..."
+                            capabilityState == com.meshlink.app.ai.model.AiCapabilityState.READY -> "Offline Ready (On-Device Model Active)"
+                            capabilityState == com.meshlink.app.ai.model.AiCapabilityState.NOT_INSTALLED -> "Emergency Guides Only (Model Not Installed)"
+                            capabilityState == com.meshlink.app.ai.model.AiCapabilityState.VERIFYING -> "Verifying model integrity..."
+                            capabilityState == com.meshlink.app.ai.model.AiCapabilityState.LOADING -> "Loading model into memory..."
+                            capabilityState == com.meshlink.app.ai.model.AiCapabilityState.LOW_MEMORY -> "Low Device Memory"
+                            capabilityState == com.meshlink.app.ai.model.AiCapabilityState.ERROR -> "Inference Error"
+                            else -> "Status: ${capabilityState.name}"
+                        }
                         Text(
-                            text = if (!isAiEnabled) "AI Disabled (Kill Switch Active)" else "Status: ${capabilityState.name}",
+                            text = statusText,
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (isAiEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            color = when {
+                                !isAiEnabled -> MaterialTheme.colorScheme.error
+                                capabilityState == com.meshlink.app.ai.model.AiCapabilityState.READY -> MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.tertiary
+                            }
                         )
                     }
                 },
@@ -90,6 +107,16 @@ fun AiAssistantScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { viewModel.stopSpeaking() }
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Stop Voice Playback")
+                    }
+                    IconButton(
+                        onClick = { viewModel.clearConversation() }
+                    ) {
+                        Icon(Icons.Default.Clear, contentDescription = "Clear Chat")
+                    }
                     IconButton(
                         onClick = { viewModel.summarizeRecentMeshMessages() },
                         enabled = !isGenerating && isAiEnabled
@@ -162,6 +189,12 @@ fun AiAssistantScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(
+                                onClick = { viewModel.cancelGeneration() }
+                            ) {
+                                Text("Cancel", style = MaterialTheme.typography.labelMedium)
+                            }
                         }
                     }
                 }
