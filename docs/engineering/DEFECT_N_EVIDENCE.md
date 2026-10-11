@@ -70,3 +70,44 @@ Governing standard: Execution Control F. All entries must reflect actual command
 - **Candidate Commit Message:** `fix(sos): N1 robust JSON serialization, payload size bounding, and golden wire compatibility`
 
 ---
+
+## Step 2: N2 Location
+
+- **Data Path Trace:**
+  `SosViewModel (acquires location, validates finite and bounds [-90,90], [-180,180], excludes (0,0))`
+  `-> nearbyRepository.sendSos(packetData.toJson())`
+  `-> NearbyRepositoryImpl.sendSos(content)`
+  `-> meshRouter.buildSos(content, peers) -> dispatchToNearby(forwardTargets)`
+  `-> BLE beacon encoding via SosBeaconCodec.encode(deviceId, lat, lon, emergencyType, severity, nonce)`
+  `-> SosBeaconAdvertiser.startAdvertising(encoded)`
+  `-> [BLE over-the-air broadcast] -> SosBeaconAdvertiser.startScanning()`
+  `-> detectedBeacons.collect { beacon -> ... }`
+  `-> MeshRouter.route("sos-beacon", domainPacket, ...)`
+  `-> persistence in Room (MessageEntity via messageRepository.insertMessage)`
+  `-> deviceRepository.updateLocation (only called if valid, finite, and not (0,0))`
+  `-> Map / Notification / UI (if lastLatitude is null -> shows "Location unavailable" and does NOT plot on map)`.
+- **Hypotheses Tested & Results:**
+  - *`NearbyRepositoryImpl.sendSos()` initializes `beaconLat`/`beaconLon` to 0.0 and passes them to beacon encoder when coordinates are absent/null:* REPRODUCED & FIXED. Lines 673-674 previously initialized `var beaconLat = 0.0`, `var beaconLon = 0.0`. If JSON coordinates were absent or null, it encoded `0.0, 0.0` into the beacon. Now changed to `var beaconLat: Double? = null`, `var beaconLon: Double? = null`, requiring both coordinates to be non-null, finite, and within valid ranges `[-90, 90]` and `[-180, 180]`, with `(0.0, 0.0)` strictly treated as unavailable.
+  - *No finite/range validation before encoding:* REPRODUCED & FIXED. Added bounds checking `lat in -90.0..90.0` and `lon in -180.0..180.0` and `!isNaN() && !isInfinite()`.
+  - *Beacon with unavailable location:* Encoded using `Float.NaN` in the IEEE 754 4-byte float fields. The wire size remains strictly 18 bytes (or 19 bytes with nonce) with CRC-16 integrity check preserved. When an old receiver reads `Float.NaN`, it formats `"lat": NaN`, and `MeshRouter`'s `optDouble("lat", Double.NaN).isNaN()` evaluates to true, causing `extractedLat = null`, completely preventing Null Island (0,0) plotting.
+  - *Legacy (0.0, 0.0) policy:* Treated as unavailable because GPS at the Gulf of Guinea (0.0, 0.0) is indistinguishable from uninitialized/defaulted coordinates.
+  - *N2 tests used mocked repositories only:* REPRODUCED & FIXED. Created `SosLocationPipelineTest.kt` using production `MeshRouter`, production `SosBeaconCodec`, production `DeviceRepositoryImpl`, production `MessageRepositoryImpl`, and a real in-memory Room database (`AppDatabase`).
+- **Before-Fix Failure Evidence:**
+  - `SosLocationPipelineTest.kt` failed compilation and verification: `SosBeaconCodec.encode` rejected nullable coordinates (`Null cannot be a value of a non-null type 'kotlin.Double'`), `SosBeacon` lacked `hasValidLocation`, and `NearbyRepositoryImpl` passed non-null default 0.0 coordinates.
+- **After-Fix Verification Evidence:**
+  - Command: `.\gradlew.bat :core:mesh:testDebugUnitTest --console=plain` (task-6726)
+  - Exit Code: 0 (BUILD SUCCESSFUL in 1m 5s)
+  - Actionable Tasks: 21 executed, 66 up-to-date
+- **Fresh JUnit Test Results (`core/mesh/build/test-results/testDebugUnitTest/`):**
+  - Total Tests: 74
+  - Failures: 0
+  - Errors: 0
+  - Skipped: 0
+  - `SosLocationPipelineTest` Tests:
+    1. `golden test - raw IEEE 754 float reader on unavailable beacon bytes yields NaN and never plots` (Passed)
+    2. `real DB integration - SOS routes and persists in Room without plotting missing or invalid GPS` (Passed)
+    3. `SosBeaconCodec encodes sentinel when location is null, out of range, or legacy 0_0` (Passed)
+  - `SosBeaconCodecTest` Tests: 5 passed (symmetric encode/decode, bad size, bad CRC, v1 with nonce, non-18/19 sizes).
+- **Candidate Commit Message:** `fix(sos): N2 explicit nullable location, coordinate bounds validation, and sentinel encoding`
+
+---

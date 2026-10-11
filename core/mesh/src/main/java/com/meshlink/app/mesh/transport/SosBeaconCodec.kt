@@ -37,18 +37,21 @@ object SosBeaconCodec {
 
     data class SosBeacon(
         val deviceIdHash: Int,
-        val latitude: Float,
-        val longitude: Float,
+        val latitude: Float?,
+        val longitude: Float?,
         val emergencyType: EmergencyType,
         val severity: Int,
         val timestampDelta: Int,
         val nonce: Byte? = null
-    )
+    ) {
+        val hasValidLocation: Boolean
+            get() = latitude != null && longitude != null
+    }
 
     fun encode(
         deviceId: String,
-        latitude: Double,
-        longitude: Double,
+        latitude: Double?,
+        longitude: Double?,
         emergencyType: EmergencyType,
         severity: Int,
         nowMs: Long = System.currentTimeMillis(),
@@ -58,8 +61,20 @@ object SosBeaconCodec {
         val buf = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN)
 
         buf.putInt(crc32(deviceId.toByteArray()))
-        buf.putFloat(latitude.toFloat())
-        buf.putFloat(longitude.toFloat())
+
+        val isValidLat = latitude != null && !latitude.isNaN() && !latitude.isInfinite() && latitude in -90.0..90.0
+        val isValidLon = longitude != null && !longitude.isNaN() && !longitude.isInfinite() && longitude in -180.0..180.0
+        val isNullIsland = latitude == 0.0 && longitude == 0.0
+
+        if (isValidLat && isValidLon && !isNullIsland) {
+            buf.putFloat(latitude!!.toFloat())
+            buf.putFloat(longitude!!.toFloat())
+        } else {
+            // Out-of-bounds / unavailable sentinel: Float.NaN in IEEE 754 float slots
+            buf.putFloat(Float.NaN)
+            buf.putFloat(Float.NaN)
+        }
+
         buf.put(emergencyType.code)
         buf.put(severity.coerceIn(1, 5).toByte())
 
@@ -91,12 +106,22 @@ object SosBeaconCodec {
         if (expectedCrc != actualCrc) return null
 
         val hash = buf.int
-        val lat = buf.float
-        val lon = buf.float
+        val rawLat = buf.float
+        val rawLon = buf.float
         val type = EmergencyType.fromCode(buf.get())
         val sev = buf.get().toInt()
         val delta = buf.short.toInt() and 0xFFFF
         val nonce = if (data.size == BEACON_V1_SIZE) data[18] else null
+
+        val isValidLat = !rawLat.isNaN() && !rawLat.isInfinite() && rawLat in -90.0f..90.0f
+        val isValidLon = !rawLon.isNaN() && !rawLon.isInfinite() && rawLon in -180.0f..180.0f
+        val isNullIsland = rawLat == 0.0f && rawLon == 0.0f
+
+        val (lat, lon) = if (isValidLat && isValidLon && !isNullIsland) {
+            rawLat to rawLon
+        } else {
+            null to null
+        }
 
         return SosBeacon(hash, lat, lon, type, sev, delta, nonce)
     }

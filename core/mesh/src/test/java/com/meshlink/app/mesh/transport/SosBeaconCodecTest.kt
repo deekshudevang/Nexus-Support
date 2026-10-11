@@ -23,8 +23,8 @@ class SosBeaconCodecTest {
         assertNotNull(decoded)
         
         // Use a small delta for float comparison
-        assertEquals(37.7749f, decoded!!.latitude, 0.001f)
-        assertEquals(-122.4194f, decoded.longitude, 0.001f)
+        assertEquals(37.7749f, decoded!!.latitude!!, 0.001f)
+        assertEquals(-122.4194f, decoded.longitude!!, 0.001f)
         assertEquals(SosBeaconCodec.EmergencyType.MEDICAL, decoded.emergencyType)
         assertEquals(4, decoded.severity)
     }
@@ -67,8 +67,8 @@ class SosBeaconCodecTest {
 
         val decoded = SosBeaconCodec.decode(encoded)
         assertNotNull(decoded)
-        assertEquals(40.7128f, decoded!!.latitude, 0.001f)
-        assertEquals(-74.0060f, decoded.longitude, 0.001f)
+        assertEquals(40.7128f, decoded!!.latitude!!, 0.001f)
+        assertEquals(-74.0060f, decoded.longitude!!, 0.001f)
         assertEquals(SosBeaconCodec.EmergencyType.FIRE, decoded.emergencyType)
         assertEquals(5, decoded.severity)
         assertEquals(nonce, decoded.nonce)

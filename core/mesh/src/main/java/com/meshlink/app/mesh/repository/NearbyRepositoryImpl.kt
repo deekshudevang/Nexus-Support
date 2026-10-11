@@ -326,9 +326,11 @@ class NearbyRepositoryImpl @Inject constructor(
         // Listen to SOS Beacons
         scope.launch {
             sosBeaconAdvertiser.detectedBeacons.collect { beacon ->
-                val beaconJson = """
-                    {"emergencyType": "${beacon.emergencyType.name}", "severity": ${beacon.severity}, "lat": ${beacon.latitude}, "lon": ${beacon.longitude}}
-                """.trimIndent()
+                val beaconJson = if (beacon.hasValidLocation && beacon.latitude != null && beacon.longitude != null) {
+                    """{"emergencyType": "${beacon.emergencyType.name}", "severity": ${beacon.severity}, "lat": ${beacon.latitude}, "lon": ${beacon.longitude}}"""
+                } else {
+                    """{"emergencyType": "${beacon.emergencyType.name}", "severity": ${beacon.severity}}"""
+                }.trimIndent()
                 
                 val domainPacket = MeshPacket(
                     senderId = beacon.deviceIdHash.toString(),
@@ -670,8 +672,8 @@ class NearbyRepositoryImpl @Inject constructor(
             }
             
             // Phase 8: Start BLE beacon advertising using authoritative parameters from payload if present
-            var beaconLat = 0.0
-            var beaconLon = 0.0
+            var beaconLat: Double? = null
+            var beaconLon: Double? = null
             var emergencyType = com.meshlink.app.mesh.transport.SosBeaconCodec.EmergencyType.MEDICAL
             var severity = 5
 
@@ -681,11 +683,24 @@ class NearbyRepositoryImpl @Inject constructor(
                     val json = org.json.JSONObject(trimmed)
                     if (json.has("lat") || json.has("latitude")) {
                         val parsedLat = if (json.has("lat")) json.optDouble("lat", Double.NaN) else json.optDouble("latitude", Double.NaN)
-                        if (!parsedLat.isNaN()) beaconLat = parsedLat
+                        if (!parsedLat.isNaN() && !parsedLat.isInfinite() && parsedLat in -90.0..90.0) {
+                            beaconLat = parsedLat
+                        }
                     }
                     if (json.has("lon") || json.has("longitude")) {
                         val parsedLon = if (json.has("lon")) json.optDouble("lon", Double.NaN) else json.optDouble("longitude", Double.NaN)
-                        if (!parsedLon.isNaN()) beaconLon = parsedLon
+                        if (!parsedLon.isNaN() && !parsedLon.isInfinite() && parsedLon in -180.0..180.0) {
+                            beaconLon = parsedLon
+                        }
+                    }
+                    // Legacy (0.0, 0.0) policy: treated as unavailable location
+                    if (beaconLat == 0.0 && beaconLon == 0.0) {
+                        beaconLat = null
+                        beaconLon = null
+                    }
+                    if (beaconLat == null || beaconLon == null) {
+                        beaconLat = null
+                        beaconLon = null
                     }
                     if (json.has("emergencyType")) {
                         val typeStr = json.optString("emergencyType", "")
