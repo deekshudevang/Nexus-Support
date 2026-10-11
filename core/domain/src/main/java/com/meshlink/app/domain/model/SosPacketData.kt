@@ -14,8 +14,8 @@ data class SosPacketData(
     val senderName: String = "",
     val emergencyType: EmergencyType = EmergencyType.OTHER,
     val severity: Int = 3, // 1-5 scale
-    val latitude: Double = 0.0,
-    val longitude: Double = 0.0,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
     val message: String = "",
     val timestamp: Long = System.currentTimeMillis(),
     val hopCount: Int = 0,
@@ -29,20 +29,86 @@ data class SosPacketData(
         PENDING, RELAYED, DELIVERED, RESPONDED
     }
 
+    val hasValidLocation: Boolean
+        get() = latitude != null && longitude != null &&
+                !latitude.isNaN() && !latitude.isInfinite() &&
+                !longitude.isNaN() && !longitude.isInfinite() &&
+                latitude in -90.0..90.0 && longitude in -180.0..180.0
+
     fun toJson(): String {
-        val sb = StringBuilder("{")
-        sb.append("\"uuid\":\"$uuid\",")
-        sb.append("\"senderId\":\"$senderId\",")
-        sb.append("\"senderName\":\"${senderName.replace("\"", "\\\"")}\",")
-        sb.append("\"emergencyType\":\"${emergencyType.name}\",")
-        sb.append("\"severity\":$severity,")
-        sb.append("\"latitude\":$latitude,")
-        sb.append("\"longitude\":$longitude,")
-        sb.append("\"message\":\"${message.replace("\"", "\\\"")}\",")
-        sb.append("\"timestamp\":$timestamp,")
-        sb.append("\"hopCount\":$hopCount,")
-        sb.append("\"status\":\"${status.name}\"")
-        sb.append("}")
-        return sb.toString()
+        val jsonObj = com.google.gson.JsonObject().apply {
+            addProperty("uuid", uuid)
+            addProperty("senderId", senderId)
+            addProperty("senderName", senderName)
+            addProperty("emergencyType", emergencyType.name)
+            addProperty("severity", severity)
+            if (hasValidLocation) {
+                addProperty("latitude", latitude)
+                addProperty("longitude", longitude)
+            } else {
+                add("latitude", com.google.gson.JsonNull.INSTANCE)
+                add("longitude", com.google.gson.JsonNull.INSTANCE)
+            }
+            addProperty("message", message)
+            addProperty("timestamp", timestamp)
+            addProperty("hopCount", hopCount)
+            addProperty("status", status.name)
+        }
+        return GSON.toJson(jsonObj)
+    }
+
+    companion object {
+        private val GSON = com.google.gson.Gson()
+
+        fun fromJson(jsonStr: String): SosPacketData? {
+            return try {
+                val element = com.google.gson.JsonParser.parseString(jsonStr.trim())
+                if (!element.isJsonObject) return null
+                val obj = element.asJsonObject
+
+                val rawLat = when {
+                    obj.has("latitude") && !obj.get("latitude").isJsonNull -> obj.get("latitude").asDouble
+                    obj.has("lat") && !obj.get("lat").isJsonNull -> obj.get("lat").asDouble
+                    else -> null
+                }
+                val rawLon = when {
+                    obj.has("longitude") && !obj.get("longitude").isJsonNull -> obj.get("longitude").asDouble
+                    obj.has("lon") && !obj.get("lon").isJsonNull -> obj.get("lon").asDouble
+                    else -> null
+                }
+
+                // Explicit coordinate range validation
+                val validLat = if (rawLat != null && !rawLat.isNaN() && !rawLat.isInfinite() && rawLat in -90.0..90.0) rawLat else null
+                val validLon = if (rawLon != null && !rawLon.isNaN() && !rawLon.isInfinite() && rawLon in -180.0..180.0) rawLon else null
+
+                val eType = try {
+                    EmergencyType.valueOf(obj.get("emergencyType")?.asString?.uppercase() ?: "OTHER")
+                } catch (_: Exception) {
+                    EmergencyType.OTHER
+                }
+
+                val status = try {
+                    SosStatus.valueOf(obj.get("status")?.asString?.uppercase() ?: "PENDING")
+                } catch (_: Exception) {
+                    SosStatus.PENDING
+                }
+
+                SosPacketData(
+                    uuid = obj.get("uuid")?.asString ?: UUID.randomUUID().toString(),
+                    senderId = obj.get("senderId")?.asString ?: "",
+                    senderName = obj.get("senderName")?.asString ?: "",
+                    emergencyType = eType,
+                    severity = obj.get("severity")?.asInt ?: 3,
+                    latitude = validLat,
+                    longitude = validLon,
+                    message = obj.get("message")?.asString ?: "",
+                    timestamp = obj.get("timestamp")?.asLong ?: System.currentTimeMillis(),
+                    hopCount = obj.get("hopCount")?.asInt ?: 0,
+                    status = status
+                )
+            } catch (e: Exception) {
+                null
+            }
+        }
     }
 }
