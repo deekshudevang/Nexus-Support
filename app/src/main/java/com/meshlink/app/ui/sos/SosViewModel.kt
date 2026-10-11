@@ -57,6 +57,17 @@ class SosViewModel @Inject constructor(
     private val _nextOrbitalWindowSeconds = MutableStateFlow(8)
     val nextOrbitalWindowSeconds: StateFlow<Int> = _nextOrbitalWindowSeconds
 
+    enum class SosDeliveryState {
+        IDLE,
+        TRANSMITTING,
+        PEER_ACKNOWLEDGED
+    }
+
+    private val _deliveryStatus = MutableStateFlow(SosDeliveryState.IDLE)
+    val deliveryStatus: StateFlow<SosDeliveryState> = _deliveryStatus
+
+    @Volatile private var activeSosMessageId: String? = null
+
     init {
         viewModelScope.launch {
             nearbyRepository.incomingPackets.collect { packet ->
@@ -65,6 +76,12 @@ class SosViewModel @Inject constructor(
                         aiCoordinator.onSosActivated()
                     } catch (t: Throwable) {
                         Timber.w(t, "Failed to notify aiCoordinator of incoming SOS; continuing SOS processing")
+                    }
+                } else if (packet.type == com.meshlink.app.domain.model.MeshPacket.PacketType.ACK) {
+                    val activeId = activeSosMessageId
+                    if (activeId != null && packet.content == activeId) {
+                        Timber.i("SosViewModel: Received peer ACK for active SOS beacon $activeId")
+                        _deliveryStatus.value = SosDeliveryState.PEER_ACKNOWLEDGED
                     }
                 }
             }
@@ -79,6 +96,8 @@ class SosViewModel @Inject constructor(
     fun toggleSos() {
         if (_isBroadcasting.value) {
             _isBroadcasting.value = false
+            _deliveryStatus.value = SosDeliveryState.IDLE
+            activeSosMessageId = null
             sosBeaconAdvertiser.stopAdvertising()
             try {
                 aiCoordinator.onSosDeactivated()
@@ -87,6 +106,7 @@ class SosViewModel @Inject constructor(
             }
         } else {
             _isBroadcasting.value = true
+            _deliveryStatus.value = SosDeliveryState.TRANSMITTING
             try {
                 aiCoordinator.onSosActivated()
             } catch (t: Throwable) {
@@ -150,6 +170,8 @@ class SosViewModel @Inject constructor(
                 longitude = lon,
                 message = message.trim()
             )
+
+            activeSosMessageId = packetData.uuid
 
             // Send via Nearby Mesh (Phase 3 structured SOS)
             nearbyRepository.sendSos(packetData.toJson())

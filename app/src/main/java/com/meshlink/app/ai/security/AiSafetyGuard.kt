@@ -63,6 +63,30 @@ object AiSafetyGuard {
     const val CYBER_ATTACK_REFUSAL =
         "I cannot assist with hacking, exploiting vulnerabilities, or generating offensive attack code. I can, however, explain defensive security best practices such as parameterized queries, prepared statements, and input validation to secure SQL databases against injection attacks."
 
+    // 4. Output hallucination checks:
+    // Models must never hallucinate external dispatching of rescue teams, 911 calls, or confirmed real-world intervention
+    private val emergencyDispatchHallucinationPatterns = listOf(
+        Regex("""(?i)\b(?:i\s+have|i've)\s+(?:called|dispatched|notified|contacted)\s+(?:the\s+)?(?:911|emergency\s+services?|paramedics?|police|first\s+responders?|rescue\s+teams?)\b"""),
+        Regex("""(?i)\b(?:help|rescue|paramedics?|first\s+responders?|emergency\s+services?|rescue\s+teams?)\s+(?:is|are)\s+(?:on\s+the\s+way|en\s+route|dispatched\s+to\s+your\s+location)\b"""),
+        Regex("""(?i)\b(?:your\s+sos\s+has\s+been\s+sent\s+to|transmitted\s+to)\s+(?:the\s+)?(?:911|local\s+authorities|the\s+coast\s+guard)\b""")
+    )
+
+    const val RESCUE_DISPATCH_DISCLAIMER =
+        "\n\n[Safety Advisory: Nexus-Support offline AI operates entirely locally on-device and cannot dispatch emergency services or verify external rescue operations. Use the SOS beacon to broadcast emergency beacons to nearby mesh peers.]"
+
+    /**
+     * Inspects generated text and sanitizes or annotates hallucinated real-world rescue actions.
+     */
+    fun validateOutput(output: String): String {
+        if (output.isBlank()) return output
+
+        var validated = output
+        if (emergencyDispatchHallucinationPatterns.any { it.containsMatchIn(validated) }) {
+            validated += RESCUE_DISPATCH_DISCLAIMER
+        }
+        return validated
+    }
+
     /**
      * Returns true if query contains an adversarial prompt injection or override attempt.
      */

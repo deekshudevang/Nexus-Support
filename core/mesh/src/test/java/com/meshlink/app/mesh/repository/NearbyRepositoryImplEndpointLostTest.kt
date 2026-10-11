@@ -287,5 +287,76 @@ class NearbyRepositoryImplEndpointLostTest {
             ConnectionState.DISCONNECTED,
             stateOf(epId)
         )
+        // Verify disconnectFromEndpoint was invoked for full cleanup
+        io.mockk.verify { connectionsClient.disconnectFromEndpoint(epId) }
+    }
+
+    // -------------------------------------------------------------------------
+    // Phase 2: Stale Peer Detection & Pruning Tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `checkStalePeers disconnects peer when inactive beyond timeoutMs`() {
+        val epId = "ep-stale-1"
+        forceState(epId, ConnectionState.AUTHENTICATED)
+
+        // Set last seen timestamp to 100 seconds ago
+        val lastSeenField = NearbyRepositoryImpl::class.java.getDeclaredField("lastSeenTimestamps")
+        lastSeenField.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val lastSeenMap = lastSeenField.get(repo) as MutableMap<String, Long>
+        val now = 1_000_000L
+        lastSeenMap[epId] = now - 100_000L // 100s ago
+
+        val staleList = repo.checkStalePeers(now = now, timeoutMs = 90_000L)
+
+        assertEquals("Stale peer should be returned in list", listOf(epId), staleList)
+        assertEquals("Stale peer should transition to DISCONNECTED", ConnectionState.DISCONNECTED, stateOf(epId))
+        io.mockk.verify { connectionsClient.disconnectFromEndpoint(epId) }
+    }
+
+    @Test
+    fun `checkStalePeers preserves active peer within timeoutMs`() {
+        val epId = "ep-active-1"
+        forceState(epId, ConnectionState.CONNECTED)
+
+        val lastSeenField = NearbyRepositoryImpl::class.java.getDeclaredField("lastSeenTimestamps")
+        lastSeenField.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val lastSeenMap = lastSeenField.get(repo) as MutableMap<String, Long>
+        val now = 1_000_000L
+        lastSeenMap[epId] = now - 30_000L // active 30s ago
+
+        val staleList = repo.checkStalePeers(now = now, timeoutMs = 90_000L)
+
+        assertEquals("Active peer should not be in stale list", emptyList<String>(), staleList)
+        assertEquals("Active peer should remain CONNECTED", ConnectionState.CONNECTED, stateOf(epId))
+        io.mockk.verify(exactly = 0) { connectionsClient.disconnectFromEndpoint(epId) }
+    }
+
+    @Test
+    fun `pruneDisconnectedEntries removes expired DISCONNECTED entries`() {
+        val epOld = "ep-old-disc"
+        val epRecent = "ep-recent-disc"
+        val epLive = "ep-live"
+
+        forceState(epOld, ConnectionState.DISCONNECTED)
+        forceState(epRecent, ConnectionState.DISCONNECTED)
+        forceState(epLive, ConnectionState.CONNECTED)
+
+        val discField = NearbyRepositoryImpl::class.java.getDeclaredField("disconnectedTimestamps")
+        discField.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val discMap = discField.get(repo) as MutableMap<String, Long>
+
+        val now = 1_000_000L
+        discMap[epOld] = now - 400_000L     // disconnected 400s ago (> 300s)
+        discMap[epRecent] = now - 50_000L   // disconnected 50s ago (<= 300s)
+
+        repo.pruneDisconnectedEntries(now = now, maxAgeMs = 300_000L)
+
+        assertNull("Old disconnected peer should be pruned", stateOf(epOld))
+        assertEquals("Recent disconnected peer should remain in map", ConnectionState.DISCONNECTED, stateOf(epRecent))
+        assertEquals("Live peer should remain in map", ConnectionState.CONNECTED, stateOf(epLive))
     }
 }

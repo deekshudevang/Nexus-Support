@@ -139,7 +139,9 @@ class MeshRouter @Inject constructor(
         }
 
         // 5. Generate ACK if we received a direct/routed message meant for us
-        if (isForMe && packet.type != PacketType.ACK && packet.type != PacketType.BROADCAST) {
+        // OR if we received an emergency SOS from another peer (peer receipt ACK)
+        val isSosFromPeer = packet.type == PacketType.SOS && packet.originId != myDeviceId
+        if ((isForMe && packet.type != PacketType.ACK && packet.type != PacketType.BROADCAST) || isSosFromPeer) {
             val ackPacket = MeshPacket(
                 senderId = myDeviceId,
                 receiverId = packet.originId,
@@ -150,7 +152,7 @@ class MeshRouter @Inject constructor(
                 finalDestId = packet.originId,
                 hopCount = 0,
                 maxHops = 10,
-                priority = 1
+                priority = if (packet.type == PacketType.SOS) 10 else 1
             )
             val nextHop = findNextHop(packet.originId, connectedPeers)
             if (nextHop != null) {
@@ -329,7 +331,10 @@ class MeshRouter @Inject constructor(
         content: String,
         connectedPeers: Map<String, String>
     ): RoutingResult {
-        val messageId = UUID.randomUUID().toString()
+        val parsedId = try {
+            org.json.JSONObject(content).optString("uuid").ifEmpty { null }
+        } catch (_: Exception) { null }
+        val messageId = parsedId ?: UUID.randomUUID().toString()
         seenMessageCache.markSeen(messageId)
 
         val packet = MeshPacket(
@@ -359,7 +364,11 @@ class MeshRouter @Inject constructor(
             status     = 1,
             isSos      = true
         )
-        kotlinx.coroutines.runBlocking { messageRepository.insertMessage(msg) }
+        kotlinx.coroutines.runBlocking {
+            messageRepository.insertMessage(msg)
+            // Enqueue into pending store-and-forward queue for offline persistence across app/peer restarts
+            enqueuePending(packet, MeshPacket.BROADCAST_DEST, packet.timestamp)
+        }
 
         val targets = connectedPeers.keys.map { ep -> ForwardTarget(ep, packet) }
         return RoutingResult.Processed(localMessage = null, forwardTargets = targets)
@@ -536,6 +545,11 @@ class MeshRouter @Inject constructor(
             PacketType.ACK -> {
                 // The content is the original messageId in plaintext
                 messageRepository.updateMessageStatus(packet.content, 2)
+                // Clean up from pending message queue if it was an enqueued message / SOS
+                val allPending = pendingMessageRepository.getAllPending()
+                allPending.firstOrNull { it.packetJson.contains(packet.content) }?.let {
+                    pendingMessageRepository.remove(it.id)
+                }
                 return null
             }
 
@@ -623,15 +637,19 @@ class MeshRouter @Inject constructor(
         if (msg.isSos) {
             val sender = packet.senderName.ifEmpty { "Unknown Peer" }
             val text = String(plaintext, Charsets.UTF_8)
-            val notification = android.app.Notification.Builder(context, "sos_channel")
-                .setSmallIcon(android.R.drawable.ic_dialog_alert)
-                .setContentTitle("EMERGENCY SOS: $sender")
-                .setContentText(text)
-                .setStyle(android.app.Notification.BigTextStyle().bigText(text))
-                .setCategory(android.app.Notification.CATEGORY_ALARM)
-                .setAutoCancel(true)
-                .build()
-            notificationManager.notify(packet.originId.hashCode(), notification)
+            try {
+                val notification = android.app.Notification.Builder(context, "sos_channel")
+                    .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                    .setContentTitle("EMERGENCY SOS: $sender")
+                    .setContentText(text)
+                    .setStyle(android.app.Notification.BigTextStyle().bigText(text))
+                    .setCategory(android.app.Notification.CATEGORY_ALARM)
+                    .setAutoCancel(true)
+                    .build()
+                notificationManager.notify(packet.originId.hashCode(), notification)
+            } catch (t: Throwable) {
+                Timber.w(t, "MeshRouter: unable to post system notification")
+            }
         }
 
         return msg

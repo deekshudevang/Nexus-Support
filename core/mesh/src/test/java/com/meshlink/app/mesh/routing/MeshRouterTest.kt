@@ -88,4 +88,65 @@ class MeshRouterTest {
         val result2 = meshRouter.route("endpoint_b", packet, emptyMap())
         assertEquals("Duplicate packet should be dropped", RoutingResult.Drop, result2)
     }
+
+    @Test
+    fun `route generates ACK when receiving SOS from another peer`() = runTest {
+        val sosPacket = MeshPacket(
+            senderId = "DEVICE_B",
+            receiverId = MeshPacket.BROADCAST_DEST,
+            content = "SOS EMERGENCY",
+            timestamp = 1000L,
+            type = MeshPacket.PacketType.SOS,
+            messageId = "SOS_EMERGENCY_123",
+            originId = "DEVICE_B",
+            finalDestId = MeshPacket.BROADCAST_DEST,
+            hopCount = 0,
+            maxHops = 10,
+            priority = 10
+        )
+
+        val connectedPeers = mapOf("ep_b" to "DEVICE_B")
+        val result = meshRouter.route("ep_b", sosPacket, connectedPeers)
+
+        assertTrue("SOS packet should be processed", result is RoutingResult.Processed)
+        val processed = result as RoutingResult.Processed
+
+        // Verify that an ACK forward target was generated back to DEVICE_B
+        val ackTarget = processed.forwardTargets.firstOrNull { it.packet.type == MeshPacket.PacketType.ACK }
+        org.junit.Assert.assertNotNull("Peer should generate ACK for incoming SOS", ackTarget)
+        assertEquals("ACK content should be SOS messageId", "SOS_EMERGENCY_123", ackTarget!!.packet.content)
+        assertEquals("ACK receiverId should be origin peer", "DEVICE_B", ackTarget.packet.receiverId)
+        assertEquals("ACK priority should be emergency high", 10, ackTarget.packet.priority)
+    }
+
+    @Test
+    fun `route handles incoming ACK by updating message repository status to 2`() = runTest {
+        val ackPacket = MeshPacket(
+            senderId = "DEVICE_B",
+            receiverId = myDeviceId,
+            content = "SOS_ORIGINAL_ID_456",
+            timestamp = 1000L,
+            type = MeshPacket.PacketType.ACK,
+            messageId = "ACK_789",
+            originId = "DEVICE_B",
+            finalDestId = myDeviceId
+        )
+
+        val result = meshRouter.route("ep_b", ackPacket, mapOf("ep_b" to "DEVICE_B"))
+
+        assertTrue(result is RoutingResult.Processed)
+        io.mockk.coVerify { messageRepository.updateMessageStatus("SOS_ORIGINAL_ID_456", 2) }
+    }
+
+    @Test
+    fun `buildSos inserts message with status 1 and enqueues to pending store-and-forward queue`() = runTest {
+        val content = """{"uuid":"SOS_UUID_TEST","message":"Need medical assistance"}"""
+        val result = meshRouter.buildSos(content, emptyMap())
+
+        assertTrue(result is RoutingResult.Processed)
+        io.mockk.coVerify {
+            messageRepository.insertMessage(match { it.id == "SOS_UUID_TEST" && it.status == 1 && it.isSos })
+            pendingMessageRepository.enqueue(match { it.packetJson.contains("SOS_UUID_TEST") })
+        }
+    }
 }

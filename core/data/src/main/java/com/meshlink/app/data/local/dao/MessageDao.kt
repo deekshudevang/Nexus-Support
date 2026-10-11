@@ -12,7 +12,7 @@ interface MessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(message: MessageEntity)
 
-    @Query("UPDATE messages SET status = :status WHERE id = :id")
+    @Query("UPDATE messages SET status = :status, delivered = CASE WHEN :status = 2 THEN 1 ELSE delivered END WHERE id = :id")
     suspend fun updateStatus(id: String, status: Int)
 
     @Query("SELECT * FROM messages WHERE senderId = :peerId OR receiverId = :peerId ORDER BY timestamp ASC")

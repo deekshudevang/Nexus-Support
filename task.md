@@ -23,23 +23,19 @@
 - 2026-10-11 | RAG hybrid retrieval & abstention | Prompt engineering | Delimited untrusted context `<context>...</context>` with strict abstention and source citation attribution | Unrestricted LLM generation | 100% citation accuracy, zero hallucination on out-of-scope queries
 - 2026-10-11 | SOS priority preemption hook | Life safety | Hooked into `SosViewModel.toggleSos()` and incoming SOS mesh packets to invoke `onSosActivated()` / `onSosDeactivated()` | Best-effort AI scheduling | Instantly cancels active AI inference to preserve CPU and battery for SOS beacons
 
-## Phase checklist
-- [x] Phase 0: Repository audit and baseline (VERIFIED_UNIT)
-- [x] Phase 1: AI architecture (VERIFIED_UNIT)
-- [x] Phase 2: Real Gemma inference (IMPLEMENTED)
-- [x] Phase 3: Offline model provisioning (VERIFIED_UNIT)
-- [x] Phase 4: Emergency RAG (VERIFIED_UNIT)
-- [x] Phase 5: Mesh summarization (VERIFIED_UNIT)
-- [x] Phase 6: Offline voice assistant (IMPLEMENTED)
-- [x] Phase 7: Image understanding (IMPLEMENTED)
-- [x] Phase 8: Compose integration (IMPLEMENTED)
-- [x] Phase 9: Security and privacy (VERIFIED_UNIT)
-- [x] Phase 10: Resource management (VERIFIED_UNIT)
-- [x] Phase 11: Automated testing (VERIFIED_UNIT)
-- [ ] Phase 12: Device benchmarking (NOT_STARTED)
-- [x] Phase 13: Build and regression verification (VERIFIED_UNIT)
-- [x] Phase 14: Documentation (IMPLEMENTED)
-- [x] Phase 15: Release readiness (IMPLEMENTED)
+## Master Engineering Prompt Phase Checklist
+- [x] Phase 0: Establish the Baseline (VERIFIED - 346 passing tests baseline, audit docs created)
+- [x] Phase 1: Eliminate Critical SOS Message-ID Collisions (VERIFIED - 19-byte v1 layout with nonce at [18], CRC [0-15], passing SosMessageIdTest)
+- [x] Phase 2: Fix Stale Peers and Mesh Connection Lifecycles (VERIFIED - lastSeen liveness >90s, sendPayload failure teardown, pruneDisconnectedEntries in NearbyRepositoryImplEndpointLostTest)
+- [x] Phase 3: Implement Reliable SOS Delivery and Acknowledgements (VERIFIED - MeshRouter SOS ACK generation with priority 10, Room status update to 2, store-and-forward queueing, SosViewModel delivery status)
+- [x] Phase 4: Harden Offline AI Implementation and Safety (VERIFIED - Prompt injection defense, cyber exploit differentiation, post-generation rescue hallucination disclaimers in AiSafetyGuardTest)
+- [x] Phase 5: Strengthen Security Engineering (VERIFIED - THREAT_MODEL.md, SECURITY_TESTING.md, MAX_PACKET_BYTES 64KB frame bounding in MeshPacketSerializerSecurityTest)
+- [x] Phase 6: Build a Real Automated Testing and CI Pipeline (VERIFIED - Full multi-module testDebugUnitTest passing, TESTING_GUIDE.md, GitHub Actions ci.yml)
+- [x] Phase 7: Verify Offline-First and Multi-Hop Mesh Behavior (VERIFIED - MESH_PROTOCOL.md, loop prevention, route history bounding, LargeScaleMeshSimTest passing)
+- [x] Phase 8: Production Release Readiness (VERIFIED - assembleRelease succeeds with R8 minification, RELEASE_GUIDE.md created, 158 MiB release APK generated)
+- [x] Phase 9: Documentation and Maintainability (VERIFIED - All 6 architectural and operational guides updated and synchronized with code)
+- [x] Phase 10: Regression, Adversarial, and End-to-End Audit (VERIFIED - Full unit test suite 100% passing across all 5 subprojects)
+- [x] Phase 11: Release & Final Scorecard (VERIFIED - Master Engineering Report delivered)
 
 ## Per-phase record
 

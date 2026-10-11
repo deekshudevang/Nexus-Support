@@ -362,7 +362,8 @@ class AiAssistantViewModel @Inject constructor(
 
         when (inferenceResult) {
             is AiResult.Success -> {
-                val finalText = inferenceResult.data.ifBlank { accumulated.toString() }
+                val rawText = inferenceResult.data.ifBlank { accumulated.toString() }
+                val finalText = AiSafetyGuard.validateOutput(rawText)
                 val currentList = _messages.value
                 if (currentList.isNotEmpty() && !currentList.last().isUser) {
                     _messages.value = currentList.dropLast(1) + currentList.last().copy(

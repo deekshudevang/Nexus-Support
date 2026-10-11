@@ -127,6 +127,12 @@ class NearbyRepositoryImpl @Inject constructor(
      */
     private val endpointIdToDeviceId = ConcurrentHashMap<String, String>()
 
+    /** endpointId → epoch ms of last received packet/handshake/result */
+    private val lastSeenTimestamps = ConcurrentHashMap<String, Long>()
+
+    /** endpointId → epoch ms of transition to DISCONNECTED (for bounded cache pruning) */
+    private val disconnectedTimestamps = ConcurrentHashMap<String, Long>()
+
 
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
@@ -195,6 +201,7 @@ class NearbyRepositoryImpl @Inject constructor(
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
             if (result.status.isSuccess) {
                 Timber.d("Nearby link established to $endpointId — starting ECDH handshake")
+                lastSeenTimestamps[endpointId] = System.currentTimeMillis()
                 _connectionStates.update { it + (endpointId to ConnectionState.HANDSHAKING) }
                 sendHandshakePacket(endpointId)
                 scope.launch {
@@ -203,6 +210,8 @@ class NearbyRepositoryImpl @Inject constructor(
                 }
             } else {
                 Timber.w("Connection to $endpointId failed: ${result.status.statusMessage}")
+                lastSeenTimestamps.remove(endpointId)
+                disconnectedTimestamps[endpointId] = System.currentTimeMillis()
                 _connectionStates.update { it + (endpointId to ConnectionState.DISCONNECTED) }
                 scheduleRestart()
             }
@@ -210,13 +219,15 @@ class NearbyRepositoryImpl @Inject constructor(
 
         override fun onDisconnected(endpointId: String) {
             Timber.d("Disconnected from $endpointId")
-            _connectionStates.update { it + (endpointId to ConnectionState.DISCONNECTED) }
             handshakeManager.clearSession(endpointId)
             val deviceId = endpointIdToDeviceId.remove(endpointId)
             if (deviceId != null) {
                 routingTable.removeRoutesFor(deviceId)  // Phase 4: invalidate stale routes
             }
             nameToEndpointId.entries.removeIf { it.value == endpointId }
+            lastSeenTimestamps.remove(endpointId)
+            disconnectedTimestamps[endpointId] = System.currentTimeMillis()
+            _connectionStates.update { it + (endpointId to ConnectionState.DISCONNECTED) }
             
             // Wake up and immediately try to reconnect to any lost peers
             adaptiveScanController.onUserActive()
@@ -229,6 +240,7 @@ class NearbyRepositoryImpl @Inject constructor(
 
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
+            lastSeenTimestamps[endpointId] = System.currentTimeMillis()
             if (payload.type != Payload.Type.BYTES) return
             val bytes  = payload.asBytes() ?: return
             val packet = bytes.toMeshPacket() ?: return
@@ -260,10 +272,12 @@ class NearbyRepositoryImpl @Inject constructor(
 
 
     init {
-        // Battery heartbeat loop
+        // Battery heartbeat loop and periodic peer liveness/cleanup maintenance
         scope.launch {
             while (true) {
-                delay(30_000L) // Broadcast heartbeat every 30 seconds
+                delay(30_000L) // Broadcast heartbeat and check liveness every 30 seconds
+                checkStalePeers()
+                pruneDisconnectedEntries()
                 if (getConnectedPeers().isNotEmpty()) {
                     val battery = batteryMonitor.getBatteryLevel()
                     val result = meshRouter.buildHeartbeat(battery, getConnectedPeers())
@@ -378,6 +392,7 @@ class NearbyRepositoryImpl @Inject constructor(
         scope.launch(Dispatchers.IO) {
             val success = handshakeManager.processHandshake(endpointId, packet.senderId, packet.content)
             if (success) {
+                lastSeenTimestamps[endpointId] = System.currentTimeMillis()
                 // 1. Record endpointId → stable peerDeviceId mapping
                 endpointIdToDeviceId[endpointId] = packet.senderId
                 Timber.d("Identity mapped: $endpointId → ${packet.senderId}")
@@ -525,6 +540,8 @@ class NearbyRepositoryImpl @Inject constructor(
 
     fun disconnectAll() {
         connectionsClient.stopAllEndpoints()
+        lastSeenTimestamps.clear()
+        disconnectedTimestamps.clear()
         _connectionStates.value = emptyMap()
         routingTable.clear()
         meshtasticTransport.disconnect()
@@ -588,8 +605,8 @@ class NearbyRepositoryImpl @Inject constructor(
             val payload = Payload.fromBytes(securePacket.toBytes())
             connectionsClient.sendPayload(endpointId, payload)
                 .addOnFailureListener { e ->
-                    Timber.e(e, "sendPayload to $endpointId failed")
-                    _connectionStates.update { it + (endpointId to ConnectionState.DISCONNECTED) }
+                    Timber.e(e, "sendPayload to $endpointId failed — disconnecting stale link")
+                    disconnect(endpointId)
                     isAdvertising = false; isDiscovering = false
                     scheduleRestart()
                 }
@@ -680,7 +697,46 @@ class NearbyRepositoryImpl @Inject constructor(
             routingTable.removeRoutesFor(deviceId)
         }
         nameToEndpointId.entries.removeIf { it.value == endpointId }
+        lastSeenTimestamps.remove(endpointId)
+        disconnectedTimestamps[endpointId] = System.currentTimeMillis()
         _connectionStates.update { it + (endpointId to ConnectionState.DISCONNECTED) }
+    }
+
+    /**
+     * Identifies peers currently in CONNECTED or AUTHENTICATED state that have had no
+     * packet, handshake, or heartbeat activity for longer than [timeoutMs] (default 90s).
+     * Disconnects them cleanly, invalidating stale routing table entries.
+     */
+    override fun checkStalePeers(now: Long, timeoutMs: Long): List<String> {
+        val staleEndpoints = _connectionStates.value
+            .filter { (ep, state) ->
+                (state == ConnectionState.CONNECTED || state == ConnectionState.AUTHENTICATED) &&
+                    (now - (lastSeenTimestamps[ep] ?: 0L)) > timeoutMs
+            }
+            .keys
+            .toList()
+
+        staleEndpoints.forEach { ep ->
+            Timber.w("Peer $ep is stale (no activity for > ${timeoutMs}ms) — tearing down")
+            disconnect(ep)
+        }
+        return staleEndpoints
+    }
+
+    /**
+     * Prunes old DISCONNECTED entries from _connectionStates to prevent unbounded memory growth.
+     */
+    override fun pruneDisconnectedEntries(now: Long, maxAgeMs: Long) {
+        _connectionStates.update { states ->
+            states.filter { (ep, state) ->
+                if (state != ConnectionState.DISCONNECTED) {
+                    true
+                } else {
+                    val discTime = disconnectedTimestamps[ep] ?: 0L
+                    (now - discTime) <= maxAgeMs
+                }
+            }
+        }
     }
 
     override fun currentEndpointForName(deviceName: String): String? =
@@ -717,7 +773,8 @@ class NearbyRepositoryImpl @Inject constructor(
                 Timber.d("Forwarded ${packet.type} msgId=${packet.messageId} hop=${packet.hopCount} → $endpointId")
             }
             .addOnFailureListener { e ->
-                Timber.e(e, "dispatchToNearby failed for $endpointId")
+                Timber.e(e, "dispatchToNearby failed for $endpointId — tearing down stale connection")
+                disconnect(endpointId)
             }
     }
 
