@@ -25,7 +25,9 @@ class SosViewModel @Inject constructor(
     private val locationTracker: LocationTracker,
     private val meshRouter: MeshRouter,
     private val nearbyRepository: NearbyRepository,
-    private val sosBeaconAdvertiser: SosBeaconAdvertiser
+    private val sosBeaconAdvertiser: SosBeaconAdvertiser,
+    private val sosNonceGenerator: com.meshlink.app.mesh.transport.SosNonceGenerator,
+    private val aiCoordinator: com.meshlink.app.ai.domain.OfflineAiCoordinator
 ) : ViewModel() {
 
     private val _isBroadcasting = MutableStateFlow(false)
@@ -55,6 +57,20 @@ class SosViewModel @Inject constructor(
     private val _nextOrbitalWindowSeconds = MutableStateFlow(8)
     val nextOrbitalWindowSeconds: StateFlow<Int> = _nextOrbitalWindowSeconds
 
+    init {
+        viewModelScope.launch {
+            nearbyRepository.incomingPackets.collect { packet ->
+                if (packet.type == com.meshlink.app.domain.model.MeshPacket.PacketType.SOS) {
+                    try {
+                        aiCoordinator.onSosActivated()
+                    } catch (t: Throwable) {
+                        Timber.w(t, "Failed to notify aiCoordinator of incoming SOS; continuing SOS processing")
+                    }
+                }
+            }
+        }
+    }
+
     fun setUplink(type: UplinkType) { _activeUplink.value = type }
     fun setIncidentType(type: IncidentType) { _incidentType.value = type }
     fun toggleGps() { _includeGps.value = !_includeGps.value }
@@ -64,8 +80,18 @@ class SosViewModel @Inject constructor(
         if (_isBroadcasting.value) {
             _isBroadcasting.value = false
             sosBeaconAdvertiser.stopAdvertising()
+            try {
+                aiCoordinator.onSosDeactivated()
+            } catch (t: Throwable) {
+                Timber.w(t, "Failed to notify aiCoordinator of SOS deactivation")
+            }
         } else {
             _isBroadcasting.value = true
+            try {
+                aiCoordinator.onSosActivated()
+            } catch (t: Throwable) {
+                Timber.w(t, "Failed to notify aiCoordinator of SOS activation; continuing SOS broadcast")
+            }
             broadcastSos()
         }
     }
@@ -136,12 +162,14 @@ class SosViewModel @Inject constructor(
                 IncidentType.SECURITY -> SosBeaconCodec.EmergencyType.SECURITY
                 IncidentType.NONE -> SosBeaconCodec.EmergencyType.OTHER
             }
+            val nonce = sosNonceGenerator.nextNonce()
             val beaconPayload = SosBeaconCodec.encode(
                 deviceId = myDeviceId,
                 latitude = lat,
                 longitude = lon,
                 emergencyType = beaconEType,
-                severity = 5
+                severity = 5,
+                nonce = nonce
             )
             sosBeaconAdvertiser.startAdvertising(beaconPayload)
         }

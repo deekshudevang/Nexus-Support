@@ -2,37 +2,61 @@ package com.meshlink.app.ai
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.meshlink.app.domain.repository.EmergencyGuideRepository
+import com.meshlink.app.ai.domain.EmergencyRagService
+import com.meshlink.app.ai.domain.MessageSummaryService
+import com.meshlink.app.ai.domain.ModelAssetManager
+import com.meshlink.app.ai.domain.OfflineAiCoordinator
+import com.meshlink.app.ai.model.AiCapabilityState
+import com.meshlink.app.ai.model.AiResult
+import com.meshlink.app.ai.model.EmergencySourceCitation
+import com.meshlink.app.domain.repository.MessageRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-data class ChatMessage(val text: String, val isUser: Boolean)
+data class ChatMessage(
+    val text: String,
+    val isUser: Boolean,
+    val citations: List<EmergencySourceCitation> = emptyList(),
+    val isWarning: Boolean = false
+)
 
 @HiltViewModel
 class AiAssistantViewModel @Inject constructor(
-    private val llmManager: LlmInferenceManager,
+    val coordinator: OfflineAiCoordinator,
+    private val ragService: EmergencyRagService,
+    private val summaryService: MessageSummaryService,
+    private val modelAssetManager: ModelAssetManager,
+    private val messageRepository: MessageRepository,
     private val speechManager: SpeechManager,
-    private val guideRepository: EmergencyGuideRepository,
     private val visionManager: VisionManager
 ) : ViewModel() {
 
+    val capabilityState: StateFlow<AiCapabilityState> = coordinator.state
+    val isAiEnabled: StateFlow<Boolean> = coordinator.isAiEnabled
+
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
-    val messages: StateFlow<List<ChatMessage>> = _messages
+    val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
     private val _isGenerating = MutableStateFlow(false)
-    val isGenerating: StateFlow<Boolean> = _isGenerating
+    val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
 
     val isListening: StateFlow<Boolean> = speechManager.isListening
-    val spokenText: kotlinx.coroutines.flow.SharedFlow<String> = speechManager.spokenText
+    val spokenText = speechManager.spokenText
 
     init {
         viewModelScope.launch {
-            llmManager.initializeModel()
-            _messages.value = listOf(ChatMessage("Hello. I am your offline Gemma AI responder. How can I help you?", false))
+            coordinator.initialize()
+            _messages.value = listOf(
+                ChatMessage(
+                    text = "Welcome to Nexus Offline Emergency AI. Ask any question regarding disaster first aid, hypothermia, bleeding, water purification, or tap 'Summarize Incident' to analyze recent mesh messages.",
+                    isUser = false
+                )
+            )
         }
 
         viewModelScope.launch {
@@ -47,36 +71,66 @@ class AiAssistantViewModel @Inject constructor(
     fun sendMessage(query: String) {
         if (query.isBlank()) return
 
-        val newMsgs = _messages.value.toMutableList()
-        newMsgs.add(ChatMessage(query, true))
-        _messages.value = newMsgs
+        val userMsg = ChatMessage(text = query, isUser = true)
+        _messages.value = _messages.value + userMsg
         _isGenerating.value = true
 
         viewModelScope.launch {
-            // RAG: 1. Retrieve context from Emergency Guides
-            val guides = guideRepository.searchGuides(query).first()
-            val contextData = if (guides.isNotEmpty()) {
-                val topGuide = guides.first()
-                "Protocol: ${topGuide.title}. Warnings: ${topGuide.warnings.joinToString()}. Steps: ${topGuide.steps.joinToString()}"
-            } else ""
-
-            // RAG: 2. Generate response with LLM
-            val responseText = llmManager.generateRagResponse(query, contextData)
-            
-            val updatedMsgs = _messages.value.toMutableList()
-            updatedMsgs.add(ChatMessage(responseText, false))
-            _messages.value = updatedMsgs
+            val result = ragService.answerQuery(query)
+            when (result) {
+                is AiResult.Success -> {
+                    val response = result.data
+                    val aiMsg = ChatMessage(
+                        text = response.answer,
+                        isUser = false,
+                        citations = response.citations
+                    )
+                    _messages.value = _messages.value + aiMsg
+                    speechManager.speak(response.answer)
+                }
+                is AiResult.Failure -> {
+                    val errorMsg = ChatMessage(
+                        text = "[AI Error]: ${result.error.userRecoveryText}. Please consult verified emergency protocols directly.",
+                        isUser = false,
+                        isWarning = true
+                    )
+                    _messages.value = _messages.value + errorMsg
+                }
+            }
             _isGenerating.value = false
+        }
+    }
 
-            // Text to speech for hands-free operation
-            speechManager.speak(responseText)
+    fun summarizeRecentMeshMessages() {
+        _isGenerating.value = true
+        _messages.value = _messages.value + ChatMessage(text = "Summarize recent incident mesh messages", isUser = true)
+
+        viewModelScope.launch {
+            val latestMessages = messageRepository.getLatestMessagePerConversation().first()
+            val result = summaryService.summarizeMessages(latestMessages)
+            when (result) {
+                is AiResult.Success -> {
+                    _messages.value = _messages.value + ChatMessage(
+                        text = result.data,
+                        isUser = false
+                    )
+                }
+                is AiResult.Failure -> {
+                    _messages.value = _messages.value + ChatMessage(
+                        text = "[Summarization Failed]: ${result.error.userRecoveryText}",
+                        isUser = false,
+                        isWarning = true
+                    )
+                }
+            }
+            _isGenerating.value = false
         }
     }
 
     fun startListening() {
         speechManager.startListening()
     }
-    
+
     fun stopListening() {
         speechManager.stopListening()
     }
@@ -84,43 +138,18 @@ class AiAssistantViewModel @Inject constructor(
     fun onImageCaptured(bitmap: android.graphics.Bitmap) {
         viewModelScope.launch {
             _isGenerating.value = true
-            
-            // 1. Analyze image using ML Kit
             val labels = visionManager.analyzeImage(bitmap)
-            
             if (labels.isEmpty()) {
-                val updatedMsgs = _messages.value.toMutableList()
-                updatedMsgs.add(ChatMessage("I couldn't clearly identify the emergency in that picture. Could you describe it?", false))
-                _messages.value = updatedMsgs
+                _messages.value = _messages.value + ChatMessage(
+                    text = "No clear hazard identified in the picture. Please describe your situation directly.",
+                    isUser = false
+                )
                 _isGenerating.value = false
-                speechManager.speak("I couldn't clearly identify the emergency in that picture. Could you describe it?")
                 return@launch
             }
-            
-            // 2. Build the automated query
-            val query = "I see ${labels.joinToString(", ")}. What should I do?"
-            
-            // Show the user's automated query in the chat
-            val newMsgs = _messages.value.toMutableList()
-            newMsgs.add(ChatMessage(query, true))
-            _messages.value = newMsgs
-            
-            // 3. RAG Retrieval
-            val guides = guideRepository.searchGuides(labels.joinToString(" ")).first()
-            val contextData = if (guides.isNotEmpty()) {
-                val topGuide = guides.first()
-                "Protocol: ${topGuide.title}. Warnings: ${topGuide.warnings.joinToString()}. Steps: ${topGuide.steps.joinToString()}"
-            } else ""
 
-            // 4. LLM Generation
-            val responseText = llmManager.generateRagResponse(query, contextData)
-            
-            val finalMsgs = _messages.value.toMutableList()
-            finalMsgs.add(ChatMessage(responseText, false))
-            _messages.value = finalMsgs
-            _isGenerating.value = false
-
-            speechManager.speak(responseText)
+            val query = "Detected: ${labels.joinToString(", ")}. What emergency steps should be taken?"
+            sendMessage(query)
         }
     }
 
