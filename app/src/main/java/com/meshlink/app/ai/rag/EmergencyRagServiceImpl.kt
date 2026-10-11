@@ -33,9 +33,16 @@ class EmergencyRagServiceImpl @Inject constructor(
             return@withContext AiResult.Failure(AiError.InvalidInput("Query cannot be blank"))
         }
 
-        // Adversarial prompt injection gate: immediate safe abstention
+        // 1. Primary Retrieval & Relevance Gate:
+        // Any adversarial injection or prompt override must pass through genuine corpus retrieval.
+        // If query does not retrieve matching emergency guides above SIMILARITY_THRESHOLD, the system
+        // naturally abstains due to lack of grounded evidence.
+        //
+        // Defense-in-depth secondary filter:
+        // A bounded pattern check provides an immediate fast-path abstention for overt prompt injections
+        // without consuming vector embedding computation.
         if (isPromptInjection(query)) {
-            AiLogger.w("Adversarial prompt injection pattern detected in emergency RAG query. Safely abstaining.")
+            AiLogger.w("Adversarial prompt injection pattern detected in emergency RAG query (defense-in-depth). Safely abstaining.")
             val latency = System.currentTimeMillis() - startTime
             return@withContext AiResult.Success(
                 RagResponse(
