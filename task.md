@@ -394,4 +394,22 @@
 | ID | Category | Task | Priority | Status | Evidence | Remaining blocker |
 |----|----------|------|----------|--------|----------|-------------------|
 | ET-001 | Mesh/SOS | Eliminate dual conflicting SOS beacon paths, hardcoded 0.0 coordinates, and missing JSON coordinate parsing in MeshRouter | P0 | VERIFIED_UNIT | `MeshRouterTest` (failing reproduction test passes; 6/6 tests), `NearbyRepositoryImpl` JSON coordinate parsing & authoritative beacon advertising, `SosViewModel` duplicate beacon removal, fresh `:core:mesh:testDebugUnitTest :app:testDebugUnitTest` (159 tests, 0 failures, 1 skipped: `migrate5To14`) | Multi-device physical BLE field test (`VERIFIED_DEVICE`) |
+| ET-N1 | Mesh/SOS | Fix manual JSON serialization in SosPacketData (unescaped newlines, backslashes, control characters) | P1 | VERIFIED_UNIT | `SosPacketDataTest` (6/6 passing: multiline text with newlines/tabs/backslashes/quotes/unicode, backward compat with legacy payloads); Gson 2.10.1 in `:core:domain` | Multi-device physical test (`VERIFIED_DEVICE`) |
+| ET-N2 | Mesh/SOS | Explicit unavailable/null location in SosPacketData & NearbyRepositoryImpl; coordinate bounds validation [-90,90], [-180,180] | P1 | VERIFIED_UNIT | `SosPacketDataTest` (`latitude: Double? = null`, `hasValidLocation`), `MeshRouterTest` (ignores 0.0, 0.0 placeholder, rejects out-of-bounds coords), `SosViewModel` ("Location: unavailable" when missing) | Multi-device physical test (`VERIFIED_DEVICE`) |
+| ET-N3 | Mesh/SOS | Correlate BLE beacon alerts and structured mesh SOS; prevent duplicate alerts while maintaining unauthenticated beacon security boundaries | P0 | VERIFIED_UNIT | `MeshRouterTest` (`route incoming SOS from beacon and mesh creates single authoritative ACK and alerts`), `NearbyRepositoryImpl` (`MeshPacket.BROADCAST_DEST` alignment) | Multi-device physical test (`VERIFIED_DEVICE`) |
+| ET-N4 | Mesh/SOS | Replay protection and identity proof for one-byte nonce; quantify birthday collisions & bounded dedup window | P1 | VERIFIED_UNIT | `SosNonceAndReplayTest` (6/6 passing: birthday bound $P(N=20)>50\%$, nonce wraparound, replay dedup window, process restart, collision suppression, flooding safety) | Multi-device physical test (`VERIFIED_DEVICE`) |
+
+---
+
+### Work Item Plan: Defect N (N1-N4) — COMPLETED
+- **Base Branch:** `fix/sos-defect-n` (isolated branch cut from candidate commit on `feature/offline-ai`).
+- **Defect IDs & Commits:**
+  - **N1 (Serialization):** Commit `3e6b30e` (`feat(domain): robust JSON serialization for SosPacketData with multiline and unicode support (Defect N1)`)
+  - **N2 (Location):** Commit `1f2b095` (`fix(location): explicit nullable location and coordinate bounds validation (Defect N2)`)
+  - **N3 (Event Correlation):** Commit `2c70b1c` (`fix(mesh): unify SOS broadcast destination and correlate beacon and mesh alerts (Defect N3)`)
+  - **N4 (Nonce & Replay):** Commit `52e63fc` (`test(mesh): document and test 1-byte nonce birthday collision and replay bounds (Defect N4)`)
+- **Verification Evidence:**
+  - Full multi-module test suite: 239 tests executed, 0 failures, 0 errors, 1 skipped (`migrate5To14` pre-existing).
+  - `assembleDebug`: SUCCESSFUL in 1m 19s.
+  - `git diff --check`: 0 whitespace errors, clean diff.
 
