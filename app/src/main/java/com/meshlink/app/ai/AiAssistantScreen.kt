@@ -238,6 +238,63 @@ fun AiAssistantScreen(
 }
 
 @Composable
+fun FormattedMessageContent(text: String, textColor: androidx.compose.ui.graphics.Color) {
+    if (!text.contains("```")) {
+        Text(
+            text = text,
+            color = textColor,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        return
+    }
+
+    val parts = text.split("```")
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        parts.forEachIndexed { index, part ->
+            if (index % 2 == 1) {
+                // Code block
+                val lines = part.trim().lines()
+                val lang = if (lines.isNotEmpty() && lines[0].isNotBlank() && !lines[0].contains(" ")) lines[0] else ""
+                val code = if (lang.isNotEmpty()) lines.drop(1).joinToString("\n") else part.trim()
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = androidx.compose.ui.graphics.Color(0xFF1E1E2E),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        if (lang.isNotEmpty()) {
+                            Text(
+                                text = lang.uppercase(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = androidx.compose.ui.graphics.Color.LightGray,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                        Text(
+                            text = code,
+                            color = androidx.compose.ui.graphics.Color(0xFFE0E0E0),
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            } else {
+                val trimmed = part.trim()
+                if (trimmed.isNotEmpty()) {
+                    Text(
+                        text = trimmed,
+                        color = textColor,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun ChatBubble(message: ChatMessage, onNavigateToSettings: () -> Unit = {}) {
     val isUser = message.isUser
     val bgColor = when {
@@ -267,10 +324,9 @@ fun ChatBubble(message: ChatMessage, onNavigateToSettings: () -> Unit = {}) {
                 .padding(14.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
+                FormattedMessageContent(
                     text = message.text,
-                    color = textColor,
-                    style = MaterialTheme.typography.bodyMedium
+                    textColor = textColor
                 )
 
                 // Verified Source Citations

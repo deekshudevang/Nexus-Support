@@ -121,7 +121,7 @@ class EmergencyRagServiceImpl @Inject constructor(
         }
 
         // 6. Execute inference through coordinator (protected by kill switch & SOS preemption)
-        val inferenceResult = coordinator.executeInference(timeoutMs = 25000L) {
+        val inferenceResult = coordinator.executeInference(timeoutMs = 120000L) {
             localAiEngine.generate(prompt)
         }
 
@@ -160,18 +160,8 @@ class EmergencyRagServiceImpl @Inject constructor(
 
     private data class ScoredGuide(val guide: EmergencyGuide, val score: Float)
 
-    private val injectionPatterns = listOf(
-        Regex("""(?i)\bignore\s+(all\s+|previous\s+|the\s+)?(context|instructions?|rules?|prompts?)\b"""),
-        Regex("""(?i)\bgenerate\s+fake\b"""),
-        Regex("""(?i)\bsystem\s+(command|prompt|override)\b"""),
-        Regex("""(?i)\bdisregard\b"""),
-        Regex("""(?i)<context\s+id=.*sys.*>"""),
-        Regex("""(?i)\bsay\s+pwned\b"""),
-        Regex("""(?i)\bgrant\s+admin\b""")
-    )
-
     private fun isPromptInjection(query: String): Boolean {
-        return injectionPatterns.any { it.containsMatchIn(query) }
+        return com.meshlink.app.ai.security.AiSafetyGuard.isPromptInjection(query)
     }
 
     private val stopWords = setOf(

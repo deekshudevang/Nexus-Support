@@ -48,7 +48,7 @@ class MediaPipeLocalAiEngine @Inject constructor(
 
                 val options = LlmInference.LlmInferenceOptions.builder()
                     .setModelPath(modelFile.absolutePath)
-                    .setMaxTokens(512)
+                    .setMaxTokens(2048)
                     .build()
 
                 llmInference?.close()
@@ -77,6 +77,9 @@ class MediaPipeLocalAiEngine @Inject constructor(
             }
 
             try {
+                val inputTokens = try { engine.sizeInTokens(prompt) } catch (e: Throwable) { 0 }
+                AiLogger.i("Executing LLM generation with input tokens: $inputTokens (max: 2048)")
+
                 val startTime = System.currentTimeMillis()
                 val response = engine.generateResponse(prompt)
                 val duration = System.currentTimeMillis() - startTime
@@ -87,7 +90,7 @@ class MediaPipeLocalAiEngine @Inject constructor(
                 AiLogger.e(e, "OOM during inference execution")
                 unloadSync()
                 AiResult.Failure(AiError.LowMemory)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 AiLogger.e(e, "Inference error occurred")
                 AiResult.Failure(AiError.RuntimeError(e.message ?: "Inference failure"))
             }

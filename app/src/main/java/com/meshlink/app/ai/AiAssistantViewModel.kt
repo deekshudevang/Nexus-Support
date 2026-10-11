@@ -19,6 +19,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import com.meshlink.app.ai.domain.AiRoute
+import com.meshlink.app.ai.domain.AiRoutingPolicy
+import com.meshlink.app.ai.domain.LocalAiEngine
+import com.meshlink.app.ai.security.AiSafetyGuard
+import java.io.File
+
 data class ChatMessage(
     val text: String,
     val isUser: Boolean,
@@ -36,8 +42,37 @@ class AiAssistantViewModel @Inject constructor(
     private val modelAssetManager: ModelAssetManager,
     private val messageRepository: MessageRepository,
     private val speechManager: SpeechManager,
-    private val visionManager: VisionManager
+    private val visionManager: VisionManager,
+    private val localAiEngine: LocalAiEngine,
+    val routingPolicy: AiRoutingPolicy
 ) : ViewModel() {
+
+    // Overloaded secondary constructor for backward compatibility with 7-parameter test instantiations
+    constructor(
+        coordinator: OfflineAiCoordinator,
+        ragService: EmergencyRagService,
+        summaryService: MessageSummaryService,
+        modelAssetManager: ModelAssetManager,
+        messageRepository: MessageRepository,
+        speechManager: SpeechManager,
+        visionManager: VisionManager
+    ) : this(
+        coordinator,
+        ragService,
+        summaryService,
+        modelAssetManager,
+        messageRepository,
+        speechManager,
+        visionManager,
+        localAiEngine = object : LocalAiEngine {
+            override suspend fun initialize(modelFile: File) = AiResult.Success(Unit)
+            override suspend fun generate(prompt: String) = AiResult.Success("Default local AI response.")
+            override fun generateStream(prompt: String) = kotlinx.coroutines.flow.flowOf(AiResult.Success("Default local AI response."))
+            override suspend fun unload() {}
+            override fun isReady() = coordinator.state.value == AiCapabilityState.READY
+        },
+        routingPolicy = AiRoutingPolicy()
+    )
 
     val capabilityState: StateFlow<AiCapabilityState> = coordinator.state
     val isAiEnabled: StateFlow<Boolean> = coordinator.isAiEnabled
@@ -56,7 +91,7 @@ class AiAssistantViewModel @Inject constructor(
             coordinator.initialize()
             _messages.value = listOf(
                 ChatMessage(
-                    text = "Welcome to Nexus Offline Emergency AI. Ask any question regarding disaster first aid, hypothermia, bleeding, water purification, or tap 'Summarize Incident' to analyze recent mesh messages.",
+                    text = "Welcome to Nexus Offline Emergency AI & General Conversational Assistant. Ask any question regarding general knowledge, coding, studies, or disaster first aid (bleeding, CPR, flood, fire).",
                     isUser = false
                 )
             )
@@ -86,34 +121,99 @@ class AiAssistantViewModel @Inject constructor(
             return
         }
 
+        // 2. Safety filter checks for harmful content
+        if (AiSafetyGuard.isHarmfulRequest(query)) {
+            val userMsg = ChatMessage(text = query, isUser = true)
+            val warningMsg = ChatMessage(
+                text = AiSafetyGuard.HARMFUL_CONTENT_REFUSAL,
+                isUser = false,
+                isWarning = true
+            )
+            _messages.value = _messages.value + userMsg + warningMsg
+            return
+        }
+
         val userMsg = ChatMessage(text = query, isUser = true)
         _messages.value = _messages.value + userMsg
         _isGenerating.value = true
 
+        val decision = routingPolicy.route(query, _messages.value)
+
         viewModelScope.launch {
             try {
-                val result = ragService.answerQuery(query)
-                when (result) {
-                    is AiResult.Success -> {
-                        val response = result.data
-                        val isExcerpt = response.answer.startsWith(RagConstants.GUIDE_EXCERPT_PREFIX)
-                        val aiMsg = ChatMessage(
-                            text = response.answer,
-                            isUser = false,
-                            citations = response.citations,
-                            isExcerptOnly = isExcerpt,
-                            showModelImport = isExcerpt
-                        )
-                        _messages.value = _messages.value + aiMsg
-                        speechManager.speak(response.answer)
+                if (decision.route == AiRoute.EMERGENCY_GUIDANCE) {
+                    val result = ragService.answerQuery(query)
+                    when (result) {
+                        is AiResult.Success -> {
+                            val response = result.data
+                            val isExcerpt = response.answer.startsWith(RagConstants.GUIDE_EXCERPT_PREFIX)
+                            val aiMsg = ChatMessage(
+                                text = response.answer,
+                                isUser = false,
+                                citations = response.citations,
+                                isExcerptOnly = isExcerpt,
+                                showModelImport = isExcerpt
+                            )
+                            _messages.value = _messages.value + aiMsg
+                            speechManager.speak(response.answer)
+                        }
+                        is AiResult.Failure -> {
+                            val errorMsg = ChatMessage(
+                                text = "[AI Error]: ${result.error.userRecoveryText}. Please consult verified emergency protocols directly.",
+                                isUser = false,
+                                isWarning = true
+                            )
+                            _messages.value = _messages.value + errorMsg
+                        }
                     }
-                    is AiResult.Failure -> {
-                        val errorMsg = ChatMessage(
-                            text = "[AI Error]: ${result.error.userRecoveryText}. Please consult verified emergency protocols directly.",
+                } else {
+                    // Route A: General Conversation (and Route C mixed general handling)
+                    if (AiSafetyGuard.isPromptInjection(query)) {
+                        val aiMsg = ChatMessage(
+                            text = AiSafetyGuard.INJECTION_REFUSAL_MESSAGE,
                             isUser = false,
                             isWarning = true
                         )
-                        _messages.value = _messages.value + errorMsg
+                        _messages.value = _messages.value + aiMsg
+                        return@launch
+                    }
+
+                    if (coordinator.state.value != AiCapabilityState.READY) {
+                        val aiMsg = ChatMessage(
+                            text = "AI model not installed: Please install or import the Gemma model in Settings to enable general-purpose offline conversation.",
+                            isUser = false,
+                            isExcerptOnly = true,
+                            showModelImport = true
+                        )
+                        _messages.value = _messages.value + aiMsg
+                        return@launch
+                    }
+
+                    val historyPairs = _messages.value.map { it.text to it.isUser }
+                    val prompt = RagConstants.buildConversationPrompt(query, historyPairs)
+
+                    val inferenceResult = coordinator.executeInference(timeoutMs = 120000L) {
+                        localAiEngine.generate(prompt)
+                    }
+
+                    when (inferenceResult) {
+                        is AiResult.Success -> {
+                            val aiMsg = ChatMessage(
+                                text = inferenceResult.data,
+                                isUser = false,
+                                citations = emptyList()
+                            )
+                            _messages.value = _messages.value + aiMsg
+                            speechManager.speak(inferenceResult.data)
+                        }
+                        is AiResult.Failure -> {
+                            val errorMsg = ChatMessage(
+                                text = "[AI Error]: ${inferenceResult.error.userRecoveryText}. Tap to retry.",
+                                isUser = false,
+                                isWarning = true
+                            )
+                            _messages.value = _messages.value + errorMsg
+                        }
                     }
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {

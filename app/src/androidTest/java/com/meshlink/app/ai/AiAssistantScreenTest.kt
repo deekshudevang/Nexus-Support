@@ -58,6 +58,8 @@ class AiAssistantScreenTest {
         coEvery { mockCoordinator.initialize() } returns AiCapabilityState.READY
     }
 
+    private val mockLocalAiEngine: com.meshlink.app.ai.inference.LocalAiEngine = mockk(relaxed = true)
+
     private fun createViewModel(): AiAssistantViewModel {
         return AiAssistantViewModel(
             coordinator = mockCoordinator,
@@ -66,7 +68,8 @@ class AiAssistantScreenTest {
             modelAssetManager = mockAssetManager,
             messageRepository = mockMessageRepository,
             speechManager = mockSpeechManager,
-            visionManager = mockVisionManager
+            visionManager = mockVisionManager,
+            localAiEngine = mockLocalAiEngine
         )
     }
 
@@ -98,7 +101,7 @@ class AiAssistantScreenTest {
         }
 
         // 1. Initial screen displays welcome message
-        composeRule.onNodeWithText("Welcome to Nexus Offline Emergency AI", substring = true)
+        composeRule.onNodeWithText("Welcome to Nexus", substring = true)
             .assertIsDisplayed()
 
         // 2. Type non-empty question into text field
@@ -119,6 +122,35 @@ class AiAssistantScreenTest {
             .assertIsDisplayed()
 
         coVerify { mockRagService.answerQuery(query) }
+    }
+
+    @Test
+    fun sendGeneralQuestion_generatesLocalAnswerWithoutGuideCitations() {
+        val viewModel = createViewModel()
+        val query = "What is photosynthesis?"
+        val modelAnswer = "Photosynthesis is the process used by plants to convert light energy into chemical energy."
+        coEvery { mockLocalAiEngine.generate(any()) } returns AiResult.Success(modelAnswer)
+
+        composeRule.setContent {
+            AiAssistantScreen(
+                viewModel = viewModel,
+                onNavigateBack = {},
+                onNavigateToSettings = {}
+            )
+        }
+
+        composeRule.onNodeWithText("Ask emergency response...")
+            .performTextInput(query)
+        composeRule.onNodeWithContentDescription("Send message")
+            .performClick()
+
+        composeRule.onNodeWithText(query)
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(modelAnswer, substring = true)
+            .assertIsDisplayed()
+
+        // General questions do not call emergency RAG
+        coVerify(exactly = 0) { mockRagService.answerQuery(any()) }
     }
 
     @Test
@@ -159,5 +191,51 @@ class AiAssistantScreenTest {
             .assertIsDisplayed()
 
         coVerify { mockRagService.answerQuery(query) }
+    }
+
+    @Test
+    fun featureFlagDisabled_showsDisabledNotice() {
+        isAiEnabled.value = false
+        val viewModel = createViewModel()
+
+        composeRule.setContent {
+            AiAssistantScreen(
+                viewModel = viewModel,
+                onNavigateBack = {},
+                onNavigateToSettings = {}
+            )
+        }
+
+        composeRule.onNodeWithText("Ask emergency response...")
+            .performTextInput("Hi there!")
+        composeRule.onNodeWithContentDescription("Send message")
+            .performClick()
+
+        composeRule.onNodeWithText("Offline AI is currently disabled", substring = true)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun missingModel_onGeneralQuery_displaysImportAction() {
+        coordinatorState.value = AiCapabilityState.NOT_INSTALLED
+        val viewModel = createViewModel()
+
+        composeRule.setContent {
+            AiAssistantScreen(
+                viewModel = viewModel,
+                onNavigateBack = {},
+                onNavigateToSettings = {}
+            )
+        }
+
+        composeRule.onNodeWithText("Ask emergency response...")
+            .performTextInput("Explain binary search")
+        composeRule.onNodeWithContentDescription("Send message")
+            .performClick()
+
+        composeRule.onNodeWithText("AI model not installed", substring = true)
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Import Model in Settings")
+            .assertIsDisplayed()
     }
 }

@@ -58,7 +58,7 @@ interface OfflineAiCoordinator {
      * timeout bounding, and SOS preemption checking.
      */
     suspend fun <T> executeInference(
-        timeoutMs: Long = 30000L,
+        timeoutMs: Long = 120000L,
         block: suspend () -> AiResult<T>
     ): AiResult<T>
 }
