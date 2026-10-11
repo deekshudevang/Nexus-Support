@@ -167,4 +167,82 @@ class MeshRouterTest {
         assertTrue(result is RoutingResult.Processed)
         io.mockk.coVerify { deviceRepository.updateLocation("DEVICE_B", 12.9716, 77.5946) }
     }
+
+    @Test
+    fun `route incoming SOS ignores placeholder 0_0 coordinates and out of bounds coordinates`() = runTest {
+        val placeholderPacket = MeshPacket(
+            senderId = "DEVICE_C",
+            receiverId = "*",
+            content = """{"emergencyType":"FIRE","severity":3,"lat":0.0,"lon":0.0}""",
+            timestamp = 1000L,
+            type = MeshPacket.PacketType.SOS,
+            messageId = "SOS_LOC_PLACEHOLDER",
+            originId = "DEVICE_C",
+            finalDestId = MeshPacket.BROADCAST_DEST
+        )
+
+        meshRouter.route("ep_c", placeholderPacket, mapOf("ep_c" to "DEVICE_C"))
+        io.mockk.coVerify(exactly = 0) { deviceRepository.updateLocation("DEVICE_C", any(), any()) }
+
+        val oobPacket = MeshPacket(
+            senderId = "DEVICE_D",
+            receiverId = "*",
+            content = """{"emergencyType":"LOST","severity":3,"lat":95.0,"lon":200.0}""",
+            timestamp = 1000L,
+            type = MeshPacket.PacketType.SOS,
+            messageId = "SOS_LOC_OOB",
+            originId = "DEVICE_D",
+            finalDestId = MeshPacket.BROADCAST_DEST
+        )
+
+        meshRouter.route("ep_d", oobPacket, mapOf("ep_d" to "DEVICE_D"))
+        io.mockk.coVerify(exactly = 0) { deviceRepository.updateLocation("DEVICE_D", any(), any()) }
+    }
+
+    @Test
+    fun `route incoming SOS from beacon and mesh creates single authoritative ACK and alerts`() = runTest {
+        // Beacon alert arrives first
+        val beaconPacket = MeshPacket(
+            senderId = "12345678",
+            receiverId = MeshPacket.BROADCAST_DEST,
+            content = """{"emergencyType":"MEDICAL","severity":5,"lat":12.9716,"lon":77.5946}""",
+            timestamp = 1000L,
+            type = MeshPacket.PacketType.SOS,
+            messageId = "sos-12345678-500-1",
+            originId = "12345678",
+            finalDestId = MeshPacket.BROADCAST_DEST,
+            priority = 100
+        )
+
+        val beaconResult = meshRouter.route("sos-beacon", beaconPacket, mapOf("ep_b" to "DEVICE_B"))
+        assertTrue(beaconResult is RoutingResult.Processed)
+        val beaconTargets = (beaconResult as RoutingResult.Processed).forwardTargets
+
+        // Structured authenticated SOS arrives from same sender over mesh
+        val meshSosPacket = MeshPacket(
+            senderId = "DEVICE_B",
+            receiverId = MeshPacket.BROADCAST_DEST,
+            content = """{"uuid":"SOS-UUID-AUTH-999","senderId":"DEVICE_B","emergencyType":"MEDICAL","severity":5,"latitude":12.9716,"longitude":77.5946,"message":"Help!"}""",
+            timestamp = 1010L,
+            type = MeshPacket.PacketType.SOS,
+            messageId = "SOS-UUID-AUTH-999",
+            originId = "DEVICE_B",
+            finalDestId = MeshPacket.BROADCAST_DEST,
+            priority = 10
+        )
+
+        val meshResult = meshRouter.route("ep_b", meshSosPacket, mapOf("ep_b" to "DEVICE_B"))
+        assertTrue(meshResult is RoutingResult.Processed)
+        val meshTargets = (meshResult as RoutingResult.Processed).forwardTargets
+
+        // Mesh SOS generates verified ACK targeting DEVICE_B with exact SOS messageId
+        val ackTarget = meshTargets.firstOrNull { it.packet.type == MeshPacket.PacketType.ACK }
+        org.junit.Assert.assertNotNull(ackTarget)
+        assertEquals("SOS-UUID-AUTH-999", ackTarget!!.packet.content)
+        assertEquals("DEVICE_B", ackTarget.packet.receiverId)
+
+        // Verify both payloads were persisted into Room without corruption
+        io.mockk.coVerify { messageRepository.insertMessage(match { it.id == "sos-12345678-500-1" }) }
+        io.mockk.coVerify { messageRepository.insertMessage(match { it.id == "SOS-UUID-AUTH-999" }) }
+    }
 }

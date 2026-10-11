@@ -332,7 +332,7 @@ class NearbyRepositoryImpl @Inject constructor(
                 
                 val domainPacket = MeshPacket(
                     senderId = beacon.deviceIdHash.toString(),
-                    receiverId = "broadcast",
+                    receiverId = MeshPacket.BROADCAST_DEST,
                     content = beaconJson,
                     timestamp = System.currentTimeMillis(),
                     type = MeshPacket.PacketType.SOS,
@@ -342,7 +342,7 @@ class NearbyRepositoryImpl @Inject constructor(
                         "sos-${beacon.deviceIdHash}-${beacon.timestampDelta}"
                     },
                     originId = beacon.deviceIdHash.toString(),
-                    finalDestId = "broadcast",
+                    finalDestId = MeshPacket.BROADCAST_DEST,
                     hopCount = 0,
                     maxHops = 3,
                     priority = 100 // High priority
