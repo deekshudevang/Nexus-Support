@@ -10,7 +10,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.meshlink.app.ai.domain.AiRoutingPolicy
 import com.meshlink.app.ai.domain.EmergencyRagService
+import com.meshlink.app.ai.domain.LocalAiEngine
 import com.meshlink.app.ai.domain.MessageSummaryService
 import com.meshlink.app.ai.domain.ModelAssetManager
 import com.meshlink.app.ai.domain.OfflineAiCoordinator
@@ -58,7 +60,8 @@ class AiAssistantScreenTest {
         coEvery { mockCoordinator.initialize() } returns AiCapabilityState.READY
     }
 
-    private val mockLocalAiEngine: com.meshlink.app.ai.inference.LocalAiEngine = mockk(relaxed = true)
+    private val mockLocalAiEngine: LocalAiEngine = mockk(relaxed = true)
+    private val mockRoutingPolicy: AiRoutingPolicy = mockk(relaxed = true)
 
     private fun createViewModel(): AiAssistantViewModel {
         return AiAssistantViewModel(
@@ -69,7 +72,8 @@ class AiAssistantScreenTest {
             messageRepository = mockMessageRepository,
             speechManager = mockSpeechManager,
             visionManager = mockVisionManager,
-            localAiEngine = mockLocalAiEngine
+            localAiEngine = mockLocalAiEngine,
+            routingPolicy = mockRoutingPolicy
         )
     }
 

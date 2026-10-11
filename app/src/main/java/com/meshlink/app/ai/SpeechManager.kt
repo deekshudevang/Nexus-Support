@@ -46,23 +46,71 @@ class SpeechManager @Inject constructor(
         }
     }
 
+    private var speechRate: Float = DEFAULT_SPEECH_RATE
+
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             val result = tts?.setLanguage(Locale.US)
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                 AiLogger.e("TTS: Language not supported")
             } else {
+                tts?.setSpeechRate(speechRate)
+                tts?.setPitch(1.0f)
                 isTtsInitialized = true
+                AiLogger.i("TTS initialized successfully with speech rate: $speechRate")
             }
         } else {
             AiLogger.e("TTS Initialization failed")
         }
     }
 
+    fun setSpeechRate(rate: Float) {
+        speechRate = rate.coerceIn(0.5f, 2.0f)
+        if (isTtsInitialized) {
+            tts?.setSpeechRate(speechRate)
+        }
+    }
+
+    fun getSpeechRate(): Float = speechRate
+
     fun speak(text: String) {
         if (isTtsInitialized) {
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "SpeechManagerTTS")
+            val sanitized = sanitizeForTts(text)
+            if (sanitized.isNotBlank()) {
+                tts?.speak(sanitized, TextToSpeech.QUEUE_FLUSH, null, "SpeechManagerTTS")
+            }
         }
+    }
+
+    fun sanitizeForTts(text: String): String {
+        return text
+            // Remove code blocks
+            .replace(Regex("```[\\s\\S]*?```"), " Code block omitted for voice. ")
+            // Remove inline code
+            .replace(Regex("`([^`]+)`"), "$1")
+            // Remove bold/italics
+            .replace(Regex("\\*\\*([^*]+)\\*\\*"), "$1")
+            .replace(Regex("\\*([^*]+)\\*"), "$1")
+            .replace(Regex("__([^_]+)__"), "$1")
+            .replace(Regex("_([^_]+)_"), "$1")
+            // Remove markdown headers
+            .replace(Regex("(?m)^#{1,6}\\s*"), "")
+            // Remove bullet point markers at start of lines
+            .replace(Regex("(?m)^[\\s*•-]+\\s*"), "")
+            // Remove horizontal rules
+            .replace(Regex("(?m)^[-*_]{3,}\\s*$"), "")
+            // Remove emergency bracket notices
+            .replace(Regex("\\[Emergency Notice:[^\\]]*\\]"), "")
+            // Remove verified emergency source lines
+            .replace(Regex("(?m)^Verified Emergency Sources:.*$"), "")
+            .replace(Regex("(?m)^Source ID:.*$"), "")
+            // Collapse whitespace and newlines
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
+
+    companion object {
+        const val DEFAULT_SPEECH_RATE = 0.85f // Calibrated calm conversational pacing (prevents 2x rushed speech)
     }
     
     fun stopSpeaking() {
