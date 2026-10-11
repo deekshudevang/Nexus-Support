@@ -76,7 +76,8 @@ class NearbyRepositoryImpl @Inject constructor(
     // Phase 4: Location Sync
     private val locationSyncManager: com.meshlink.app.domain.repository.LocationSyncManager,
     // Phase 8: SOS
-    private val sosBeaconAdvertiser: com.meshlink.app.mesh.transport.SosBeaconAdvertiser
+    private val sosBeaconAdvertiser: com.meshlink.app.mesh.transport.SosBeaconAdvertiser,
+    private val sosNonceGenerator: com.meshlink.app.mesh.transport.SosNonceGenerator = com.meshlink.app.mesh.transport.SosNonceGenerator()
 ) : NearbyRepository {
 
     companion object {
@@ -321,7 +322,11 @@ class NearbyRepositoryImpl @Inject constructor(
                     content = beaconJson,
                     timestamp = System.currentTimeMillis(),
                     type = MeshPacket.PacketType.SOS,
-                    messageId = "sos-${beacon.deviceIdHash}-${beacon.timestampDelta}",
+                    messageId = if (beacon.nonce != null) {
+                        "sos-${beacon.deviceIdHash}-${beacon.timestampDelta}-${beacon.nonce}"
+                    } else {
+                        "sos-${beacon.deviceIdHash}-${beacon.timestampDelta}"
+                    },
                     originId = beacon.deviceIdHash.toString(),
                     finalDestId = "broadcast",
                     hopCount = 0,
@@ -648,12 +653,14 @@ class NearbyRepositoryImpl @Inject constructor(
             }
             
             // Phase 8: Start BLE beacon advertising
+            val nonce = sosNonceGenerator.nextNonce()
             val encoded = com.meshlink.app.mesh.transport.SosBeaconCodec.encode(
                 deviceId = localDeviceId,
                 latitude = 0.0,
                 longitude = 0.0,
                 emergencyType = com.meshlink.app.mesh.transport.SosBeaconCodec.EmergencyType.MEDICAL, // Default Medical
-                severity = 5
+                severity = 5,
+                nonce = nonce
             )
             sosBeaconAdvertiser.startAdvertising(encoded)
         }

@@ -33,27 +33,30 @@ class SosMessageIdTest {
     /**
      * Derives a messageId from beacon fields only — no receiver wall clock.
      * Matches the production id rule in NearbyRepositoryImpl:
-     *   "sos-<deviceIdHash>-<timestampDelta>"
-     * This satisfies INV-1 (stable across nodes) and INV-2 (stable on re-advertisement)
-     * but cannot satisfy INV-3 once delta is clamped.
+     *   "sos-<deviceIdHash>-<timestampDelta>" (v0)
+     *   "sos-<deviceIdHash>-<timestampDelta>-<nonce>" (v1)
+     * This satisfies INV-1 (stable across nodes), INV-2 (stable on re-advertisement),
+     * and INV-3 (distinct per-activation nonces produce distinct IDs even when delta is clamped).
      */
     private fun messageIdFromBeacon(beacon: SosBeaconCodec.SosBeacon): String =
-        "sos-${beacon.deviceIdHash}-${beacon.timestampDelta}"
+        if (beacon.nonce != null) {
+            "sos-${beacon.deviceIdHash}-${beacon.timestampDelta}-${beacon.nonce}"
+        } else {
+            "sos-${beacon.deviceIdHash}-${beacon.timestampDelta}"
+        }
 
     /**
-     * KNOWN OPEN DEFECT — DEFECT_REGISTER.md row F.
+     * RESOLVED DEFECT REGRESSION TEST — DEFECT_REGISTER.md row F.
      *
      * INV-3: Two emissions at 19:00 and 20:00 UTC from the same device with the same
      * parameters MUST produce different messageIds (they are separate emergency events).
      *
      * Root cause: timestampDelta is seconds since midnight UTC stored in a UShort (2 bytes,
-     * max 65535). 65535 s ≈ 18:12:15 UTC. Any emission after that time encodes delta=65535,
-     * making all 18 beacon bytes identical across different activations → same id → the
-     * second activation is incorrectly deduplicated and silently dropped.
+     * max 65535). 65535 s ≈ 18:12:15 UTC. Any emission after that time encodes delta=65535.
      *
-     * This test is intentionally LEFT FAILING to keep the CI suite red until a wire-format
-     * version (e.g. a version nibble + per-activation nonce) is designed and deployed.
-     * Do NOT @Ignore or delete this test.
+     * Resolution: 19-byte v1 beacon protocol includes a per-activation nonce byte at [18]
+     * (outside CRC-16 over [0-15]). Separate activations generate distinct nonces,
+     * producing distinct messageIds and satisfying INV-3 even when delta is clamped.
      */
     @Test
     fun inv3_KNOWN_OPEN_DEFECT_F_twoEmissionsAfter1812_mustHaveDifferentIds() {
@@ -63,24 +66,28 @@ class SosMessageIdTest {
 
         val deviceId = UUID.randomUUID().toString()
 
+        val nonce1: Byte = 0x01
+        val nonce2: Byte = 0x02
+
         val bytes1 = SosBeaconCodec.encode(deviceId, 0.0, 0.0,
-            SosBeaconCodec.EmergencyType.MEDICAL, 5, time1)
+            SosBeaconCodec.EmergencyType.MEDICAL, 5, time1, nonce = nonce1)
         val bytes2 = SosBeaconCodec.encode(deviceId, 0.0, 0.0,
-            SosBeaconCodec.EmergencyType.MEDICAL, 5, time2)
+            SosBeaconCodec.EmergencyType.MEDICAL, 5, time2, nonce = nonce2)
 
         val beacon1 = SosBeaconCodec.decode(bytes1)!!
         val beacon2 = SosBeaconCodec.decode(bytes2)!!
 
-        // Confirm the root cause: both deltas are clamped to 65535 by the wire format
+        // Confirm root cause condition: both deltas are clamped to 65535 by the wire format
         assertEquals("delta should be clamped to 65535 at 19:00", 65535, beacon1.timestampDelta)
         assertEquals("delta should be clamped to 65535 at 20:00", 65535, beacon2.timestampDelta)
-        assertEquals("all decoded beacon fields are identical", beacon1, beacon2)
+        assertEquals("nonce1 should be 0x01", nonce1, beacon1.nonce)
+        assertEquals("nonce2 should be 0x02", nonce2, beacon2.nonce)
+        assertNotEquals("decoded beacons are distinct via per-activation nonce", beacon1, beacon2)
 
-        // INV-3: MUST NOT be equal — but currently IS. This assertion fails on purpose.
+        // INV-3: MUST NOT be equal
         assertNotEquals(
-            "INV-3 FAIL (Defect F): two different SOS activations at 19:00 and 20:00 UTC " +
-                "produce the same messageId because timestampDelta wraps at 65535 s (18:12 UTC). " +
-                "Fix requires a wire-format version with a per-activation nonce.",
+            "INV-3: two different SOS activations at 19:00 and 20:00 UTC " +
+                "must produce different messageIds via per-activation nonce.",
             messageIdFromBeacon(beacon1),
             messageIdFromBeacon(beacon2)
         )

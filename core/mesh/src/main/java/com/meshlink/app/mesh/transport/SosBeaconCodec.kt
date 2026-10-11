@@ -21,6 +21,7 @@ import java.nio.ByteOrder
 object SosBeaconCodec {
 
     const val BEACON_SIZE = 18
+    const val BEACON_V1_SIZE = 19
     /** BLE manufacturer ID — use 0xFFFF (reserved for testing/development). */
     const val MANUFACTURER_ID = 0xFFFF
 
@@ -40,7 +41,8 @@ object SosBeaconCodec {
         val longitude: Float,
         val emergencyType: EmergencyType,
         val severity: Int,
-        val timestampDelta: Int
+        val timestampDelta: Int,
+        val nonce: Byte? = null
     )
 
     fun encode(
@@ -49,9 +51,11 @@ object SosBeaconCodec {
         longitude: Double,
         emergencyType: EmergencyType,
         severity: Int,
-        nowMs: Long = System.currentTimeMillis()
+        nowMs: Long = System.currentTimeMillis(),
+        nonce: Byte? = null
     ): ByteArray {
-        val buf = ByteBuffer.allocate(BEACON_SIZE).order(ByteOrder.LITTLE_ENDIAN)
+        val size = if (nonce != null) BEACON_V1_SIZE else BEACON_SIZE
+        val buf = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN)
 
         buf.putInt(crc32(deviceId.toByteArray()))
         buf.putFloat(latitude.toFloat())
@@ -69,15 +73,19 @@ object SosBeaconCodec {
         val crc = crc16(payload, 0, 16)
         buf.putShort(crc)
 
+        if (nonce != null) {
+            buf.put(nonce)
+        }
+
         return payload
     }
 
     fun decode(data: ByteArray): SosBeacon? {
-        if (data.size < BEACON_SIZE) return null
+        if (data.size != BEACON_SIZE && data.size != BEACON_V1_SIZE) return null
 
         val buf = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
 
-        // Verify CRC-16 integrity
+        // Verify CRC-16 integrity over bytes 0-15
         val expectedCrc = crc16(data, 0, 16)
         val actualCrc = ByteBuffer.wrap(data, 16, 2).order(ByteOrder.LITTLE_ENDIAN).short
         if (expectedCrc != actualCrc) return null
@@ -88,8 +96,9 @@ object SosBeaconCodec {
         val type = EmergencyType.fromCode(buf.get())
         val sev = buf.get().toInt()
         val delta = buf.short.toInt() and 0xFFFF
+        val nonce = if (data.size == BEACON_V1_SIZE) data[18] else null
 
-        return SosBeacon(hash, lat, lon, type, sev, delta)
+        return SosBeacon(hash, lat, lon, type, sev, delta, nonce)
     }
 
     private fun crc32(data: ByteArray): Int {
