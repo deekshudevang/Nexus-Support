@@ -149,4 +149,22 @@ class MeshRouterTest {
             pendingMessageRepository.enqueue(match { it.packetJson.contains("SOS_UUID_TEST") })
         }
     }
+
+    @Test
+    fun `route incoming SOS extracts GPS coordinates from JSON content and updates device location`() = runTest {
+        val sosPacket = MeshPacket(
+            senderId = "DEVICE_B",
+            receiverId = "*",
+            content = """{"emergencyType":"MEDICAL","severity":5,"lat":12.9716,"lon":77.5946}""",
+            timestamp = 1000L,
+            type = MeshPacket.PacketType.SOS,
+            messageId = "SOS_LOC_123",
+            originId = "DEVICE_B",
+            finalDestId = MeshPacket.BROADCAST_DEST
+        )
+
+        val result = meshRouter.route("ep_b", sosPacket, mapOf("ep_b" to "DEVICE_B"))
+        assertTrue(result is RoutingResult.Processed)
+        io.mockk.coVerify { deviceRepository.updateLocation("DEVICE_B", 12.9716, 77.5946) }
+    }
 }

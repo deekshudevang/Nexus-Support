@@ -386,3 +386,12 @@
 | **Phase 3.11: SOS Activation Preemption** | **VERIFIED** | Navigated to SOS screen (Tab 5); verified `OfflineAiCoordinatorImpl.onSosActivated()` pre-empts active inference coroutine, setting `isSosActive = true` and preserving CPU/battery for mesh life-safety broadcasting. (Evidence: `evidence_sos_real.png`). |
 | **Phase 4: Real Performance Benchmarks** | **VERIFIED** | **Time to First Token (TTFT):** ~1,850 ms (CPU fallback on API 36).<br>**Inference Duration:** 23.09s for 364 prompt tokens + ~280 generated tokens (~12.1 tok/s).<br>**Peak Memory:** 780.5 MB PSS (Dalvik Heap: 9.4 MB, Native Heap: 193.5 MB, Gfx: 250.6 MB, RSS: 802.9 MB). Under 2.0 GB target budget.<br>**Stability:** 0 ANRs, 0 native crashes, 0 thermal throttling warnings. |
 | **Phase 5: Release Readiness** | **VERIFIED** | All 77 unit tests pass. 11/11 physical device smoke test scenarios verified with screenshot artifacts. Zero high-severity defects. Ready for wider beta testing. |
+
+---
+
+## Engineering Transformation Tracker
+
+| ID | Category | Task | Priority | Status | Evidence | Remaining blocker |
+|----|----------|------|----------|--------|----------|-------------------|
+| ET-001 | Mesh/SOS | Eliminate dual conflicting SOS beacon paths, hardcoded 0.0 coordinates, and missing JSON coordinate parsing in MeshRouter | P0 | VERIFIED_UNIT | `MeshRouterTest` (failing reproduction test passes; 6/6 tests), `NearbyRepositoryImpl` JSON coordinate parsing & authoritative beacon advertising, `SosViewModel` duplicate beacon removal, fresh `:core:mesh:testDebugUnitTest :app:testDebugUnitTest` (159 tests, 0 failures, 1 skipped: `migrate5To14`) | Multi-device physical BLE field test (`VERIFIED_DEVICE`) |
+

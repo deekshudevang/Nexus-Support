@@ -98,6 +98,7 @@ class SosViewModel @Inject constructor(
             _isBroadcasting.value = false
             _deliveryStatus.value = SosDeliveryState.IDLE
             activeSosMessageId = null
+            nearbyRepository.cancelSos()
             sosBeaconAdvertiser.stopAdvertising()
             try {
                 aiCoordinator.onSosDeactivated()
@@ -173,27 +174,8 @@ class SosViewModel @Inject constructor(
 
             activeSosMessageId = packetData.uuid
 
-            // Send via Nearby Mesh (Phase 3 structured SOS)
+            // Send via Nearby Mesh (nearbyRepository.sendSos also starts authoritative BLE beacon advertising)
             nearbyRepository.sendSos(packetData.toJson())
-
-            // Start BLE beacon advertising (Phase 2 compact SOS)
-            val beaconEType = when (_incidentType.value) {
-                IncidentType.MED_EVAC -> SosBeaconCodec.EmergencyType.MEDICAL
-                IncidentType.LOST -> SosBeaconCodec.EmergencyType.LOST
-                IncidentType.GEAR -> SosBeaconCodec.EmergencyType.OTHER
-                IncidentType.SECURITY -> SosBeaconCodec.EmergencyType.SECURITY
-                IncidentType.NONE -> SosBeaconCodec.EmergencyType.OTHER
-            }
-            val nonce = sosNonceGenerator.nextNonce()
-            val beaconPayload = SosBeaconCodec.encode(
-                deviceId = myDeviceId,
-                latitude = lat,
-                longitude = lon,
-                emergencyType = beaconEType,
-                severity = 5,
-                nonce = nonce
-            )
-            sosBeaconAdvertiser.startAdvertising(beaconPayload)
         }
     }
 }

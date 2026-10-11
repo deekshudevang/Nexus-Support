@@ -669,14 +669,49 @@ class NearbyRepositoryImpl @Inject constructor(
                 result.forwardTargets.forEach { dispatchToNearby(it) }
             }
             
-            // Phase 8: Start BLE beacon advertising
+            // Phase 8: Start BLE beacon advertising using authoritative parameters from payload if present
+            var beaconLat = 0.0
+            var beaconLon = 0.0
+            var emergencyType = com.meshlink.app.mesh.transport.SosBeaconCodec.EmergencyType.MEDICAL
+            var severity = 5
+
+            val trimmed = content.trim()
+            if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+                try {
+                    val json = org.json.JSONObject(trimmed)
+                    if (json.has("lat") || json.has("latitude")) {
+                        val parsedLat = if (json.has("lat")) json.optDouble("lat", Double.NaN) else json.optDouble("latitude", Double.NaN)
+                        if (!parsedLat.isNaN()) beaconLat = parsedLat
+                    }
+                    if (json.has("lon") || json.has("longitude")) {
+                        val parsedLon = if (json.has("lon")) json.optDouble("lon", Double.NaN) else json.optDouble("longitude", Double.NaN)
+                        if (!parsedLon.isNaN()) beaconLon = parsedLon
+                    }
+                    if (json.has("emergencyType")) {
+                        val typeStr = json.optString("emergencyType", "")
+                        emergencyType = when (typeStr.uppercase()) {
+                            "LOST" -> com.meshlink.app.mesh.transport.SosBeaconCodec.EmergencyType.LOST
+                            "SECURITY" -> com.meshlink.app.mesh.transport.SosBeaconCodec.EmergencyType.SECURITY
+                            "OTHER", "GEAR", "NONE" -> com.meshlink.app.mesh.transport.SosBeaconCodec.EmergencyType.OTHER
+                            else -> com.meshlink.app.mesh.transport.SosBeaconCodec.EmergencyType.MEDICAL
+                        }
+                    }
+                    if (json.has("severity")) {
+                        val parsedSev = json.optInt("severity", 5)
+                        if (parsedSev in 1..5) severity = parsedSev
+                    }
+                } catch (e: Exception) {
+                    Timber.w(e, "NearbyRepositoryImpl: failed to parse JSON for SOS beacon advertising")
+                }
+            }
+
             val nonce = sosNonceGenerator.nextNonce()
             val encoded = com.meshlink.app.mesh.transport.SosBeaconCodec.encode(
                 deviceId = localDeviceId,
-                latitude = 0.0,
-                longitude = 0.0,
-                emergencyType = com.meshlink.app.mesh.transport.SosBeaconCodec.EmergencyType.MEDICAL, // Default Medical
-                severity = 5,
+                latitude = beaconLat,
+                longitude = beaconLon,
+                emergencyType = emergencyType,
+                severity = severity,
                 nonce = nonce
             )
             sosBeaconAdvertiser.startAdvertising(encoded)

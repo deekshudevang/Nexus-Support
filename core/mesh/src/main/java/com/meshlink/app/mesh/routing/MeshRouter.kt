@@ -607,23 +607,45 @@ class MeshRouter @Inject constructor(
         messageRepository.insertMessage(msg)
 
         // Attempt to extract GPS coordinates from payload
-        val contentStr = String(plaintext, Charsets.UTF_8)
-        val mapsUrlPrefix = "https://maps.google.com/?q="
-        val urlIndex = contentStr.indexOf(mapsUrlPrefix)
-        if (urlIndex != -1) {
+        val contentStr = String(plaintext, Charsets.UTF_8).trim()
+        var extractedLat: Double? = null
+        var extractedLon: Double? = null
+
+        if (contentStr.startsWith("{") && contentStr.endsWith("}")) {
             try {
-                val coords = contentStr.substring(urlIndex + mapsUrlPrefix.length).split(" ")[0].split(",")
-                if (coords.size >= 2) {
-                    val lat = coords[0].trim().toDoubleOrNull()
-                    val lon = coords[1].trim().toDoubleOrNull()
-                    if (lat != null && lon != null) {
-                        deviceRepository.updateLocation(packet.originId, lat, lon)
-                        Timber.i("MeshRouter: extracted location for ${packet.originId} -> $lat, $lon")
-                    }
+                val json = org.json.JSONObject(contentStr)
+                if (json.has("lat") || json.has("latitude")) {
+                    extractedLat = if (json.has("lat")) json.optDouble("lat", Double.NaN) else json.optDouble("latitude", Double.NaN)
+                    if (extractedLat.isNaN()) extractedLat = null
+                }
+                if (json.has("lon") || json.has("longitude")) {
+                    extractedLon = if (json.has("lon")) json.optDouble("lon", Double.NaN) else json.optDouble("longitude", Double.NaN)
+                    if (extractedLon.isNaN()) extractedLon = null
                 }
             } catch (e: Exception) {
-                Timber.w(e, "MeshRouter: failed to parse location coordinates")
+                Timber.w(e, "MeshRouter: failed to parse JSON payload for location")
             }
+        }
+
+        if (extractedLat == null || extractedLon == null) {
+            val mapsUrlPrefix = "https://maps.google.com/?q="
+            val urlIndex = contentStr.indexOf(mapsUrlPrefix)
+            if (urlIndex != -1) {
+                try {
+                    val coords = contentStr.substring(urlIndex + mapsUrlPrefix.length).split(" ")[0].split(",")
+                    if (coords.size >= 2) {
+                        extractedLat = coords[0].trim().toDoubleOrNull()
+                        extractedLon = coords[1].trim().toDoubleOrNull()
+                    }
+                } catch (e: Exception) {
+                    Timber.w(e, "MeshRouter: failed to parse location coordinates from URL")
+                }
+            }
+        }
+
+        if (extractedLat != null && extractedLon != null) {
+            deviceRepository.updateLocation(packet.originId, extractedLat, extractedLon)
+            Timber.i("MeshRouter: extracted location for ${packet.originId} -> $extractedLat, $extractedLon")
         }
 
         // Update the sender's known display name if provided
