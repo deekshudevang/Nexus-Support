@@ -54,10 +54,60 @@ data class SosPacketData(
             addProperty("hopCount", hopCount)
             addProperty("status", status.name)
         }
-        return GSON.toJson(jsonObj)
+
+        var jsonStr = GSON.toJson(jsonObj)
+        if (jsonStr.toByteArray(Charsets.UTF_8).size > MAX_TRANSPORT_PAYLOAD_BYTES) {
+            // Deterministically truncate medical info / message while strictly preserving all vital fields (uuid, senderId, location, etc.)
+            jsonObj.addProperty("message", "")
+            val baseSize = GSON.toJson(jsonObj).toByteArray(Charsets.UTF_8).size
+            val markerBytes = TRUNCATION_MARKER.toByteArray(Charsets.UTF_8).size
+            val maxMessageBytes = (MAX_TRANSPORT_PAYLOAD_BYTES - baseSize - markerBytes - 32).coerceAtLeast(0)
+
+            var best = truncateUtf8String(message, maxMessageBytes)
+            jsonObj.addProperty("message", best + TRUNCATION_MARKER)
+            jsonStr = GSON.toJson(jsonObj)
+
+            // Final safety adjustment in case JSON escaping added extra bytes
+            while (jsonStr.toByteArray(Charsets.UTF_8).size > MAX_TRANSPORT_PAYLOAD_BYTES && best.isNotEmpty()) {
+                val excess = jsonStr.toByteArray(Charsets.UTF_8).size - MAX_TRANSPORT_PAYLOAD_BYTES
+                val dropCount = maxOf(1, excess / 2)
+                best = best.dropLast(dropCount)
+                if (best.isNotEmpty() && Character.isHighSurrogate(best.last())) {
+                    best = best.dropLast(1)
+                }
+                jsonObj.addProperty("message", best + TRUNCATION_MARKER)
+                jsonStr = GSON.toJson(jsonObj)
+            }
+        }
+        return jsonStr
+    }
+
+    private fun truncateUtf8String(str: String, maxBytes: Int): String {
+        if (maxBytes <= 0) return ""
+        if (str.toByteArray(Charsets.UTF_8).size <= maxBytes) return str
+
+        var low = 0
+        var high = minOf(str.length, maxBytes)
+        var best = ""
+        while (low <= high) {
+            val mid = (low + high) ushr 1
+            val candidate = str.substring(0, mid)
+            if (candidate.toByteArray(Charsets.UTF_8).size <= maxBytes) {
+                best = candidate
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        if (best.isNotEmpty() && Character.isHighSurrogate(best.last())) {
+            best = best.dropLast(1)
+        }
+        return best
     }
 
     companion object {
+        const val MAX_TRANSPORT_PAYLOAD_BYTES = 32_000 // Google Nearby Connections Payload.MAX_BYTES = 32,768 (32 KB); reserve envelope headroom
+        const val TRUNCATION_MARKER = "\n[TRUNCATED: Medical info exceeded transport limit]"
         private val GSON = com.google.gson.Gson()
 
         fun fromJson(jsonStr: String): SosPacketData? {

@@ -1,3 +1,52 @@
+# Defect N checkpoint
+
+- **Current Step:** STEP 1 (N1 Serialization) -> STEP 2 (N2 Location)
+- **Step Status:**
+  - Step 0 (State, Baseline, Work Item): DONE
+  - Step 1 (N1 Serialization): DONE
+  - Step 2 (N2 Location): NOT_STARTED
+  - Step 3 (N3 One Event, Two Paths): NOT_STARTED
+  - Step 4 (N4 Identity, Nonce, Replay): NOT_STARTED
+  - Step 5 (Cross-Module Regression): NOT_STARTED
+  - Step 6 (Fresh, Accurate Test Counts): NOT_STARTED
+  - Step 7 (Diff Hygiene): NOT_STARTED
+  - Step 8 (Documentation Accuracy): NOT_STARTED
+  - Step 9 (Report and Stop): NOT_STARTED
+- **Last Commit SHA:** `3ebf99808a757011790d3f2baf8dfe673931a42a` (pending Step 1 commit)
+- **Last Command Completed:** `.\gradlew.bat :core:domain:test --console=plain` (Exit code: 0)
+- **Uncommitted / Untracked Files:** `docs/engineering/DEFECT_N_EVIDENCE.md`
+- **Last Verified Test Results:** `:core:domain:test`: 6/6 tests passed in `SosPacketDataTest`, 0 failures, 0 errors, 0 skipped
+- **Current Blocker:** None
+- **Exact Next Action:** Commit Step 1 and proceed to Step 2 (N2 Location).
+
+---
+
+## Defect N Complete-Fix Work Item Specification (N1–N4)
+
+- **Branch:** `fix/sos-defect-n` (HEAD: `3ebf99808a757011790d3f2baf8dfe673931a42a`)
+- **Modules and Real Test Tasks (from `settings.gradle.kts`):**
+  - `:app` -> `:app:testDebugUnitTest`, `:app:assembleDebug`
+  - `:core:domain` -> `:core:domain:test`
+  - `:core:data` -> `:core:data:testDebugUnitTest`
+  - `:core:mesh` -> `:core:mesh:testDebugUnitTest`
+  - `:core:crypto` -> `:core:crypto:testDebugUnitTest`
+- **Acceptance Criteria & Defects:**
+  - **N1 Serialization:** Reconcile test count (actually 3 `@Test` in `SosPacketDataTest`), move Gson to `gradle/libs.versions.toml` (pinned, Apache-2.0 documented), enforce payload size bound against transport limit with deterministic truncation marker on medical info, and add bidirectional golden wire tests (old parser accepts new output; new parser accepts old payload with unknown/missing fields).
+  - **N2 Location:** Trace full path in docs; explicit location representation (nullable); validate bounds `[-90,90]`, `[-180,180]`, reject NaN/Inf; eliminate 0.0 defaults in beacon path; backward-compatible unavailable sentinel in beacon; document legacy (0,0) policy; integration tests with real in-memory DB and production classes proving missing GPS is never plotted on map.
+  - **N3 One Event, Two Paths:** Separate authenticity namespaces: unauthenticated beacon vs authenticated mesh SOS; beacon never generates ACK, never relays as authenticated, never suppresses mesh SOS; single authoritative `beaconKey` triple generation `(deviceHash, timestampDelta, nonce)` carried as optional field in mesh SOS; receiver matches only when triple matches, deviceHash matches, and exactly 1 candidate exists; implement all 12 scenarios S1–S12 with production classes, real in-memory Room DB, and injectable clock.
+  - **N4 Identity, Nonce, Replay:** Document authenticated event ID as authoritative identity, beacon as correlation hint; mathematical proof and test of birthday bound ($P(N=20)>50\%$); injectable clock for `SeenMessageCache`; tests for TTL (10m) expiry, nonce wraparound, flooding bounds / rate limits, and durable restart deduplication using real database without schema break.
+  - **Documentation Accuracy:** Fix stale commit references (`52e63fc` -> actual commit SHAs), reconcile defect register test count, create `docs/engineering/SOS_PROTOCOL.md` and `docs/engineering/DEFECT_N_EVIDENCE.md`, note AI documentation mismatch as a separate open item.
+- **Rollback Boundary:**
+  - Step 1: `fix(sos): N1 ...`
+  - Step 2: `fix(sos): N2 ...`
+  - Step 3: `fix(sos): N3 ...`
+  - Step 4: `fix(sos): N4 ...`
+- **Compatibility Decisions:**
+  - Wire formats strictly preserved. Only additive optional fields with golden test proof that existing parsers ignore them.
+  - No Room schema changes or migrations unless approved.
+
+---
+
 # Nexus-Support Offline AI Development
 
 ## Status

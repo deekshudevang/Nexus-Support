@@ -16,6 +16,6 @@ kotlin {
 
 dependencies {
     implementation(libs.kotlinx.coroutines.core)
-    implementation("com.google.code.gson:gson:2.10.1")
+    implementation(libs.gson)
     testImplementation(libs.junit)
 }
