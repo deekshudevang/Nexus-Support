@@ -168,3 +168,54 @@ Governing standard: Execution Control F. All entries must reflect actual command
     11. `S11 - two authenticated events with same beaconKey followed by beacon are ambiguous and produce 3 alerts without suppression` (Passed)
     12. `S12 - beacon expires before matching mesh SOS arrives leaving 1 authenticated alert` (Passed)
 - **Candidate Commit Message:** `fix(sos): N3 beacon authenticity separation, beaconKey correlation, and integration scenarios`
+
+---
+
+## Step 4: N4 Identity, Nonce, Replay
+
+- **Production Identity Specification:**
+  - *Authoritative Identity:* Authenticated SOS UUID (`SosPacketData.uuid` / `Message.id`, 128-bit RFC 4122 random UUID) is the sole authoritative identity of an emergency event.
+  - *Beacon Triple:* `(deviceHash, timestampDelta, nonce)` is an ephemeral correlation hint only.
+  - *Single Authoritative Generator:* `NearbyRepositoryImpl.sendSos()` generates `(deviceHash, timestampDelta, nonce)` once and populates both `SosPacketData.beaconKey` and the BLE beacon frame via `SosBeaconCodec.encode`. Competing or divergent generators eliminated.
+  - *Cryptographic Nonce:* `SosNonceGenerator` uses `java.security.SecureRandom()` to draw uniformly distributed 8-bit nonces across $[-128, 127]$.
+- **Collision Quantification:**
+  - *Single Sender:*
+    Exact birthday formula: $P(\text{collision}) = 1 - \prod_{k=0}^{n-1} \frac{256 - k}{256}$.
+    $P(n=2) = 0.39\%$, $P(n=10) = 16.26\%$, $P(n=19) = 49.86\%$, $P(n=20) = 53.41\%$ (>50%), $P(n=30) = 83.19\%$.
+    *Conclusion:* An 8-bit nonce alone cannot guarantee uniqueness across activations. True uniqueness requires the 128-bit UUID channel.
+  - *Simulation with Fixed Seed:* `Random(42L)` across 10,000 trials with $n=20$ samples from $S=256$ demonstrates empirical collision probability of $53.4\% \pm 2\%$, confirming theoretical mathematical derivation.
+  - *Multi-Sender Area Population:*
+    For concurrent senders in an area emitting within the identical 1-second timestamp delta bucket, the state space is $2^{32} \times 2^8 = 2^{40} \approx 1.1 \times 10^{12}$. The 50% collision crossover point is $M \approx \sqrt{2 \ln(2) \cdot 2^{40}} \approx 1,232,875$ concurrent emitting devices.
+- **Replay, Deduplication & Anti-Flood Invariants:**
+  - *Injectable Clock:* `SeenMessageCache` and `MeshRouter` accept injectable clock providers `clock: () -> Long`.
+  - *TTL Expiry:* Entries older than 10 minutes (`DEFAULT_TTL_MS = 600_000L`) are evicted from the LRU cache and treated as unseen, allowing retransmission after prolonged disconnection.
+  - *Rate Limiting:*
+    - Per-source anti-flood: `BEACON_MIN_INTERVAL_PER_SOURCE_MS = 2_000L` drops subsequent bursts from the same device hash.
+    - Global sliding window: `MAX_BEACONS_PER_MINUTE_GLOBAL = 30` bounds total unverified beacons to 30 per minute.
+    - Memory bounding: `MAX_UNVERIFIED_BEACONS = 100` hard capacity cap with proactive pruning of records older than 10 minutes.
+  - *Restart Durability (Real Room Database):*
+    Process death and cold start clears in-memory caches, but Room table primary key constraint (`@PrimaryKey val id: String` with `OnConflictStrategy.REPLACE`) guarantees zero duplicate alerts in database when the same authenticated SOS is replayed after restart. Zero schema changes or migrations required.
+  - *Beacon Non-Suppression Invariant:*
+    A colliding unauthenticated beacon never suppresses an authenticated SOS event.
+- **After-Fix Verification Evidence:**
+  - Command: `.\gradlew.bat :core:mesh:testDebugUnitTest --console=plain` (task-7116)
+  - Exit Code: 0 (BUILD SUCCESSFUL in 36s)
+  - Actionable Tasks: 4 executed, 83 up-to-date
+- **Fresh JUnit Test Results (`core/mesh/build/test-results/testDebugUnitTest/TEST-com.meshlink.app.mesh.repository.SosNonceAndReplayTest.xml`):**
+  - Total Tests: 11
+  - Failures: 0
+  - Errors: 0
+  - Skipped: 0
+  - Tests Executed:
+    1. `prove birthday bound collision probability for 1-byte nonce` (Passed)
+    2. `simulation with fixed seed confirms 1-byte nonce collision exceeds 50 percent for 20 emissions` (Passed)
+    3. `quantify collision probability across distinct senders in an area` (Passed)
+    4. `nonce generator produces values across wraparound without exception` (Passed)
+    5. `seen message cache suppresses replay inside 10-minute TTL using injectable clock` (Passed)
+    6. `seen message cache allows retransmission after 10-minute TTL expiry using injectable clock` (Passed)
+    7. `process restart resets in-memory seen message cache but real DB guarantees restart durability` (Passed)
+    8. `per-source rate limiting drops beacon flood from single source` (Passed)
+    9. `global sliding window rate limiting bounds unverified beacons to 30 per minute` (Passed)
+    10. `hard memory bound and TTL pruning on unverified beacon alert records` (Passed)
+    11. `colliding unauthenticated beacon cannot suppress authenticated SOS event` (Passed)
+- **Candidate Commit Message:** `fix(sos): N4 nonce collision bounds, injectable clock dedup, and replay durability`

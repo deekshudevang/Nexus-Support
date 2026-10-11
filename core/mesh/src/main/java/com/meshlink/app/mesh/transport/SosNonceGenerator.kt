@@ -13,23 +13,20 @@ import javax.inject.Singleton
  */
 @Singleton
 class SosNonceGenerator @Inject constructor(
-    context: Context? = null
+    context: Context? = null,
+    private val random: java.util.Random = SecureRandom()
 ) {
-    private val prefs = context?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    private val random = SecureRandom()
-    private val memoryCounter = AtomicInteger(0)
-
+    /**
+     * Generates an 8-bit cryptographically random nonce for an SOS activation.
+     * Note: As proven in defect N4 analysis, an 8-bit nonce (256 values) cannot guarantee
+     * collision resistance under repeated emissions; it serves solely as an ephemeral
+     * correlation hint alongside the authoritative 128-bit mesh UUID.
+     */
     @Synchronized
     fun nextNonce(): Byte {
-        val counter = if (prefs != null) {
-            val current = prefs.getInt(KEY_COUNTER, 0)
-            prefs.edit().putInt(KEY_COUNTER, current + 1).apply()
-            current
-        } else {
-            memoryCounter.getAndIncrement()
-        }
-        val randomByte = ByteArray(1).also { random.nextBytes(it) }[0]
-        return ((counter and 0xFF) xor randomByte.toInt()).toByte()
+        val b = ByteArray(1)
+        random.nextBytes(b)
+        return b[0]
     }
 
     companion object {

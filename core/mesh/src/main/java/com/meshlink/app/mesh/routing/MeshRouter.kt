@@ -58,7 +58,8 @@ class MeshRouter @Inject constructor(
     private val pendingMessageRepository: PendingMessageRepository,
     private val userProfileManager: UserProfileManager,
     private val notificationManager: NotificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager,
-    private val seenBeaconCache: SeenMessageCache = SeenMessageCache()
+    private val seenBeaconCache: SeenMessageCache = SeenMessageCache(),
+    private val clock: () -> Long = { System.currentTimeMillis() }
 ) {
     init {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -71,10 +72,20 @@ class MeshRouter @Inject constructor(
         private const val PENDING_TTL_MS = 48 * 60 * 60 * 1_000L  // 48 hours
         /** Minimum interval between accepted heartbeats from any single peer (anti-flood). */
         private const val HEARTBEAT_MIN_INTERVAL_MS = 5_000L
+        /** Maximum number of unverified beacon alert records kept in memory to prevent exhaustion. */
+        const val MAX_UNVERIFIED_BEACONS = 100
+        /** Minimum interval between unverified beacon alerts from the same source hash (anti-flood). */
+        const val BEACON_MIN_INTERVAL_PER_SOURCE_MS = 2_000L
+        /** Sliding window limit: maximum unverified beacon alerts processed globally per minute. */
+        const val MAX_BEACONS_PER_MINUTE_GLOBAL = 30
     }
 
     /** Rate-limit table: peerDeviceId → timestamp of last accepted heartbeat. */
     private val heartbeatLastSeen = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /** Rate-limit table: beaconDeviceHash → timestamp of last accepted beacon. */
+    private val beaconLastSeenPerSource = java.util.concurrent.ConcurrentHashMap<Int, Long>()
+    private val globalBeaconTimestamps = java.util.concurrent.ConcurrentLinkedQueue<Long>()
 
     data class AuthenticatedSosRecord(
         val messageId: String,
@@ -115,12 +126,37 @@ class MeshRouter @Inject constructor(
                 Timber.d("MeshRouter: DROP duplicate beacon messageId=${packet.messageId}")
                 return@withContext RoutingResult.Drop
             }
-            seenBeaconCache.markSeen(packet.messageId)
 
             val parts = packet.messageId.split("-")
             val idHash = if (parts.size >= 2) parts[1].toIntOrNull() ?: 0 else 0
             val originHash = packet.originId.toIntOrNull() ?: idHash
             val beaconDeviceHash = originHash
+
+            // Anti-flood: Per-source and global sliding-window rate limits
+            val now = clock()
+            val lastSeen = beaconLastSeenPerSource[beaconDeviceHash] ?: 0L
+            if (now - lastSeen < BEACON_MIN_INTERVAL_PER_SOURCE_MS) {
+                Timber.w("MeshRouter: Rate-limiting beacon flood from deviceHash $beaconDeviceHash")
+                return@withContext RoutingResult.Drop
+            }
+            while (globalBeaconTimestamps.peek()?.let { now - it > 60_000L } == true) {
+                globalBeaconTimestamps.poll()
+            }
+            if (globalBeaconTimestamps.size >= MAX_BEACONS_PER_MINUTE_GLOBAL) {
+                Timber.w("MeshRouter: Global beacon rate limit exceeded ($MAX_BEACONS_PER_MINUTE_GLOBAL/min)")
+                return@withContext RoutingResult.Drop
+            }
+
+            beaconLastSeenPerSource[beaconDeviceHash] = now
+            globalBeaconTimestamps.add(now)
+            seenBeaconCache.markSeen(packet.messageId)
+
+            // Prune expired records (> 10 minutes) and enforce hard bounds
+            unverifiedBeaconAlerts.removeAll { now - it.timestamp > 10 * 60 * 1_000L }
+            while (unverifiedBeaconAlerts.size >= MAX_UNVERIFIED_BEACONS) {
+                unverifiedBeaconAlerts.removeAt(0)
+            }
+            activeAuthenticatedSos.removeAll { now - it.timestamp > 10 * 60 * 1_000L }
 
             // Matching rule: B matches E iff:
             // (1) E carries beaconKey equal to B's triple (packet.messageId);
@@ -145,7 +181,7 @@ class MeshRouter @Inject constructor(
                 UnverifiedBeaconRecord(
                     messageId = packet.messageId,
                     deviceHash = beaconDeviceHash,
-                    timestamp = System.currentTimeMillis()
+                    timestamp = now
                 )
             )
 
@@ -205,7 +241,7 @@ class MeshRouter @Inject constructor(
                 messageId = packet.messageId,
                 originId = packet.originId,
                 beaconKey = beaconKey,
-                timestamp = System.currentTimeMillis()
+                timestamp = clock()
             )
             activeAuthenticatedSos.add(authRecord)
 

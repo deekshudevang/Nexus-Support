@@ -1,23 +1,23 @@
 # Defect N checkpoint
 
-- **Current Step:** STEP 4 (N4 Identity, Nonce, Replay)
+- **Current Step:** STEP 5 (Cross-Module Regression)
 - **Step Status:**
   - Step 0 (State, Baseline, Work Item): DONE
   - Step 1 (N1 Serialization): DONE
   - Step 2 (N2 Location): DONE
   - Step 3 (N3 One Event, Two Paths): DONE
-  - Step 4 (N4 Identity, Nonce, Replay): NOT_STARTED
+  - Step 4 (N4 Identity, Nonce, Replay): DONE
   - Step 5 (Cross-Module Regression): NOT_STARTED
   - Step 6 (Fresh, Accurate Test Counts): NOT_STARTED
   - Step 7 (Diff Hygiene): NOT_STARTED
   - Step 8 (Documentation Accuracy): NOT_STARTED
   - Step 9 (Report and Stop): NOT_STARTED
-- **Last Commit SHA:** `ca2f70771fad6da86e9aa0f5e9d5d71f9c130866`
-- **Last Command Completed:** `.\gradlew.bat :core:domain:test :core:data:testDebugUnitTest :core:mesh:testDebugUnitTest --console=plain` (Exit code: 0)
-- **Uncommitted / Untracked Files:** `core/mesh/src/test/java/com/meshlink/app/mesh/repository/SosTwoPathsIntegrationTest.kt`
-- **Last Verified Test Results:** `:core:mesh:testDebugUnitTest` (all tests passed including 12 S1–S12 integration tests), `:core:domain:test` (all tests passed), `:core:data:testDebugUnitTest` (all tests passed)
+- **Last Commit SHA:** `f0ac6eb274016f4eca858764eaef3487e89c4a9a`
+- **Last Command Completed:** `.\gradlew.bat :core:mesh:testDebugUnitTest --console=plain` (Exit code: 0)
+- **Uncommitted / Untracked Files:** None
+- **Last Verified Test Results:** `:core:mesh:testDebugUnitTest`: 79/79 tests passed (including 11 `SosNonceAndReplayTest` and 12 `SosTwoPathsIntegrationTest`), 0 failures, 0 errors, 0 skipped
 - **Current Blocker:** None
-- **Exact Next Action:** Commit Step 3, then proceed to Step 4 (N4 Identity, Nonce, Replay).
+- **Exact Next Action:** Commit Step 4, then proceed to Step 5 (Cross-Module Regression).
 
 ---
 

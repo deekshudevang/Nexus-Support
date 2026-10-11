@@ -52,7 +52,8 @@ class SeenMessageCache @Inject constructor(
             val age = clock() - entry.seenAt
             if (age > DEFAULT_TTL_MS) {
                 lruCache.remove(messageId)
-                // Don't return false yet — Bloom may still catch it
+                // Defined behavior: entry has expired its 10-minute TTL, allow retransmission
+                return false
             } else {
                 return true
             }
