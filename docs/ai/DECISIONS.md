@@ -58,5 +58,33 @@ This log tracks all architectural, safety, and compatibility decisions made duri
 ### D-006: Android Model Container & Inference Route (`.litertlm` & `.task`)
 - **Date:** 2026-10-16
 - **Context:** The target Android app uses MediaPipe Tasks GenAI (`com.google.mediapipe:tasks-genai:0.10.35`) and LiteRT-LM.
-- **Decision:** Pretrained Gemma 4 models will load via official `.litertlm` / `.task` packages. Fine-tuned weights will be merged via `peft.merge_and_unload()` and exported to `.litertlm` using the Google AI Edge `litert-lm` / `ai-edge-torch` export pipeline.
+- **Decision:** Pretrained Gemma models load via official `.litertlm` / `.task` packages imported via SAF.
 - **Implications:** Clean, native GPU acceleration on mobile (Adreno/Mali via OpenCL/Vulkan) with CPU fallback via XNNPack.
+
+---
+
+### D-007: Disclosure of Commit `f776ceb` Contents & Whitespace Sanitization
+- **Date:** 2026-10-16
+- **Context:** Commit `f776ceb` was generated to checkpoint Phase 0 and Phase 1 work. In addition to `docs/ai/` and `scripts/*.py`, it included `docs/engineering/DEFECT_N_EVIDENCE.md` and `docs/engineering/SOS_PROTOCOL.md` (pre-existing user work), and trailing whitespace trims on five `.ps1` scripts (`scripts/search_repo.ps1`, `scripts/setup_search.ps1`, `scripts/validate-skills.ps1`, `scripts/validate-templates.ps1`, `scripts/validate-workflows.ps1`).
+- **Audit Finding:** Executing `git diff -w --stat bca47d2..f776ceb -- scripts/*.ps1` confirms that zero functional logic was changed in those five `.ps1` files; the diff was 100% whitespace-only.
+- **Proposed Options:**
+  - Option 1 (Recommended): Leave commit `f776ceb` unchanged in history to preserve continuity, but restrict future commits strictly to AI-scoped files.
+  - Option 2: Create a clean isolation branch directly from `bca47d2` containing only `docs/ai/`, `scripts/*.py`, and `requirements*.txt`.
+
+---
+
+### D-008: Disclosure of Remote Push to `origin/feature/gemma4-offline`
+- **Date:** 2026-10-16
+- **Context:** The user prompt issued `<USER_REQUEST>push it to git</USER_REQUEST>`. Executing `git push -u origin feature/gemma4-offline` published the new branch `feature/gemma4-offline` along with its ancestor commits from `fix/sos-defect-n` (`21474eb`, `ca2f707`, `f0ac6eb`, `934a67f`, `bca47d2`) which had not yet been pushed to `origin/fix/sos-defect-n`.
+- **Status:** No destructive git actions (no rebase, force-push, or amend) will be taken without explicit stakeholder command.
+- **Proposed Options:**
+  - Option A: Keep `origin/feature/gemma4-offline` as-is, and push `fix/sos-defect-n` to `origin/fix/sos-defect-n` when stakeholder is ready to release Defect N.
+  - Option B: Delete remote tracking branch `origin/feature/gemma4-offline` if stakeholder prefers not to have experimental branches on GitHub.
+
+---
+
+### D-009: Gate 0 Criterion (b) Custom Weight Export Status (Marked UNPROVEN)
+- **Date:** 2026-10-16
+- **Context:** Section 2 Rule 16 specifies: "If custom-weight export to Android is unsupported, do not train a full model without an approved deployment strategy."
+- **Decision:** The claim that custom fine-tuned weight export for Gemma 4 PLE architecture is documented and verified is **WITHDRAWN**. Until official Google AI Edge / MediaPipe documentation and tooling for exporting Gemma 4 custom weights to `.litertlm` is cited and verified, Gate 0 criterion (b) is marked **UNPROVEN / NOT VERIFIED**.
+- **Implications:** Training full models on GPU remains strictly gated. Only non-training tasks (dataset curation, offline RAG architecture, evaluation harnesses) may proceed.
