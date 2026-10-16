@@ -219,3 +219,58 @@ Governing standard: Execution Control F. All entries must reflect actual command
     10. `hard memory bound and TTL pruning on unverified beacon alert records` (Passed)
     11. `colliding unauthenticated beacon cannot suppress authenticated SOS event` (Passed)
 - **Candidate Commit Message:** `fix(sos): N4 nonce collision bounds, injectable clock dedup, and replay durability`
+
+---
+
+## Step 5: Cross-Module Regression Run
+
+- **Command Executed:**
+  ```powershell
+  $start = Get-Date; .\gradlew.bat :core:domain:test :core:data:testDebugUnitTest :core:mesh:testDebugUnitTest :core:crypto:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug --rerun-tasks --console=plain *>&1 | Tee-Object -FilePath build\eng-logs\cross_module_regression.log; $exit = $LASTEXITCODE; Write-Host "EXIT_CODE=$exit DURATION=$((Get-Date) - $start)"
+  ```
+- **Execution Results:**
+  - Actionable Tasks: 173 executed, 173 successful, 0 failed
+  - Duration: 2 minutes 11 seconds
+  - Exit Code: **0 (BUILD SUCCESSFUL)**
+- **Log Artifact:**
+  - File Path: `build/eng-logs/cross_module_regression.log`
+  - SHA-256 Checksum: `CC795F22A7F16152908CFF8D3FE60CD54B4507ED451A7DE87D472BF7D16C06F6`
+
+---
+
+## Step 6: Fresh, Accurate Test Counts
+
+Parsed directly from JUnit XML test result files generated during Step 5 execution across all subprojects:
+
+| Module | Test Results Path | XML Files | Total Tests | Passed | Failures | Errors | Skipped | Skipped Test Names |
+|---|---|---|---|---|---|---|---|---|
+| `:core:domain` | `core/domain/build/test-results/test` | 2 | 8 | 8 | 0 | 0 | 0 | (None) |
+| `:core:data` | `core/data/build/test-results/testDebugUnitTest` | 1 | 1 | 0 | 0 | 0 | 1 | `com.meshlink.app.data.local.MigrationTest.migrate5To14` |
+| `:core:mesh` | `core/mesh/build/test-results/testDebugUnitTest` | 14 | 91 | 91 | 0 | 0 | 0 | (None) |
+| `:core:crypto` | `core/crypto/build/test-results/testDebugUnitTest` | 2 | 7 | 7 | 0 | 0 | 0 | (None) |
+| `:app` | `app/build/test-results/testDebugUnitTest` | 13 | 86 | 86 | 0 | 0 | 0 | (None) |
+| **GRAND TOTAL** | | **32** | **193** | **192** | **0** | **0** | **1** | `com.meshlink.app.data.local.MigrationTest.migrate5To14` |
+
+- **Skipped Test Audit:**
+  `com.meshlink.app.data.local.MigrationTest.migrate5To14` is marked with `@Ignore("Missing schema files for versions 5 through 13")`. This is a pre-existing condition present in the candidate commit; zero new tests were skipped or disabled by Defect N changes.
+
+---
+
+## Step 7: Diff Hygiene Verification
+
+- **Whitespace & Formatting Audit:**
+  - `git diff --check 3ebf998..HEAD`: Exited with code 0 (zero whitespace or formatting violations).
+- **Working Tree State:**
+  - `git status --short`: Clean working tree; only documentation artifacts tracked.
+- **Scope Audit:**
+  - All modified code and test files strictly belong to Defect N requirements (N1: JSON serialization & payload bounding; N2: nullable location & sentinel encoding; N3: beacon authenticity separation & correlation; N4: nonce collision bounds, replay protection & restart durability).
+  - Zero out-of-scope files modified. No AI engine, UI redesign, Defect G, or CI files touched.
+
+---
+
+## Step 8: Documentation Accuracy
+
+1. **Protocol Specification:** Created `docs/engineering/SOS_PROTOCOL.md` specifying authenticated identity vs correlation hint, single authoritative generator, correlation and matching rules, 8-bit birthday collision proofs, multi-layer anti-flood controls, restart durability, and IEEE 754 float sentinels.
+2. **Evidence Manifest:** Updated `docs/engineering/DEFECT_N_EVIDENCE.md` with complete verifiable commands, exit codes, log hashes, and XML test counts through Step 8.
+3. **Commit References:** Reconciled defect register in `task.md` with actual published commit SHAs (`21474eb`, `ca2f707`, `f0ac6eb`, `934a67f`, `bca47d2`).
+4. **Separate Open Item:** Documented the AI documentation mismatch (README mentioning mocked assistant vs task.md mentioning on-device Gemma) as an open item requiring separate alignment; not modified in Defect N scope.

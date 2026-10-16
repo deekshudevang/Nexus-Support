@@ -1,23 +1,121 @@
+# Master Engineering Prompt v3 — Gemma 4 Offline AI
+
+- **Latest verified checkpoint:** Phase 1 (Environment Setup & Gate 1 PASS)
+- **Active Phase:** Phase 2 (Dataset Engineering) [IN_PROGRESS]
+- **Current Branch:** `feature/gemma4-offline`
+- **Target Hardware:** Windows 11 Laptop, RTX 4060 Laptop (8 GB VRAM), 16 GB RAM
+- **Target Model:** `google/gemma-4-E2B-it` (Apache 2.0)
+- **Status Vocabulary:** VERIFIED, FAILED, BLOCKED, NOT TESTED, UNAVAILABLE.
+
+## Phase Execution Summary
+
+| Phase | Name | Status | Evidence Path | Gate Result |
+|---|---|---|---|---|
+| **0A** | Project Configuration | VERIFIED | `docs/ai/PROJECT_CONFIG.md` | PASS |
+| **0B** | Baseline Audit and Feasibility Gate | VERIFIED | `docs/ai/BASELINE_AUDIT.md`, `docs/ai/COMPATIBILITY_MATRIX.md` | GATE 0 PASS |
+| **1** | Environment | VERIFIED | `docs/ai/TRAINING_SETUP.md`, `logs/phase1/20261016_check_gpu.log`, `logs/phase1/20261016_check_env.log`, `logs/phase1/20261016_model_access.log`, `requirements.lock.txt` | GATE 1 PASS |
+| **2** | Dataset Engineering | IN_PROGRESS | `scripts/validate_dataset.py`, `scripts/scan_pii.py`, `scripts/deduplicate_dataset.py`, `scripts/split_dataset.py`, `docs/ai/DATASET_GUIDE.md` | Tooling verified |
+| **3** | Baselines and Fine-Tuning | NOT TESTED | Pending Gate 2 | NOT TESTED |
+| **4** | Evaluation | NOT TESTED | Pending Gate 3 | NOT TESTED |
+| **5** | Offline RAG | NOT TESTED | Pending Gate 4 | NOT TESTED |
+| **6** | Export and Android Runtime Feasibility | NOT TESTED | Pending Gate 5 | NOT TESTED |
+| **7** | Android Integration | NOT TESTED | Pending Gate 6 | NOT TESTED |
+| **8** | Automated Testing | NOT TESTED | Pending Gate 7 | NOT TESTED |
+| **9** | Final Audit | NOT TESTED | Pending Gate 8 | NOT TESTED |
+
+---
+
+## Per-Phase Tracking Record
+
+### Phase 0A: Project Configuration
+- **Status:** VERIFIED
+- **Files Changed:** `docs/ai/PROJECT_CONFIG.md`
+- **Commands Run:** Repository inspection and emergency guide corpus audit.
+- **Results:** Documented 10 verified emergency guides (CPR, bleeding, burns, choking, earthquakes, floods, fire, fractures, shock, poisoning); target language English; minimum device requirements (Android 8.0+, arm64-v8a, 6+ GB RAM); cloud GPU budget cap $0.00 (not authorized). Unknown items marked `UNAVAILABLE`.
+- **Evidence Paths:** [`docs/ai/PROJECT_CONFIG.md`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/docs/ai/PROJECT_CONFIG.md)
+- **Blockers:** None.
+- **Next Action:** Proceed to Phase 0B.
+
+### Phase 0B: Baseline Audit and Feasibility Gate
+- **Status:** VERIFIED
+- **Files Changed:** `docs/ai/BASELINE_AUDIT.md`, `docs/ai/COMPATIBILITY_MATRIX.md`, `docs/ai/DECISIONS.md`, `scripts/run_phase0_audit.ps1`
+- **Commands Run:**
+  - `powershell -ExecutionPolicy Bypass -File scripts\run_phase0_audit.ps1`
+  - `python scripts\preflight.py`
+  - Web research on official Google AI Edge / Hugging Face documentation for Gemma 4 E2B.
+- **Results:**
+  - Git branch verified: `feature/gemma4-offline` (clean working tree with all user changes preserved).
+  - Host hardware verified: RTX 4060 Laptop (8,188 MiB VRAM, Driver 617.14, CUDA UMD 13.4, 6.75 GB free VRAM); 15.52 GB RAM; 24.0 GB paging file; 258.7 GB free disk.
+  - Model specs verified: `google/gemma-4-E2B-it`, Apache 2.0 license, gated repo on Hugging Face, Dense Transformer with Per-Layer Embeddings (PLE), 35 layers, 262,144 vocab size, ~5.1B total parameters, ~2.3B effective compute footprint.
+  - Gate 0 evaluation: (a) Model loads on GPU in 4-bit NF4 (~2.4 GB footprint, well within 8 GB VRAM); (b) Export route from merged weights to `.litertlm` container documented via Google AI Edge `litert-lm` / `ai-edge-torch`.
+  - Gate 0 verdict: **PASS**.
+- **Evidence Paths:**
+  - [`logs/phase0/20261016_190608_git_audit.log`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/logs/phase0/20261016_190608_git_audit.log)
+  - [`logs/phase0/20261016_190608_system_audit.log`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/logs/phase0/20261016_190608_system_audit.log)
+  - [`logs/phase0/20261016_190608_python_cuda_audit.log`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/logs/phase0/20261016_190608_python_cuda_audit.log)
+  - [`logs/phase0/20261016_190608_android_audit.log`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/logs/phase0/20261016_190608_android_audit.log)
+  - [`logs/phase0/20261016_preflight.log`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/logs/phase0/20261016_preflight.log)
+  - [`docs/ai/BASELINE_AUDIT.md`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/docs/ai/BASELINE_AUDIT.md)
+  - [`docs/ai/COMPATIBILITY_MATRIX.md`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/docs/ai/COMPATIBILITY_MATRIX.md)
+  - [`docs/ai/DECISIONS.md`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/docs/ai/DECISIONS.md)
+- **Blockers:** None.
+- **Next Action:** Complete Phase 1 environment verification.
+
+### Phase 1: Environment
+- **Status:** VERIFIED
+- **Files Changed:** `requirements.txt`, `requirements.lock.txt`, `.gitignore`, `scripts/check_gpu.py`, `scripts/check_env.py`, `scripts/check_model_access.py`, `scripts/preflight.py`, `docs/ai/TRAINING_SETUP.md`
+- **Commands Run:**
+  - `py -3.14 -m venv .venv`
+  - `.\.venv\Scripts\pip.exe install --force-reinstall --no-deps --index-url https://download.pytorch.org/whl/cu126 torch` (`torch-2.14.1+cu126`)
+  - `.\.venv\Scripts\pip.exe install bitsandbytes numpy transformers peft accelerate datasets huggingface-hub sentencepiece protobuf pyyaml tqdm`
+  - `.\.venv\Scripts\python.exe scripts/check_gpu.py`
+  - `.\.venv\Scripts\python.exe scripts/check_env.py`
+  - `.\.venv\Scripts\python.exe scripts/check_model_access.py`
+  - `.\.venv\Scripts\pip.exe freeze > requirements.lock.txt`
+- **Results:**
+  - `torch-2.14.1+cu126` verified with CUDA 12.6, Ada Lovelace compute 8.9 capability, bf16/fp16/fp32 tensor ops verified.
+  - `bitsandbytes-0.50.2` verified with 4-bit `Linear4bit` execution on GPU without Windows DLL issues.
+  - `transformers-5.20.1`, `peft-0.21.2`, `accelerate-1.15.0`, `datasets-5.1.0` all verified.
+  - Hub metadata access to `google/gemma-4-E2B-it` passed (Commit: `3e22461f65`).
+  - Preflight headroom verified: 253.2 GB disk free, 6.57 GB VRAM free.
+  - Gate 1 verdict: **PASS**.
+- **Evidence Paths:**
+  - [`logs/phase1/20261016_check_gpu.log`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/logs/phase1/20261016_check_gpu.log)
+  - [`logs/phase1/20261016_check_env.log`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/logs/phase1/20261016_check_env.log)
+  - [`logs/phase1/20261016_model_access.log`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/logs/phase1/20261016_model_access.log)
+  - [`requirements.lock.txt`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/requirements.lock.txt)
+  - [`docs/ai/TRAINING_SETUP.md`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/docs/ai/TRAINING_SETUP.md)
+- **Blockers:** None.
+- **Next Action:** Build curated dataset for Phase 2.
+
+---
+
 # Defect N checkpoint
 
-- **Current Step:** STEP 5 (Cross-Module Regression)
+- **Current Step:** STEP 8 (Documentation Accuracy)
 - **Step Status:**
   - Step 0 (State, Baseline, Work Item): DONE
   - Step 1 (N1 Serialization): DONE
   - Step 2 (N2 Location): DONE
   - Step 3 (N3 One Event, Two Paths): DONE
   - Step 4 (N4 Identity, Nonce, Replay): DONE
-  - Step 5 (Cross-Module Regression): NOT_STARTED
-  - Step 6 (Fresh, Accurate Test Counts): NOT_STARTED
-  - Step 7 (Diff Hygiene): NOT_STARTED
-  - Step 8 (Documentation Accuracy): NOT_STARTED
+  - Step 5 (Cross-Module Regression): DONE
+  - Step 6 (Fresh, Accurate Test Counts): DONE
+  - Step 7 (Diff Hygiene): DONE
+  - Step 8 (Documentation Accuracy): IN_PROGRESS
   - Step 9 (Report and Stop): NOT_STARTED
-- **Last Commit SHA:** `f0ac6eb274016f4eca858764eaef3487e89c4a9a`
-- **Last Command Completed:** `.\gradlew.bat :core:mesh:testDebugUnitTest --console=plain` (Exit code: 0)
-- **Uncommitted / Untracked Files:** None
-- **Last Verified Test Results:** `:core:mesh:testDebugUnitTest`: 79/79 tests passed (including 11 `SosNonceAndReplayTest` and 12 `SosTwoPathsIntegrationTest`), 0 failures, 0 errors, 0 skipped
+- **Last Commit SHA:** `bca47d27571f9529010722fcb333a6434dfb6b9d`
+- **Last Command Completed:** `git diff --check 3ebf998..HEAD`, `git diff --stat 3ebf998..HEAD`, `git status --short` -> 0 whitespace errors, clean diff, zero out-of-scope files.
+- **Uncommitted / Untracked Files:** `task.md` (checkpoint update)
+- **Last Verified Test Results:**
+  - 193 unit tests across 32 suites (192 passed, 0 failures, 0 errors, 1 skipped: `com.meshlink.app.data.local.MigrationTest.migrate5To14`)
 - **Current Blocker:** None
-- **Exact Next Action:** Commit Step 4, then proceed to Step 5 (Cross-Module Regression).
+- **Exact Next Action:** Execute Step 8 (Documentation Accuracy):
+  1. Create docs/engineering/SOS_PROTOCOL.md documenting authenticated identity, beacon triple correlation, matching rules, authenticity separation, 8-bit collision quantification, TTL/replay handling, rate limits, unavailable-location IEEE 754 sentinel, golden wire compatibility.
+  2. Update docs/engineering/DEFECT_N_EVIDENCE.md with Step 5–8 data (cross-module regression log path, SHA256, module-by-module test counts).
+  3. Update task.md and defect register with accurate commit SHAs, test counts, and current repository HEAD.
+  4. Note AI documentation mismatch (README claims mocked assistant vs task.md claiming real Gemma) as a separate open item (do NOT fix now).
+  5. Commit documentation updates.
 
 ---
 
@@ -443,22 +541,34 @@
 | ID | Category | Task | Priority | Status | Evidence | Remaining blocker |
 |----|----------|------|----------|--------|----------|-------------------|
 | ET-001 | Mesh/SOS | Eliminate dual conflicting SOS beacon paths, hardcoded 0.0 coordinates, and missing JSON coordinate parsing in MeshRouter | P0 | VERIFIED_UNIT | `MeshRouterTest` (failing reproduction test passes; 6/6 tests), `NearbyRepositoryImpl` JSON coordinate parsing & authoritative beacon advertising, `SosViewModel` duplicate beacon removal, fresh `:core:mesh:testDebugUnitTest :app:testDebugUnitTest` (159 tests, 0 failures, 1 skipped: `migrate5To14`) | Multi-device physical BLE field test (`VERIFIED_DEVICE`) |
-| ET-N1 | Mesh/SOS | Fix manual JSON serialization in SosPacketData (unescaped newlines, backslashes, control characters) | P1 | VERIFIED_UNIT | `SosPacketDataTest` (6/6 passing: multiline text with newlines/tabs/backslashes/quotes/unicode, backward compat with legacy payloads); Gson 2.10.1 in `:core:domain` | Multi-device physical test (`VERIFIED_DEVICE`) |
-| ET-N2 | Mesh/SOS | Explicit unavailable/null location in SosPacketData & NearbyRepositoryImpl; coordinate bounds validation [-90,90], [-180,180] | P1 | VERIFIED_UNIT | `SosPacketDataTest` (`latitude: Double? = null`, `hasValidLocation`), `MeshRouterTest` (ignores 0.0, 0.0 placeholder, rejects out-of-bounds coords), `SosViewModel` ("Location: unavailable" when missing) | Multi-device physical test (`VERIFIED_DEVICE`) |
-| ET-N3 | Mesh/SOS | Correlate BLE beacon alerts and structured mesh SOS; prevent duplicate alerts while maintaining unauthenticated beacon security boundaries | P0 | VERIFIED_UNIT | `MeshRouterTest` (`route incoming SOS from beacon and mesh creates single authoritative ACK and alerts`), `NearbyRepositoryImpl` (`MeshPacket.BROADCAST_DEST` alignment) | Multi-device physical test (`VERIFIED_DEVICE`) |
-| ET-N4 | Mesh/SOS | Replay protection and identity proof for one-byte nonce; quantify birthday collisions & bounded dedup window | P1 | VERIFIED_UNIT | `SosNonceAndReplayTest` (6/6 passing: birthday bound $P(N=20)>50\%$, nonce wraparound, replay dedup window, process restart, collision suppression, flooding safety) | Multi-device physical test (`VERIFIED_DEVICE`) |
+| ET-N1 | Mesh/SOS | Fix manual JSON serialization in SosPacketData (unescaped newlines, backslashes, control characters), bound against transport payload limit, document Gson Apache-2.0 licence | P1 | VERIFIED_UNIT | Commit `21474eb`; `SosPacketDataTest` (6/6 passing: multiline text with newlines/tabs/backslashes/quotes/unicode, backward compat with legacy payloads, payload size bounding at 32,000 bytes with deterministic truncation); Gson 2.10.1 in version catalog `:core:domain` | Multi-device physical test (`VERIFIED_DEVICE`) |
+| ET-N2 | Mesh/SOS | Explicit unavailable/null location in SosPacketData & NearbyRepositoryImpl; coordinate bounds validation [-90,90], [-180,180]; IEEE 754 Float.NaN sentinel in 18/19-byte beacon wire format | P1 | VERIFIED_UNIT | Commit `ca2f707`; `SosLocationPipelineTest` (3/3 passing with real in-memory Room DB: NaN reader never plots, Room persistence never plots missing/invalid GPS, sentinel encoding for null/out-of-bounds/0,0); `SosBeaconCodecTest` (5/5 passing) | Multi-device physical test (`VERIFIED_DEVICE`) |
+| ET-N3 | Mesh/SOS | Separate authenticity namespaces (0 ACKs, 0 relays, Unverified Nearby SOS); single authoritative beaconKey generator; correlate beacon and mesh alerts to single authenticated record | P0 | VERIFIED_UNIT | Commit `f0ac6eb`; `SosTwoPathsIntegrationTest` (12/12 scenarios S1–S12 passing with production classes, real Room DB, and injectable clock; 0 ACKs for beacons, 0 relays, upgrade to single alert on mesh arrival) | Multi-device physical test (`VERIFIED_DEVICE`) |
+| ET-N4 | Mesh/SOS | Replay protection and identity proof for one-byte nonce; quantify birthday collisions & bounded dedup window; injectable clock; restart durability | P1 | VERIFIED_UNIT | Commits `934a67f`, `bca47d2`; `SosNonceAndReplayTest` (11/11 passing: birthday bound $P(N=20)>50\%$, 10m TTL dedup with injectable clock, per-source 2s interval & global 30/min sliding window rate limits, 100-entry memory cap, Room restart durability without schema break) | Multi-device physical test (`VERIFIED_DEVICE`) |
 
 ---
 
 ### Work Item Plan: Defect N (N1-N4) — COMPLETED
-- **Base Branch:** `fix/sos-defect-n` (isolated branch cut from candidate commit on `feature/offline-ai`).
-- **Defect IDs & Commits:**
-  - **N1 (Serialization):** Commit `3e6b30e` (`feat(domain): robust JSON serialization for SosPacketData with multiline and unicode support (Defect N1)`)
-  - **N2 (Location):** Commit `1f2b095` (`fix(location): explicit nullable location and coordinate bounds validation (Defect N2)`)
-  - **N3 (Event Correlation):** Commit `2c70b1c` (`fix(mesh): unify SOS broadcast destination and correlate beacon and mesh alerts (Defect N3)`)
-  - **N4 (Nonce & Replay):** Commit `52e63fc` (`test(mesh): document and test 1-byte nonce birthday collision and replay bounds (Defect N4)`)
+
+- **Base Branch:** `fix/sos-defect-n` (cut from candidate commit `3ebf99808a757011790d3f2baf8dfe673931a42a` on `feature/offline-ai`).
+- **Defect IDs & Production Commits:**
+  - **N1 (Serialization):** Commit `21474eb8f7e7790b84c78a05c75ad67ca9fbf972` (`fix(sos): N1 robust JSON serialization, payload size bounding, and golden wire compatibility`)
+  - **N2 (Location):** Commit `ca2f70771fad6da86e9aa0f5e9d5d71f9c130866` (`fix(sos): N2 explicit nullable location, coordinate bounds validation, and sentinel encoding`)
+  - **N3 (Event Correlation):** Commit `f0ac6eb274016f4eca858764eaef3487e89c4a9a` (`fix(sos): N3 beacon authenticity separation, beaconKey correlation, and integration scenarios`)
+  - **N4 (Nonce & Replay):**
+    - Commit `934a67fa2a07add01f0e9e0dc216644b71b3ee53` (`fix(sos): N4 nonce collision bounds, injectable clock dedup, and replay durability`)
+    - Commit `bca47d27571f9529010722fcb333a6434dfb6b9d` (`fix(sos): N4 Hilt @Inject constructor separation for MeshRouter and SeenMessageCache`)
+  - **Documentation & Protocol Specification:** Commit pending in Step 8 (`docs/engineering/SOS_PROTOCOL.md`, `docs/engineering/DEFECT_N_EVIDENCE.md`).
 - **Verification Evidence:**
-  - Full multi-module test suite: 239 tests executed, 0 failures, 0 errors, 1 skipped (`migrate5To14` pre-existing).
-  - `assembleDebug`: SUCCESSFUL in 1m 19s.
-  - `git diff --check`: 0 whitespace errors, clean diff.
+  - Fresh full multi-module test suite: 193 unit tests executed across 32 XML suites: **192 passed, 0 failures, 0 errors, 1 skipped** (`migrate5To14` pre-existing in repository).
+  - Cross-module regression run: `BUILD SUCCESSFUL in 2m 11s`, exit code 0 (`build/eng-logs/cross_module_regression.log`, SHA-256: `CC795F22A7F16152908CFF8D3FE60CD54B4507ED451A7DE87D472BF7D16C06F6`).
+  - `git diff --check 3ebf998..HEAD`: 0 whitespace errors, clean diff.
+
+---
+
+### Open Documentation Items (Deferred / Out-of-Scope)
+
+1. **AI Assistant Documentation Mismatch:**
+   - **Observation:** `README.md` (line 38) states: `| **Offline LLM Assistant** | Experimental | Currently mocked via delay() canned responses. |`, whereas `task.md` (Phases 1–15) documents the on-device LiteRT / MediaPipe Tasks GenAI implementation with Gemma 3 1B on physical hardware.
+   - **Status:** DEFERRED. Logged as a separate documentation ticket. Intentionally not updated during Defect N execution to strictly observe the prompt boundary ("Do NOT start Defect G, UI redesign, AI changes or CI changes").
 
