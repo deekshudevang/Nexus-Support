@@ -376,4 +376,201 @@ class ModelAssetManagerTest {
         assertNull("Staged slot must be null after delete", assetManager.getStagedSlot())
         assertTrue("Baseline file in files/models must be preserved", baselineFile.exists())
     }
+
+    // 13. Rejection of LiteRT-LM format prior to activation
+    @Test
+    fun activateStagedModel_whenFormatIsLiteRtLm_abortsActivationAndPreservesBaseline() = runTest {
+        val baselineFile = createBaselineModel()
+        val originalBaselineBytes = baselineFile.readBytes()
+
+        val candidateBytes = ("candidate-litertlm-bytes-padding".repeat(40)).toByteArray()
+        val candidateHash = MessageDigest.getInstance("SHA-256")
+            .digest(candidateBytes)
+            .joinToString("") { "%02x".format(it) }
+        val uri = mockUri("candidate.litertlm", candidateBytes)
+
+        val stageResult = assetManager.stageCandidateFromUri(uri, candidateHash)
+        assertTrue("Staging of file can proceed to isolated staging area", stageResult.isSuccess)
+
+        // Activation must fail because Tasks GenAI runtime does not support .litertlm
+        val activationResult = assetManager.activateStagedModel()
+        assertTrue("Activation of LiteRT-LM on Tasks GenAI must fail", activationResult.isFailure)
+
+        val error = (activationResult as com.meshlink.app.ai.model.AiResult.Failure).error
+        assertTrue(error is AiError.RuntimeError)
+        val msg = (error as AiError.RuntimeError).message
+        assertTrue(msg.contains("Incompatible model format") && msg.contains("litertlm"))
+
+        // Baseline model remains active and completely untouched
+        val activeSlot = assetManager.getActiveSlot()
+        assertEquals("baseline", activeSlot?.slotId)
+        assertEquals(originalBaselineBytes.toList(), baselineFile.readBytes().toList())
+    }
+
+    // 14. Rejection of empty candidate file
+    @Test
+    fun stageCandidateFromUri_whenEmptyFile_failsWithModelCorrupt() = runTest {
+        val baselineFile = createBaselineModel()
+        val originalBaselineBytes = baselineFile.readBytes()
+
+        val uri = mockUri("empty.task", ByteArray(0))
+        val result = assetManager.stageCandidateFromUri(uri, "")
+
+        assertTrue(result.isFailure)
+        assertTrue((result as com.meshlink.app.ai.model.AiResult.Failure).error is AiError.ModelCorrupt)
+        assertNull(assetManager.getStagedSlot())
+        assertEquals(originalBaselineBytes.toList(), baselineFile.readBytes().toList())
+    }
+
+    // 15. Rejection of truncated candidate file (< 1024 bytes)
+    @Test
+    fun stageCandidateFromUri_whenTruncatedFile_failsWithModelCorrupt() = runTest {
+        val baselineFile = createBaselineModel()
+        val originalBaselineBytes = baselineFile.readBytes()
+
+        val truncatedBytes = ByteArray(100) { 0x01 }
+        val uri = mockUri("truncated.task", truncatedBytes)
+        val result = assetManager.stageCandidateFromUri(uri, "")
+
+        assertTrue(result.isFailure)
+        assertTrue((result as com.meshlink.app.ai.model.AiResult.Failure).error is AiError.ModelCorrupt)
+        assertNull(assetManager.getStagedSlot())
+        assertEquals(originalBaselineBytes.toList(), baselineFile.readBytes().toList())
+    }
+
+    // 16. Recovery from .bak when registry is corrupted by crash
+    @Test
+    fun crashRecovery_whenRegistryCorruptButBackupExists_recoversFromBackup() = runTest {
+        val baselineFile = createBaselineModel()
+        val modelsSubDir = File(tempDir, "ai_models").apply { mkdirs() }
+        val registryFile = File(modelsSubDir, "model_registry.json")
+        val bakFile = File(modelsSubDir, "model_registry.json.bak")
+
+        // First activate a candidate to generate valid registry (> 1024 bytes)
+        val candidateBytes = ("candidate-backup-test".repeat(60)).toByteArray()
+        val candidateHash = MessageDigest.getInstance("SHA-256")
+            .digest(candidateBytes)
+            .joinToString("") { "%02x".format(it) }
+        val uri = mockUri("candidate.task", candidateBytes)
+        val stageResult = assetManager.stageCandidateFromUri(uri, candidateHash)
+        assertTrue("Stage candidate must succeed", stageResult.isSuccess)
+        val activateResult = assetManager.activateStagedModel()
+        assertTrue("Activate staged model must succeed: $activateResult", activateResult.isSuccess)
+
+        // Copy registry to .bak and corrupt primary registry with truncated JSON
+        assertTrue("Registry file must exist before backup", registryFile.exists())
+        registryFile.copyTo(bakFile, overwrite = true)
+        registryFile.writeText("{ \"version\": 1, \"activeSlotId\": ") // truncated mid-write
+
+        val recoveredManager = ModelAssetManagerImpl(mockContext)
+        val activeSlot = recoveredManager.getActiveSlot()
+
+        assertNotNull("Must recover from .bak file", activeSlot)
+        assertEquals("slot_a", activeSlot?.slotId)
+        assertEquals(candidateHash, activeSlot?.sha256)
+    }
+
+    // 17. Automatic recovery to previous slot when active model file is missing on disk
+    @Test
+    fun crashRecovery_whenActiveFileMissingOnDisk_recoversToPreviousSlot() = runTest {
+        val baselineFile = createBaselineModel()
+        val candidateBytes = ("candidate-active-missing-test".repeat(40)).toByteArray()
+        val candidateHash = MessageDigest.getInstance("SHA-256")
+            .digest(candidateBytes)
+            .joinToString("") { "%02x".format(it) }
+        val uri = mockUri("candidate.task", candidateBytes)
+
+        assetManager.stageCandidateFromUri(uri, candidateHash)
+        assetManager.activateStagedModel()
+
+        val activeSlot = assetManager.getActiveSlot()
+        assertNotNull(activeSlot)
+        assertEquals("slot_a", activeSlot?.slotId)
+
+        // Delete the active model file from disk (e.g. process terminated or storage wiped)
+        activeSlot!!.file.delete()
+        assertFalse(activeSlot.file.exists())
+
+        // Recreate manager to simulate restart and automatic recovery
+        val restartedManager = ModelAssetManagerImpl(mockContext)
+        val recoveredActive = restartedManager.getActiveSlot()
+
+        assertNotNull("Should recover previous baseline model as active", recoveredActive)
+        assertEquals("baseline", recoveredActive?.slotId)
+        assertEquals(baselineFile.absolutePath, recoveredActive?.file?.absolutePath)
+        assertTrue(baselineFile.exists())
+    }
+
+    // 18. Rollback fails gracefully without corrupting active model when previous file is missing
+    @Test
+    fun rollbackToPrevious_whenPreviousSlotFileMissing_failsGracefullyWithoutCorruptingActive() = runTest {
+        val baselineFile = createBaselineModel()
+        val candidateBytes = ("candidate-rollback-missing-test".repeat(40)).toByteArray()
+        val candidateHash = MessageDigest.getInstance("SHA-256")
+            .digest(candidateBytes)
+            .joinToString("") { "%02x".format(it) }
+        val uri = mockUri("candidate.task", candidateBytes)
+
+        assetManager.stageCandidateFromUri(uri, candidateHash)
+        assetManager.activateStagedModel()
+
+        // Delete the previous baseline file
+        baselineFile.delete()
+
+        val rollbackResult = assetManager.rollbackToPrevious()
+        assertTrue("Rollback must fail when previous file is missing", rollbackResult.isFailure)
+        assertEquals(AiError.ModelMissing, (rollbackResult as com.meshlink.app.ai.model.AiResult.Failure).error)
+
+        // Active slot remains active
+        val activeSlot = assetManager.getActiveSlot()
+        assertEquals("slot_a", activeSlot?.slotId)
+        assertTrue(activeSlot!!.file.exists())
+    }
+
+    // 19. Rollback fails gracefully when previous file has corrupted checksum
+    @Test
+    fun rollbackToPrevious_whenPreviousSlotFileCorrupted_failsGracefully() = runTest {
+        val baselineFile = createBaselineModel()
+        val candidateBytes = ("candidate-corrupt-rollback-test".repeat(40)).toByteArray()
+        val candidateHash = MessageDigest.getInstance("SHA-256")
+            .digest(candidateBytes)
+            .joinToString("") { "%02x".format(it) }
+        val uri = mockUri("candidate.task", candidateBytes)
+
+        assetManager.stageCandidateFromUri(uri, candidateHash)
+        assetManager.activateStagedModel()
+
+        // Corrupt previous baseline content on disk
+        baselineFile.writeText("corrupted-tampered-baseline-bytes")
+
+        val rollbackResult = assetManager.rollbackToPrevious()
+        assertTrue("Rollback must fail on checksum mismatch of previous model", rollbackResult.isFailure)
+        assertTrue((rollbackResult as com.meshlink.app.ai.model.AiResult.Failure).error is AiError.ModelCorrupt)
+
+        // Active slot remains active
+        val activeSlot = assetManager.getActiveSlot()
+        assertEquals("slot_a", activeSlot?.slotId)
+    }
+
+    // 20. Activation fails when staged candidate file is missing
+    @Test
+    fun activateStagedModel_whenStagedFileDeletedBeforeActivation_returnsModelMissing() = runTest {
+        val baselineFile = createBaselineModel()
+        val candidateBytes = ("candidate-missing-before-act".repeat(40)).toByteArray()
+        val uri = mockUri("candidate.task", candidateBytes)
+
+        assetManager.stageCandidateFromUri(uri, "")
+        val stagedSlot = assetManager.getStagedSlot()
+        assertNotNull(stagedSlot)
+
+        // Delete staged candidate file before calling activateStagedModel
+        stagedSlot!!.file.delete()
+
+        val activationResult = assetManager.activateStagedModel()
+        assertTrue(activationResult.isFailure)
+        assertEquals(AiError.ModelMissing, (activationResult as com.meshlink.app.ai.model.AiResult.Failure).error)
+
+        // Baseline preserved
+        assertEquals("baseline", assetManager.getActiveSlot()?.slotId)
+    }
 }

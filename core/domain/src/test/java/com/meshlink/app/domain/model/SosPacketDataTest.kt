@@ -104,6 +104,24 @@ class SosPacketDataTest {
         // 0.0 is technically within [-90,90] and [-180,180] so valid lat/lon, but safely parsed
         assertEquals(0.0, parsed.latitude!!, 0.0001)
         assertEquals(0.0, parsed.longitude!!, 0.0001)
+        assertFalse("0.0, 0.0 Null Island coordinates must not be considered valid location", parsed.hasValidLocation)
+    }
+
+    @Test
+    fun `hasValidLocation returns false for 0_0 null island placeholder coordinates`() {
+        val nullIsland = SosPacketData(
+            senderId = "test-null-island",
+            latitude = 0.0,
+            longitude = 0.0,
+            message = "Uninitialized GPS"
+        )
+        assertFalse(nullIsland.hasValidLocation)
+        val json = nullIsland.toJson()
+        val reparsed = SosPacketData.fromJson(json)
+        assertNotNull(reparsed)
+        assertFalse(reparsed!!.hasValidLocation)
+        assertNull(reparsed.latitude)
+        assertNull(reparsed.longitude)
     }
 
     @Test

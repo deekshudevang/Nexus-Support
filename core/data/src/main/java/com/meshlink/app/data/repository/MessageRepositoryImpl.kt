@@ -39,4 +39,7 @@ class MessageRepositoryImpl @Inject constructor(
 
     override suspend fun getAllMessages(): List<Message> =
         messageDao.getAllMessages().map { it.toDomain() }
+
+    override suspend fun messageExists(messageId: String): Boolean =
+        messageDao.existsById(messageId)
 }

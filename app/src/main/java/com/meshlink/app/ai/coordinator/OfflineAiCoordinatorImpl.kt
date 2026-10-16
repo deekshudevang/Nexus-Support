@@ -93,7 +93,13 @@ class OfflineAiCoordinatorImpl(
         }
 
         _state.value = AiCapabilityState.LOADING
-        val initResult = localAiEngine.initialize(modelFile)
+        val initResult = try {
+            localAiEngine.initialize(modelFile)
+        } catch (e: Throwable) {
+            AiLogger.e(e, "Uncaught error during LocalAiEngine initialization")
+            AiResult.Failure(AiError.RuntimeError(e.message ?: "Initialization crashed"))
+        }
+
         if (initResult.isSuccess) {
             AiLogger.i("LocalAiEngine initialized successfully. State: READY")
             _state.value = AiCapabilityState.READY
@@ -151,6 +157,58 @@ class OfflineAiCoordinatorImpl(
             } else {
                 AiResult.Failure(AiError.RuntimeError("Failed to initialize restored model (state=$initState)"))
             }
+        }
+    }
+
+    override suspend fun activateCandidateAndVerify(): AiResult<Unit> = withContext(dispatcher) {
+        if (killSwitchActive.get()) {
+            return@withContext AiResult.Failure(AiError.DisabledByKillSwitch)
+        }
+
+        inferenceMutex.withLock {
+            AiLogger.i("Starting candidate model activation and verification...")
+            activeInferenceJob?.cancel()
+            activeInferenceJob = null
+            localAiEngine.unload()
+
+            val activateResult = modelAssetManager.activateStagedModel()
+            if (activateResult.isFailure) {
+                val err = (activateResult as AiResult.Failure).error
+                AiLogger.w("Candidate activation failed: $err")
+                initialize()
+                return@withContext AiResult.Failure(err)
+            }
+
+            // Attempt initialization of candidate model
+            val initState = initialize()
+            if (initState != AiCapabilityState.READY) {
+                AiLogger.w("Candidate model failed initialization (state=$initState). Triggering automatic rollback.")
+                modelAssetManager.rollbackToPrevious()
+                initialize()
+                return@withContext AiResult.Failure(
+                    AiError.RuntimeError("Candidate model failed initialization. Rolled back to previous model.")
+                )
+            }
+
+            // Run mandatory smoke test
+            val smokeTestResult = try {
+                localAiEngine.generate("test smoke prompt")
+            } catch (e: Throwable) {
+                AiResult.Failure(AiError.RuntimeError(e.message ?: "Smoke test crashed"))
+            }
+
+            if (smokeTestResult.isFailure) {
+                AiLogger.w("Candidate model failed mandatory smoke test. Triggering automatic rollback.")
+                localAiEngine.unload()
+                modelAssetManager.rollbackToPrevious()
+                initialize()
+                return@withContext AiResult.Failure(
+                    AiError.RuntimeError("Candidate model failed mandatory smoke test. Rolled back to previous model.")
+                )
+            }
+
+            AiLogger.i("Candidate model passed initialization and mandatory smoke test. Activation verified.")
+            AiResult.Success(Unit)
         }
     }
 

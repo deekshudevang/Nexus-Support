@@ -2,9 +2,9 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ master, main, feature/gemma4-offline, 'feature/**', 'fix/**' ]
   pull_request:
-    branches: [ master, main ]
+    branches: [ master, main, feature/gemma4-offline, 'feature/**', 'fix/**' ]
   workflow_dispatch:
 
 concurrency:
@@ -44,7 +44,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run JVM Unit Tests
-        run: ./gradlew testDebugUnitTest --continue
+        run: ./gradlew testDebugUnitTest :core:domain:test --continue
 
       - name: Upload Test Reports
         if: always()
@@ -93,4 +93,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lint-results
-          path: "**/build/reports/lint-results-debug.html"
+          path: "**/build/reports/lint-results-debug.*"

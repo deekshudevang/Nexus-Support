@@ -13,11 +13,12 @@ import java.io.File
 class FakeLocalAiEngine : LocalAiEngine {
     var initialized = false
     var shouldFailInit = false
+    var failInitPredicate: ((File) -> Boolean)? = null
     var responseToReturn = "Sample test response"
     var unloadCalled = false
 
     override suspend fun initialize(modelFile: File): AiResult<Unit> {
-        if (shouldFailInit) {
+        if (shouldFailInit || failInitPredicate?.invoke(modelFile) == true) {
             return AiResult.Failure(AiError.ModelCorrupt("Simulated corrupt model"))
         }
         initialized = true

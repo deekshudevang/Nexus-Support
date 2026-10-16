@@ -246,4 +246,160 @@ class OfflineAiCoordinatorTest {
         assertTrue(result.isFailure)
         assertEquals(AiError.DisabledByKillSwitch, (result as AiResult.Failure).error)
     }
+
+    @Test
+    fun initialize_whenEngineFails_transitionsToErrorAndNeverReportsReady() = testScope.runTest {
+        val tempFile = File.createTempFile("test_gemma", ".bin")
+        tempFile.deleteOnExit()
+        fakeAssetManager.modelFileToReturn = tempFile
+        coordinator.enableAi()
+
+        fakeEngine.shouldFailInit = true
+        val state = coordinator.initialize()
+
+        assertEquals(AiCapabilityState.ERROR, state)
+        assertEquals(AiCapabilityState.ERROR, coordinator.state.value)
+    }
+
+    @Test
+    fun initialize_whenEngineThrowsUncaughtException_transitionsToError() = testScope.runTest {
+        val tempFile = File.createTempFile("test_gemma", ".bin")
+        tempFile.deleteOnExit()
+        fakeAssetManager.modelFileToReturn = tempFile
+        coordinator.enableAi()
+
+        val throwingEngine = object : com.meshlink.app.ai.domain.LocalAiEngine {
+            override suspend fun initialize(modelFile: File): AiResult<Unit> = throw IllegalStateException("Native crash")
+            override suspend fun generate(prompt: String): AiResult<String> = AiResult.Failure(AiError.RuntimeError("crash"))
+            override fun generateStream(prompt: String) = kotlinx.coroutines.flow.emptyFlow<AiResult<String>>()
+            override suspend fun unload() {}
+            override fun isReady(): Boolean = false
+        }
+
+        val testCoordinator = OfflineAiCoordinatorImpl(
+            modelAssetManager = fakeAssetManager,
+            localAiEngine = throwingEngine,
+            dispatcher = testDispatcher
+        )
+        testCoordinator.enableAi()
+
+        val state = testCoordinator.initialize()
+        assertEquals(AiCapabilityState.ERROR, state)
+        assertEquals(AiCapabilityState.ERROR, testCoordinator.state.value)
+    }
+
+    @Test
+    fun activateCandidateAndVerify_whenInitializationFails_rollsBackAutomatically() = testScope.runTest {
+        val originalFile = File.createTempFile("original_model", ".bin")
+        val candidateFile = File.createTempFile("candidate_model", ".bin")
+        fakeAssetManager.modelFileToReturn = originalFile
+        val baselineSlot = com.meshlink.app.ai.domain.ModelSlot(
+            slotId = "baseline",
+            file = originalFile,
+            sha256 = "orig_sha",
+            sizeBytes = 100L,
+            format = "bin",
+            role = com.meshlink.app.ai.domain.ModelSlotRole.ACTIVE
+        )
+        fakeAssetManager.activeSlotToReturn = baselineSlot
+        fakeAssetManager.previousSlotToReturn = baselineSlot.copy(role = com.meshlink.app.ai.domain.ModelSlotRole.PREVIOUS)
+        fakeAssetManager.stagedSlotToReturn = com.meshlink.app.ai.domain.ModelSlot(
+            slotId = "staged",
+            file = candidateFile,
+            sha256 = "candidate_sha",
+            sizeBytes = 100L,
+            format = "bin",
+            role = com.meshlink.app.ai.domain.ModelSlotRole.STAGED
+        )
+        coordinator.enableAi()
+
+        // Candidate fails initialization, but baseline succeeds on rollback
+        fakeEngine.failInitPredicate = { it.name == candidateFile.name }
+
+        val activateResult = coordinator.activateCandidateAndVerify()
+
+        assertTrue("Candidate activation must fail if candidate fails init", activateResult.isFailure)
+        assertTrue(fakeEngine.unloadCalled)
+        // Automatic rollback occurred: active slot is restored to previous
+        assertEquals("baseline", fakeAssetManager.getActiveSlot()?.slotId)
+    }
+
+    @Test
+    fun activateCandidateAndVerify_whenSmokeTestFails_rollsBackAutomatically() = testScope.runTest {
+        val originalFile = File.createTempFile("original_model", ".bin")
+        val candidateFile = File.createTempFile("candidate_model", ".bin")
+        fakeAssetManager.modelFileToReturn = originalFile
+        val baselineSlot = com.meshlink.app.ai.domain.ModelSlot(
+            slotId = "baseline",
+            file = originalFile,
+            sha256 = "orig_sha",
+            sizeBytes = 100L,
+            format = "bin",
+            role = com.meshlink.app.ai.domain.ModelSlotRole.ACTIVE
+        )
+        fakeAssetManager.activeSlotToReturn = baselineSlot
+        fakeAssetManager.previousSlotToReturn = baselineSlot.copy(role = com.meshlink.app.ai.domain.ModelSlotRole.PREVIOUS)
+        fakeAssetManager.stagedSlotToReturn = com.meshlink.app.ai.domain.ModelSlot(
+            slotId = "staged",
+            file = candidateFile,
+            sha256 = "candidate_sha",
+            sizeBytes = 100L,
+            format = "bin",
+            role = com.meshlink.app.ai.domain.ModelSlotRole.STAGED
+        )
+        coordinator.enableAi()
+
+        // Mock engine that passes initialization but fails smoke test generation
+        val failingGenEngine = object : com.meshlink.app.ai.domain.LocalAiEngine {
+            override suspend fun initialize(modelFile: File): AiResult<Unit> = AiResult.Success(Unit)
+            override suspend fun generate(prompt: String): AiResult<String> = AiResult.Failure(AiError.RuntimeError("Smoke test OOM"))
+            override fun generateStream(prompt: String) = kotlinx.coroutines.flow.emptyFlow<AiResult<String>>()
+            override suspend fun unload() {}
+            override fun isReady(): Boolean = true
+        }
+
+        val testCoordinator = OfflineAiCoordinatorImpl(
+            modelAssetManager = fakeAssetManager,
+            localAiEngine = failingGenEngine,
+            dispatcher = testDispatcher
+        )
+        testCoordinator.enableAi()
+
+        val result = testCoordinator.activateCandidateAndVerify()
+        assertTrue("Activation must fail when smoke test fails", result.isFailure)
+        assertEquals("baseline", fakeAssetManager.getActiveSlot()?.slotId)
+    }
+
+    @Test
+    fun activateCandidateAndVerify_whenSmokeTestSucceeds_activatesSuccessfully() = testScope.runTest {
+        val originalFile = File.createTempFile("original_model", ".bin")
+        val candidateFile = File.createTempFile("candidate_model", ".bin")
+        fakeAssetManager.modelFileToReturn = originalFile
+        val baselineSlot = com.meshlink.app.ai.domain.ModelSlot(
+            slotId = "baseline",
+            file = originalFile,
+            sha256 = "orig_sha",
+            sizeBytes = 100L,
+            format = "bin",
+            role = com.meshlink.app.ai.domain.ModelSlotRole.ACTIVE
+        )
+        fakeAssetManager.activeSlotToReturn = baselineSlot
+        fakeAssetManager.previousSlotToReturn = baselineSlot.copy(role = com.meshlink.app.ai.domain.ModelSlotRole.PREVIOUS)
+        fakeAssetManager.stagedSlotToReturn = com.meshlink.app.ai.domain.ModelSlot(
+            slotId = "staged",
+            file = candidateFile,
+            sha256 = "candidate_sha",
+            sizeBytes = 100L,
+            format = "bin",
+            role = com.meshlink.app.ai.domain.ModelSlotRole.STAGED
+        )
+        coordinator.enableAi()
+
+        fakeEngine.shouldFailInit = false
+        val result = coordinator.activateCandidateAndVerify()
+
+        assertTrue("Activation must succeed", result.isSuccess)
+        assertEquals(AiCapabilityState.READY, coordinator.state.value)
+        assertEquals("slot_active", fakeAssetManager.getActiveSlot()?.slotId)
+    }
 }

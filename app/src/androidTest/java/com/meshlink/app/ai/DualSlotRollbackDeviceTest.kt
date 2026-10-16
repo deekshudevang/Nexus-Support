@@ -40,7 +40,14 @@ class DualSlotRollbackDeviceTest {
         println("Baseline model hash: $baselineHash")
         assertEquals("Baseline model hash must match known-good Gemma 3", expectedChecksum, baselineHash)
 
-        val stagingCandidate = File(File(File(context.filesDir, "ai_models"), "staging"), "candidate.task")
+        val sourceFile = File(context.cacheDir, "candidate_source.task")
+        if (!sourceFile.exists()) {
+            baselineFile.copyTo(sourceFile, overwrite = true)
+        }
+        val stageResult = assetManager.stageCandidateFromUri(android.net.Uri.fromFile(sourceFile), expectedChecksum)
+        assertTrue("Candidate staging must succeed: $stageResult", stageResult is AiResult.Success)
+
+        val stagingCandidate = (stageResult as AiResult.Success).data
         assertTrue("Staged candidate copy must exist", stagingCandidate.exists())
         assertEquals("Staged candidate copy size must match", expectedSize, stagingCandidate.length())
 
@@ -53,6 +60,10 @@ class DualSlotRollbackDeviceTest {
         println("Initial active slot: ${initialActive?.slotId}")
         assertNotNull("Initial active slot must exist", initialActive)
         assertEquals("baseline", initialActive?.slotId)
+
+        val stagedSlot = assetManager.getStagedSlot()
+        println("Staged slot: ${stagedSlot?.slotId}")
+        assertNotNull("Staged slot must exist", stagedSlot)
 
         // STEP 5: Exercise real activation mechanism to promote staged model
         println("Executing real activation mechanism: activateStagedModel()...")

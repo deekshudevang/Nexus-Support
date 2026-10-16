@@ -142,7 +142,8 @@ class EmergencyRagServiceImpl @Inject constructor(
 
         when (inferenceResult) {
             is AiResult.Success -> {
-                val formattedAnswer = inferenceResult.data + RagConstants.MEDICAL_SAFETY_DISCLAIMER
+                val validatedOutput = com.meshlink.app.ai.security.AiSafetyGuard.validateOutput(inferenceResult.data)
+                val formattedAnswer = validatedOutput + RagConstants.MEDICAL_SAFETY_DISCLAIMER
                 AiResult.Success(
                     RagResponse(
                         answer = formattedAnswer,

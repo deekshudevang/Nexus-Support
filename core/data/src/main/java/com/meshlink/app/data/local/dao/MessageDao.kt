@@ -18,6 +18,9 @@ interface MessageDao {
     @Query("DELETE FROM messages WHERE id = :id")
     suspend fun deleteById(id: String)
 
+    @Query("SELECT EXISTS(SELECT 1 FROM messages WHERE id = :id)")
+    suspend fun existsById(id: String): Boolean
+
     @Query("SELECT * FROM messages ORDER BY timestamp ASC")
     suspend fun getAllMessages(): List<MessageEntity>
 

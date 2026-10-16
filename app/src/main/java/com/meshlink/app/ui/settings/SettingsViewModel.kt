@@ -109,11 +109,22 @@ class SettingsViewModel @Inject constructor(
         val hash = _pendingHashConfirmation.value ?: return
         viewModelScope.launch {
             modelAssetManager.confirmModelHash(hash)
-            modelAssetManager.activateStagedModel()
+            val activateResult = modelAssetManager.activateStagedModel()
             _pendingHashConfirmation.value = null
+            if (activateResult.isFailure) {
+                _importStatus.value = "Activation failed. Rolled back to previous model."
+                refreshRollbackState()
+                return@launch
+            }
             _importStatus.value = "Model hash confirmed by user. Initializing..."
-            aiCoordinator.initialize()
-            _importStatus.value = "Ready: on-device model active"
+            val initState = aiCoordinator.initialize()
+            if (initState != com.meshlink.app.ai.model.AiCapabilityState.READY) {
+                _importStatus.value = "Initialization failed ($initState). Rolling back to previous model..."
+                aiCoordinator.rollbackModel()
+                _importStatus.value = "Rolled back to previous verified model due to initialization failure."
+            } else {
+                _importStatus.value = "Ready: on-device model active"
+            }
             refreshRollbackState()
         }
     }

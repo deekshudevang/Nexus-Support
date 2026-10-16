@@ -250,4 +250,50 @@ class MeshRouterTest {
         io.mockk.coVerify { messageRepository.insertMessage(match { it.id == "SOS-UUID-AUTH-999" }) }
         io.mockk.coVerify { messageRepository.deleteMessage(beaconId) }
     }
+
+    @Test
+    fun `route incoming SOS reverse arrival - mesh SOS arrives first then beacon arrives second links cleanly`() = runTest {
+        val deviceBHash = com.meshlink.app.mesh.transport.SosBeaconCodec.crc32("DEVICE_B".toByteArray())
+        val beaconId = "sos-$deviceBHash-500-1"
+
+        // 1. Mesh SOS arrives first
+        val meshSosPacket = MeshPacket(
+            senderId = "DEVICE_B",
+            receiverId = MeshPacket.BROADCAST_DEST,
+            content = """{"uuid":"SOS-UUID-REVERSE-1","senderId":"DEVICE_B","emergencyType":"FIRE","severity":4,"latitude":13.0,"longitude":77.6,"message":"Fire in sector 4","beaconKey":"$beaconId"}""",
+            timestamp = 1000L,
+            type = MeshPacket.PacketType.SOS,
+            messageId = "SOS-UUID-REVERSE-1",
+            originId = "DEVICE_B",
+            finalDestId = MeshPacket.BROADCAST_DEST,
+            priority = 10
+        )
+
+        val meshResult = meshRouter.route("ep_b", meshSosPacket, mapOf("ep_b" to "DEVICE_B"))
+        assertTrue("Mesh SOS should be processed", meshResult is RoutingResult.Processed)
+        io.mockk.coVerify { messageRepository.insertMessage(match { it.id == "SOS-UUID-REVERSE-1" }) }
+
+        // 2. Beacon arrives second
+        val beaconPacket = MeshPacket(
+            senderId = deviceBHash.toString(),
+            receiverId = MeshPacket.BROADCAST_DEST,
+            content = """{"emergencyType":"FIRE","severity":4,"lat":13.0,"lon":77.6}""",
+            timestamp = 1020L,
+            type = MeshPacket.PacketType.SOS,
+            messageId = beaconId,
+            originId = deviceBHash.toString(),
+            finalDestId = MeshPacket.BROADCAST_DEST,
+            priority = 100
+        )
+
+        val beaconResult = meshRouter.route("sos-beacon", beaconPacket, mapOf("ep_b" to "DEVICE_B"))
+        assertTrue("Beacon result should be processed", beaconResult is RoutingResult.Processed)
+        val processedBeacon = beaconResult as RoutingResult.Processed
+
+        // Verified: linked to existing authenticated alert -> localMessage is null, no ACK, no forwarding
+        org.junit.Assert.assertNull("Beacon should link to existing auth alert and produce null localMessage", processedBeacon.localMessage)
+        assertEquals("Beacon should have 0 forward targets", 0, processedBeacon.forwardTargets.size)
+        // Beacon should NOT be inserted as duplicate message
+        io.mockk.coVerify(exactly = 0) { messageRepository.insertMessage(match { it.id == beaconId }) }
+    }
 }

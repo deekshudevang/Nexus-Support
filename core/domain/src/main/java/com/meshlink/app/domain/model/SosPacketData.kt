@@ -34,7 +34,8 @@ data class SosPacketData(
         get() = latitude != null && longitude != null &&
                 !latitude.isNaN() && !latitude.isInfinite() &&
                 !longitude.isNaN() && !longitude.isInfinite() &&
-                latitude in -90.0..90.0 && longitude in -180.0..180.0
+                latitude in -90.0..90.0 && longitude in -180.0..180.0 &&
+                (latitude != 0.0 || longitude != 0.0)
 
     fun toJson(): String {
         val jsonObj = com.google.gson.JsonObject().apply {

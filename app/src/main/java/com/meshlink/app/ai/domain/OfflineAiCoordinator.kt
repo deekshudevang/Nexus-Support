@@ -67,4 +67,11 @@ interface OfflineAiCoordinator {
      * Serialized with active inference to prevent race conditions.
      */
     suspend fun rollbackModel(): AiResult<Unit>
+
+    /**
+     * Activates the staged candidate model, performs initialization and a mandatory smoke test.
+     * If initialization or smoke testing fails, automatically rolls back to the previous model.
+     * Never deletes the previous model until the new model passes smoke testing.
+     */
+    suspend fun activateCandidateAndVerify(): AiResult<Unit>
 }

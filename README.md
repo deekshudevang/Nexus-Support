@@ -35,7 +35,7 @@
 | **Offline Map Rendering** | Implemented | Mapsforge vector engine functioning. |
 | **Mesh Discovery (Nearby)**| Device-dependent | Unvalidated in physical dense environments. |
 | **Cloud Sync / Stub** | Experimental | Backend stubbed via `MockMeshBackendService`. |
-| **Offline LLM Assistant** | Experimental | Currently mocked via `delay()` canned responses. |
+| **Offline LLM Assistant** | Implemented (Verified on Device) | On-device MediaPipe Tasks GenAI engine running Gemma 3 1B INT4 with crash-safe dual-slot registry, emergency RAG, and instant SOS kill switch. |
 | **Large Scale Mesh** | Unvalidated | Simulation passes, but unvalidated on >5 physical radios. |
 
 *Note: Simulation metrics are never presented as physical field validation.*

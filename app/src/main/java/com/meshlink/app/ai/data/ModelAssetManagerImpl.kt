@@ -94,12 +94,44 @@ class ModelAssetManagerImpl @Inject constructor(
     )
 
     private fun loadRegistry(): InternalRegistry {
-        if (!registryFile.exists()) {
+        val bakFile = File(modelsDir, "model_registry.json.bak")
+        val contentToParse: String? = when {
+            registryFile.exists() && registryFile.length() > 0L -> {
+                try {
+                    val text = registryFile.readText()
+                    JSONObject(text) // Validate parseable JSON
+                    text
+                } catch (e: Exception) {
+                    AiLogger.w("model_registry.json is corrupt or partial. Checking backup: ${e.message}")
+                    if (bakFile.exists() && bakFile.length() > 0L) {
+                        try {
+                            val bakText = bakFile.readText()
+                            JSONObject(bakText)
+                            AiLogger.i("Recovered model registry from crash backup model_registry.json.bak")
+                            try { bakFile.copyTo(registryFile, overwrite = true) } catch (_: Exception) {}
+                            bakText
+                        } catch (_: Exception) { null }
+                    } else null
+                }
+            }
+            bakFile.exists() && bakFile.length() > 0L -> {
+                try {
+                    val bakText = bakFile.readText()
+                    JSONObject(bakText)
+                    AiLogger.i("Restoring missing model_registry.json from model_registry.json.bak")
+                    try { bakFile.copyTo(registryFile, overwrite = true) } catch (_: Exception) {}
+                    bakText
+                } catch (_: Exception) { null }
+            }
+            else -> null
+        }
+
+        if (contentToParse == null) {
             return bootstrapRegistry()
         }
 
         return try {
-            val json = JSONObject(registryFile.readText())
+            val json = JSONObject(contentToParse)
             val activeId = json.optString("activeSlotId", "").takeIf { it.isNotBlank() }
             val stagedId = json.optString("stagedSlotId", "").takeIf { it.isNotBlank() }
             val prevId = json.optString("previousSlotId", "").takeIf { it.isNotBlank() }
@@ -110,10 +142,10 @@ class ModelAssetManagerImpl @Inject constructor(
                 for (key in slotsObj.keys()) {
                     val sObj = slotsObj.getJSONObject(key)
                     val relPath = sObj.getString("relativePath")
-                    val targetFile = if (relPath.startsWith("/") || relPath.contains(":\\")) {
+                    val targetFile = if (File(relPath).isAbsolute) {
                         File(relPath)
                     } else {
-                        File(context.filesDir, relPath)
+                        File(context.filesDir, relPath.removePrefix("/"))
                     }
                     val roleStr = sObj.optString("role", ModelSlotRole.ACTIVE.name)
                     val role = try {
@@ -160,7 +192,7 @@ class ModelAssetManagerImpl @Inject constructor(
                 slots = slotsMap
             )
         } catch (e: Exception) {
-            AiLogger.w("Failed to parse model_registry.json, recovering from disk: ${e.message}")
+            AiLogger.w("Failed to parse registry content, bootstrapping from disk: ${e.message}")
             bootstrapRegistry()
         }
     }
@@ -188,6 +220,7 @@ class ModelAssetManagerImpl @Inject constructor(
 
     private fun saveRegistryAtomic(registry: InternalRegistry) {
         val tmpFile = File(modelsDir, "model_registry.json.tmp")
+        val bakFile = File(modelsDir, "model_registry.json.bak")
         try {
             val json = JSONObject().apply {
                 put("version", 1)
@@ -199,7 +232,7 @@ class ModelAssetManagerImpl @Inject constructor(
                 for ((key, slot) in registry.slots) {
                     val sObj = JSONObject().apply {
                         val relPath = try {
-                            slot.file.relativeTo(context.filesDir).path
+                            slot.file.relativeTo(context.filesDir).invariantSeparatorsPath
                         } catch (e: Exception) {
                             slot.file.absolutePath
                         }
@@ -220,10 +253,41 @@ class ModelAssetManagerImpl @Inject constructor(
                 try { fos.fd.sync() } catch (_: Exception) {}
             }
 
-            val renamed = tmpFile.renameTo(registryFile)
-            if (!renamed) {
-                tmpFile.copyTo(registryFile, overwrite = true)
-                tmpFile.delete()
+            if (registryFile.exists()) {
+                try {
+                    java.nio.file.Files.move(
+                        tmpFile.toPath(),
+                        registryFile.toPath(),
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                    )
+                    if (bakFile.exists()) bakFile.delete()
+                    return
+                } catch (_: Throwable) {
+                    // Non-atomic move fallback with backup preservation
+                }
+
+                if (bakFile.exists()) bakFile.delete()
+                registryFile.renameTo(bakFile)
+
+                val moved = tmpFile.renameTo(registryFile)
+                if (moved) {
+                    if (bakFile.exists()) bakFile.delete()
+                } else {
+                    if (bakFile.exists()) bakFile.renameTo(registryFile)
+                    if (tmpFile.exists()) tmpFile.delete()
+                }
+            } else {
+                val renamed = tmpFile.renameTo(registryFile)
+                if (!renamed) {
+                    try {
+                        java.nio.file.Files.move(
+                            tmpFile.toPath(),
+                            registryFile.toPath(),
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                        )
+                    } catch (_: Exception) {}
+                }
             }
         } catch (e: Exception) {
             AiLogger.e(e, "Failed to atomically save model_registry.json")
@@ -479,6 +543,17 @@ class ModelAssetManagerImpl @Inject constructor(
             val currentHash = computeSha256(stagedSlot.file)
             if (!currentHash.equals(stagedSlot.sha256, ignoreCase = true)) {
                 return@withContext AiResult.Failure(AiError.ModelCorrupt("Staged file modified or corrupt before activation"))
+            }
+
+            // Verify runtime compatibility before activation
+            val compatCheck = com.meshlink.app.ai.model.ModelRuntimeCompatibility.validateModelArtifact(
+                stagedSlot.file,
+                com.meshlink.app.ai.model.SupportedAiRuntime.TASKS_GENAI
+            )
+            if (compatCheck.isFailure) {
+                val err = (compatCheck as AiResult.Failure).error
+                AiLogger.w("Activation aborted: candidate model is incompatible with runtime: $err")
+                return@withContext AiResult.Failure(err)
             }
 
             // Hash must be confirmed by user or pinned

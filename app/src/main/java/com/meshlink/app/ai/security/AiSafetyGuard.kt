@@ -68,6 +68,7 @@ object AiSafetyGuard {
     private val emergencyDispatchHallucinationPatterns = listOf(
         Regex("""(?i)\b(?:i\s+have|i've)\s+(?:called|dispatched|notified|contacted)\s+(?:the\s+)?(?:911|emergency\s+services?|paramedics?|police|first\s+responders?|rescue\s+teams?)\b"""),
         Regex("""(?i)\b(?:help|rescue|paramedics?|first\s+responders?|emergency\s+services?|rescue\s+teams?)\s+(?:is|are)\s+(?:on\s+the\s+way|en\s+route|dispatched\s+to\s+your\s+location)\b"""),
+        Regex("""(?i)\b(?:your\s+sos\s+(?:has\s+been|was|is)\s+(?:delivered|sent|transmitted|received\s+by\s+authorities|acknowledged\s+by\s+rescue))\b"""),
         Regex("""(?i)\b(?:your\s+sos\s+has\s+been\s+sent\s+to|transmitted\s+to)\s+(?:the\s+)?(?:911|local\s+authorities|the\s+coast\s+guard)\b""")
     )
 

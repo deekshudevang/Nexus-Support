@@ -47,6 +47,8 @@ class SettingsViewModelAiTest {
         Dispatchers.setMain(testDispatcher)
         every { mockCoordinator.state } returns coordinatorState
         every { mockCoordinator.isAiEnabled } returns isAiEnabled
+        coEvery { mockCoordinator.initialize() } returns AiCapabilityState.READY
+        coEvery { mockAssetManager.activateStagedModel() } returns AiResult.Success(File("gemma.bin"))
     }
 
     @After

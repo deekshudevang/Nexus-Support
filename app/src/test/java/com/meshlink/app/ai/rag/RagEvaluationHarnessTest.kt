@@ -371,4 +371,24 @@ class RagEvaluationHarnessTest {
             )
         }
     }
+
+    @Test
+    fun outputValidation_detectsHallucinatedRescueAndUnverifiedSosDelivery() = testScope.runTest {
+        coordinator.enableAi()
+
+        // Configure fakeEngine to return hallucinated rescue response
+        fakeEngine.responseToReturn = "I have called 911 and emergency services are on the way. Your SOS has been delivered to authorities. Stay calm."
+
+        val result = ragService.answerQuery("How do I perform CPR on an adult?")
+        assertTrue(result.isSuccess)
+        val response = (result as AiResult.Success).data
+        assertTrue(
+            "Answer must append safety advisory disclaimer when LLM hallucinates rescue dispatch or SOS delivery",
+            response.answer.contains("Nexus-Support offline AI operates entirely locally on-device")
+        )
+        assertTrue(
+            "Answer must retain standard medical safety disclaimer",
+            response.answer.contains(RagConstants.MEDICAL_SAFETY_DISCLAIMER)
+        )
+    }
 }

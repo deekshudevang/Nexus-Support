@@ -81,7 +81,9 @@ class FakeModelAssetManager : ModelAssetManager {
             AiResult.Success(staged)
         }
         if (result is AiResult.Success) {
-            previousSlotToReturn = activeSlotToReturn?.copy(role = com.meshlink.app.ai.domain.ModelSlotRole.PREVIOUS)
+            if (activeSlotToReturn != null) {
+                previousSlotToReturn = activeSlotToReturn?.copy(role = com.meshlink.app.ai.domain.ModelSlotRole.PREVIOUS)
+            }
             activeSlotToReturn = com.meshlink.app.ai.domain.ModelSlot(
                 slotId = "slot_active",
                 file = result.data,

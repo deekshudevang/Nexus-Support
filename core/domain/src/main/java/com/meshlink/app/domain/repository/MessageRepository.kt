@@ -10,4 +10,5 @@ interface MessageRepository {
     suspend fun updateMessageStatus(messageId: String, status: Int)
     suspend fun deleteMessage(messageId: String)
     suspend fun getAllMessages(): List<Message>
+    suspend fun messageExists(messageId: String): Boolean = false
 }

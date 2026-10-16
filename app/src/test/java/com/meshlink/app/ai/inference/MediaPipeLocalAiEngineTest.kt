@@ -7,6 +7,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -77,5 +78,18 @@ class MediaPipeLocalAiEngineTest {
             "Expected incompatible format error message but was: $message",
             message.contains("MediaPipe Tasks GenAI runtime requires .task or .bin")
         )
+    }
+
+    @Test
+    fun generate_whenEngineNotInitialized_returnsModelMissing() = runTest {
+        val result = engine.generate("Hello")
+
+        assertTrue(result.isFailure)
+        assertEquals(AiError.ModelMissing, (result as AiResult.Failure).error)
+    }
+
+    @Test
+    fun isReady_whenNotInitialized_returnsFalse() {
+        assertFalse(engine.isReady())
     }
 }

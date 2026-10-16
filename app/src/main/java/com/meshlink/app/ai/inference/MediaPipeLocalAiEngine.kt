@@ -33,17 +33,14 @@ class MediaPipeLocalAiEngine @Inject constructor(
     override suspend fun initialize(modelFile: File): AiResult<Unit> = withContext(Dispatchers.IO) {
         synchronized(inferenceLock) {
             try {
-                if (!modelFile.exists() || modelFile.length() == 0L) {
-                    AiLogger.w("Model file does not exist or is empty at ${modelFile.absolutePath}")
-                    return@withContext AiResult.Failure(AiError.ModelMissing)
-                }
-
-                val ext = modelFile.extension.lowercase()
-                if (ext != "task" && ext != "bin") {
-                    AiLogger.w("Incompatible model extension '$ext' for MediaPipe Tasks GenAI runtime")
-                    return@withContext AiResult.Failure(
-                        AiError.RuntimeError("Incompatible model format '.$ext'. MediaPipe Tasks GenAI runtime requires .task or .bin")
-                    )
+                val validationResult = com.meshlink.app.ai.model.ModelRuntimeCompatibility.validateModelArtifact(
+                    modelFile,
+                    com.meshlink.app.ai.model.SupportedAiRuntime.TASKS_GENAI
+                )
+                if (validationResult.isFailure) {
+                    val err = (validationResult as AiResult.Failure).error
+                    AiLogger.w("Model file validation failed for MediaPipe runtime: $err")
+                    return@withContext validationResult.map { Unit }
                 }
 
                 val startTime = System.currentTimeMillis()
