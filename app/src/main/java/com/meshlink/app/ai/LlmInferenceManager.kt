@@ -6,7 +6,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import timber.log.Timber
+import com.meshlink.app.ai.security.AiLogger
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,7 +23,7 @@ class LlmInferenceManager @Inject constructor(
         try {
             val modelFile = File(context.filesDir, modelName)
             if (!modelFile.exists()) {
-                Timber.w("Gemma model not found at ${modelFile.absolutePath}. Falling back to stub.")
+                AiLogger.w("Gemma model not found at ${modelFile.absolutePath}. Falling back to stub.")
                 return@withContext false
             }
             
@@ -35,7 +35,7 @@ class LlmInferenceManager @Inject constructor(
             llmInference = LlmInference.createFromOptions(context, options)
             true
         } catch (e: Exception) {
-            Timber.e(e, "Failed to initialize LLM Inference")
+            AiLogger.e(e, "Failed to initialize LLM Inference")
             false
         }
     }
@@ -58,7 +58,7 @@ class LlmInferenceManager @Inject constructor(
             val response = llmInference?.generateResponse(prompt) ?: throw IllegalStateException("LLM not initialized")
             return@withContext response.trim()
         } catch (e: Exception) {
-            Timber.e(e, "Failed to generate LLM response")
+            AiLogger.e(e, "Failed to generate LLM response")
             return@withContext "[System: AI Error] An error occurred during inference (${e.message}). Please refer to the standard emergency protocols."
         }
     }

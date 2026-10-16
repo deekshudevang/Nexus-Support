@@ -10,6 +10,7 @@ import androidx.work.WorkManager
 import com.meshlink.app.worker.CloudSyncWorker
 import com.meshlink.app.worker.MeshCleanupWorker
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -20,10 +21,30 @@ class MeshLinkApp : Application(), Configuration.Provider {
     @Inject
     lateinit var workerFactory: androidx.hilt.work.HiltWorkerFactory
 
+    @Inject
+    lateinit var aiCoordinator: dagger.Lazy<com.meshlink.app.ai.domain.OfflineAiCoordinator>
+
+    private val appScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
             .build()
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        try {
+            appScope.launch {
+                try {
+                    aiCoordinator.get().onTrimMemory(level)
+                } catch (t: Throwable) {
+                    Timber.w(t, "Error notifying OfflineAiCoordinator of memory trim level $level")
+                }
+            }
+        } catch (t: Throwable) {
+            Timber.w(t, "Failed to dispatch onTrimMemory to AI coordinator")
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()

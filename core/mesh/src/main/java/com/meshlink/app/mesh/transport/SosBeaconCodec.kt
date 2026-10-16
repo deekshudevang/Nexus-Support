@@ -21,6 +21,7 @@ import java.nio.ByteOrder
 object SosBeaconCodec {
 
     const val BEACON_SIZE = 18
+    const val BEACON_V1_SIZE = 19
     /** BLE manufacturer ID — use 0xFFFF (reserved for testing/development). */
     const val MANUFACTURER_ID = 0xFFFF
 
@@ -36,26 +37,44 @@ object SosBeaconCodec {
 
     data class SosBeacon(
         val deviceIdHash: Int,
-        val latitude: Float,
-        val longitude: Float,
+        val latitude: Float?,
+        val longitude: Float?,
         val emergencyType: EmergencyType,
         val severity: Int,
-        val timestampDelta: Int
-    )
+        val timestampDelta: Int,
+        val nonce: Byte? = null
+    ) {
+        val hasValidLocation: Boolean
+            get() = latitude != null && longitude != null
+    }
 
     fun encode(
         deviceId: String,
-        latitude: Double,
-        longitude: Double,
+        latitude: Double?,
+        longitude: Double?,
         emergencyType: EmergencyType,
         severity: Int,
-        nowMs: Long = System.currentTimeMillis()
+        nowMs: Long = System.currentTimeMillis(),
+        nonce: Byte? = null
     ): ByteArray {
-        val buf = ByteBuffer.allocate(BEACON_SIZE).order(ByteOrder.LITTLE_ENDIAN)
+        val size = if (nonce != null) BEACON_V1_SIZE else BEACON_SIZE
+        val buf = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN)
 
         buf.putInt(crc32(deviceId.toByteArray()))
-        buf.putFloat(latitude.toFloat())
-        buf.putFloat(longitude.toFloat())
+
+        val isValidLat = latitude != null && !latitude.isNaN() && !latitude.isInfinite() && latitude in -90.0..90.0
+        val isValidLon = longitude != null && !longitude.isNaN() && !longitude.isInfinite() && longitude in -180.0..180.0
+        val isNullIsland = latitude == 0.0 && longitude == 0.0
+
+        if (isValidLat && isValidLon && !isNullIsland) {
+            buf.putFloat(latitude!!.toFloat())
+            buf.putFloat(longitude!!.toFloat())
+        } else {
+            // Out-of-bounds / unavailable sentinel: Float.NaN in IEEE 754 float slots
+            buf.putFloat(Float.NaN)
+            buf.putFloat(Float.NaN)
+        }
+
         buf.put(emergencyType.code)
         buf.put(severity.coerceIn(1, 5).toByte())
 
@@ -69,30 +88,45 @@ object SosBeaconCodec {
         val crc = crc16(payload, 0, 16)
         buf.putShort(crc)
 
+        if (nonce != null) {
+            buf.put(nonce)
+        }
+
         return payload
     }
 
     fun decode(data: ByteArray): SosBeacon? {
-        if (data.size < BEACON_SIZE) return null
+        if (data.size != BEACON_SIZE && data.size != BEACON_V1_SIZE) return null
 
         val buf = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
 
-        // Verify CRC-16 integrity
+        // Verify CRC-16 integrity over bytes 0-15
         val expectedCrc = crc16(data, 0, 16)
         val actualCrc = ByteBuffer.wrap(data, 16, 2).order(ByteOrder.LITTLE_ENDIAN).short
         if (expectedCrc != actualCrc) return null
 
         val hash = buf.int
-        val lat = buf.float
-        val lon = buf.float
+        val rawLat = buf.float
+        val rawLon = buf.float
         val type = EmergencyType.fromCode(buf.get())
         val sev = buf.get().toInt()
         val delta = buf.short.toInt() and 0xFFFF
+        val nonce = if (data.size == BEACON_V1_SIZE) data[18] else null
 
-        return SosBeacon(hash, lat, lon, type, sev, delta)
+        val isValidLat = !rawLat.isNaN() && !rawLat.isInfinite() && rawLat in -90.0f..90.0f
+        val isValidLon = !rawLon.isNaN() && !rawLon.isInfinite() && rawLon in -180.0f..180.0f
+        val isNullIsland = rawLat == 0.0f && rawLon == 0.0f
+
+        val (lat, lon) = if (isValidLat && isValidLon && !isNullIsland) {
+            rawLat to rawLon
+        } else {
+            null to null
+        }
+
+        return SosBeacon(hash, lat, lon, type, sev, delta, nonce)
     }
 
-    private fun crc32(data: ByteArray): Int {
+    fun crc32(data: ByteArray): Int {
         val crc = java.util.zip.CRC32()
         crc.update(data)
         return crc.value.toInt()

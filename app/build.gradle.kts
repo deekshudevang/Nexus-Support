@@ -99,7 +99,7 @@ dependencies {
     implementation(libs.mapsforge.themes)
     implementation(libs.osmbonuspack)
     implementation("com.google.mlkit:image-labeling:17.0.8")
-    implementation("com.google.mediapipe:tasks-genai:0.10.14")
+    implementation("com.google.mediapipe:tasks-genai:0.10.35")
 
     // Testing — unit tests
     testImplementation(libs.junit)
