@@ -183,4 +183,16 @@ class SettingsViewModelAiTest {
 
         assertTrue(vm.importStatus.value!!.contains("Import failed"))
     }
+
+    @Test
+    fun rollbackModel_whenSuccessful_updatesStatusAndRefreshesState() = runTest(testDispatcher) {
+        val vm = createViewModel()
+        coEvery { mockCoordinator.rollbackModel() } returns AiResult.Success(Unit)
+
+        vm.rollbackModel()
+        advanceUntilIdle()
+
+        coVerify { mockCoordinator.rollbackModel() }
+        assertTrue(vm.importStatus.value!!.contains("Rollback successful"))
+    }
 }

@@ -61,4 +61,10 @@ interface OfflineAiCoordinator {
         timeoutMs: Long = 120000L,
         block: suspend () -> AiResult<T>
     ): AiResult<T>
+
+    /**
+     * Safely unloads current model and restores the retained PREVIOUS model.
+     * Serialized with active inference to prevent race conditions.
+     */
+    suspend fun rollbackModel(): AiResult<Unit>
 }

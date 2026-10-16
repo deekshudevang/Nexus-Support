@@ -46,9 +46,38 @@ class SettingsViewModel @Inject constructor(
     private val _pendingHashConfirmation = MutableStateFlow<String?>(null)
     val pendingHashConfirmation: StateFlow<String?> = _pendingHashConfirmation.asStateFlow()
 
+    private val _canRollback = MutableStateFlow(false)
+    val canRollback: StateFlow<Boolean> = _canRollback.asStateFlow()
+
+    init {
+        refreshRollbackState()
+    }
+
+    fun refreshRollbackState() {
+        viewModelScope.launch {
+            _canRollback.value = modelAssetManager.getPreviousSlot() != null
+        }
+    }
+
     fun triggerAiKillSwitch() {
         viewModelScope.launch {
             aiCoordinator.triggerKillSwitch()
+        }
+    }
+
+    fun rollbackModel() {
+        viewModelScope.launch {
+            _importStatus.value = "Rolling back to previous model..."
+            val result = aiCoordinator.rollbackModel()
+            when (result) {
+                is com.meshlink.app.ai.model.AiResult.Success -> {
+                    _importStatus.value = "Rollback successful: previous model active"
+                    refreshRollbackState()
+                }
+                is com.meshlink.app.ai.model.AiResult.Failure -> {
+                    _importStatus.value = "Rollback failed: ${result.error.userRecoveryText}"
+                }
+            }
         }
     }
 
@@ -62,6 +91,7 @@ class SettingsViewModel @Inject constructor(
                         _importStatus.value = "Model verified with pinned SHA-256. Initializing..."
                         aiCoordinator.initialize()
                         _importStatus.value = "Ready: ${result.data.name}"
+                        refreshRollbackState()
                     } else {
                         val computed = modelAssetManager.computeSha256(result.data)
                         _pendingHashConfirmation.value = computed
@@ -79,10 +109,12 @@ class SettingsViewModel @Inject constructor(
         val hash = _pendingHashConfirmation.value ?: return
         viewModelScope.launch {
             modelAssetManager.confirmModelHash(hash)
+            modelAssetManager.activateStagedModel()
             _pendingHashConfirmation.value = null
             _importStatus.value = "Model hash confirmed by user. Initializing..."
             aiCoordinator.initialize()
             _importStatus.value = "Ready: on-device model active"
+            refreshRollbackState()
         }
     }
 
@@ -91,6 +123,7 @@ class SettingsViewModel @Inject constructor(
             _pendingHashConfirmation.value = null
             modelAssetManager.deleteInstalledModel()
             _importStatus.value = "Model import cancelled"
+            refreshRollbackState()
         }
     }
 
@@ -99,8 +132,10 @@ class SettingsViewModel @Inject constructor(
             aiCoordinator.triggerKillSwitch()
             modelAssetManager.deleteInstalledModel()
             _importStatus.value = "AI model and local cache cleared"
+            refreshRollbackState()
         }
     }
+
 
     fun toggleMasterScanning(paused: Boolean) {
         _isMasterScanningPaused.value = paused

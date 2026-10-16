@@ -294,9 +294,21 @@ fun SettingsScreen(
                         }
                     }
 
+                    val canRollback by viewModel.canRollback.collectAsState()
+                    if (canRollback) {
+                        OutlinedButton(
+                            onClick = { viewModel.rollbackModel() },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("Rollback to Previous Model", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
                     if (isAiEnabled) {
                         Button(
                             onClick = { viewModel.triggerAiKillSwitch() },
+
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                             modifier = Modifier.fillMaxWidth()
                         ) {

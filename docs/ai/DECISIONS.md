@@ -12,6 +12,13 @@ This log tracks all architectural, safety, and compatibility decisions made duri
 - **D-004:** Cloud Budget & Paid Resources Policy ($0.00 Cap)
 - **D-005:** Emergency Fact Grounding Boundary (Strict RAG vs Weight Behavioral Tuning)
 - **D-006:** Android Model Container & Inference Route (`.litertlm` & `.task`)
+- **D-007:** Disclosure of Commit `f776ceb` Contents & Whitespace Sanitization
+- **D-008:** Disclosure of Remote Push to `origin/feature/gemma4-offline`
+- **D-009:** Gate 0 Criterion (b) Custom Weight Export Status (Marked UNPROVEN)
+- **D-010:** Verification of Existing Gemma 3 Model Archive (`gemma3-1B-it-int4.task`)
+- **D-011:** Realignment of Gate 0C Acceptance Criteria
+- **D-012:** Strategic Tradeoffs: Improving Existing Gemma 3 vs Gemma 4 Exploration
+- **D-013:** Non-Destructive Dual-Slot Model Lifecycle Architecture & Invariants (Phase 0D)
 
 ---
 
@@ -88,3 +95,51 @@ This log tracks all architectural, safety, and compatibility decisions made duri
 - **Context:** Section 2 Rule 16 specifies: "If custom-weight export to Android is unsupported, do not train a full model without an approved deployment strategy."
 - **Decision:** The claim that custom fine-tuned weight export for Gemma 4 PLE architecture is documented and verified is **WITHDRAWN**. Until official Google AI Edge / MediaPipe documentation and tooling for exporting Gemma 4 custom weights to `.litertlm` is cited and verified, Gate 0 criterion (b) is marked **UNPROVEN / NOT VERIFIED**.
 - **Implications:** Training full models on GPU remains strictly gated. Only non-training tasks (dataset curation, offline RAG architecture, evaluation harnesses) may proceed.
+
+---
+
+### D-010: Verification of Existing Gemma 3 Model Archive (`gemma3-1B-it-int4.task`)
+- **Date:** 2026-10-16
+- **Context:** User provided existing local model archive at `C:\Users\deeks\Downloads\gemma-3-tflite-gemma3-1b-it-int4-v1.tar.gz`.
+- **Finding:** Archive verified (`786,501,209` bytes, SHA-256 `E5DE8D8A482393D4E78F0429AA3896B90804BE4798E8357E82ADC80E2D2CDAFC`). Contains compiled inference artifacts: `gemma3-1B-it-int4.task` (`554,661,243` bytes, MediaPipe bundle with TFLite model, SentencePiece tokenizer, and metadata) and `gemma3-1B-it-int4.tflite` (`549,971,728` bytes). Contains zero training checkpoints.
+- **Decision:** `gemma3-1B-it-int4.task` is directly compatible with the app's `MediaPipeLocalAiEngine` runtime specification. No training or conversion is required to test baseline Gemma 3 on-device.
+
+---
+
+### D-011: Realignment of Gate 0C Acceptance Criteria
+- **Date:** 2026-10-16
+- **Context:** Recovery Checkpoint v2 requires Gate 0C to track the original Master Prompt v3.1 pre-migration baseline safety criteria.
+- **Decision:** Gate 0C tracks six discrete criteria: (1) Baseline build, (2) Unit test suite, (3) Feature flag default-off & kill switch, (4) Verifiable rollback procedure, (5) Android compatibility evidence, (6) Out-of-repo safety snapshot.
+- **Status:** Criteria 3, 4, and 6 are VERIFIED. Criteria 1 and 2 are NOT TESTED (no Gradle build/test run executed in read-only mode). Criterion 5 is PARTIAL. Gate 0C overall is marked **NOT VERIFIED**.
+
+---
+
+### D-012: Strategic Tradeoffs: Improving Existing Gemma 3 vs Gemma 4 Exploration
+- **Date:** 2026-10-16
+- **Analysis:**
+  - **Option A (Safest & Fastest):** Operationalize existing `gemma3-1B-it-int4.task`. It already exists as a compiled, quantized MediaPipe bundle compatible with `MediaPipeLocalAiEngine.kt` and `ModelAssetManagerImpl.kt`. Improvement focus shifts to prompt engineering, FTS5/encrypted RAG emergency packs, and local evaluation harnesses. Zero risk of mobile export failure.
+  - **Option B (Investigate Gemma 4):** Restrict Gemma 4 work strictly to desktop exploration and official export pipeline research. Do NOT train Gemma 4 weights until Google AI Edge publishes verified conversion tooling for the PLE architecture.
+
+---
+
+### D-013: Non-Destructive Dual-Slot Model Lifecycle Architecture & Invariants (Phase 0D)
+- **Date:** 2026-10-16
+- **Context:** Phase 0D mandates a persistent, safe model lifecycle supporting staging, validation, activation, and physical rollback without deleting or overwriting the active baseline Gemma 3 artifact.
+- **Decision:** Implemented a slot-based persistent registry (`context.filesDir/ai_models/model_registry.json`) with three logical roles:
+  1. `ACTIVE`: Currently loaded and operational model.
+  2. `STAGED`: Validated candidate model residing in `ai_models/staging/`, awaiting explicit user or coordinator activation.
+  3. `PREVIOUS`: Retained previous known-good model in its immutable slot, enabling immediate zero-loss rollback.
+- **Enforced Safety Invariants (12/12):**
+  1. *No Active Overwrite:* Candidates are imported to temporary staging (`ai_models/staging/`), never over the active model.
+  2. *Staging Isolation:* Candidate files are validated in staging before any promotion.
+  3. *Pre-Activation Validation:* Format (`.task` / `.litertlm`), minimum file size (> 100 MB), and cryptographic SHA-256 are verified prior to promotion.
+  4. *Atomic Manifest Writes:* Manifest updates are written to `model_registry.json.tmp`, flushed to disk (`fd.sync()`), and atomically renamed.
+  5. *Crash Resilience:* An interrupted or failed import leaves the active model and manifest fully operational.
+  6. *Baseline Preservation:* Promoting a candidate to `ACTIVE` retains the prior active model in `PREVIOUS`.
+  7. *Explicit Rollback:* Single-step rollback operation swaps `PREVIOUS` to `ACTIVE` and deallocates native runtime memory before re-initialization.
+  8. *Inference Isolation:* Inference requests only access verified active slot files, never staging or partial files.
+  9. *Concurrency Control:* All import, activation, rollback, and inference operations are serialized via coroutine Mutex lock.
+  10. *Kill-Switch Integrity:* Kill switch forcibly unloads native LiteRT/MediaPipe engine instances and deallocates GPU/RAM regardless of active slot.
+  11. *Fault-Tolerant Recovery:* Corrupted or missing manifests automatically synthesize a recovery state referencing the verified on-device baseline model.
+  12. *Security & Flags:* Candidate models cannot bypass `ai_enabled` feature flags, permission checks, or emergency preemption controls.
+- **Implications:** Verified on physical hardware (Motorola edge 50 pro). The baseline Gemma 3 1B INT4 model (`files/models/gemma3-1B-it-int4.task`) was preserved bit-for-bit while switching between slots and executing physical rollbacks.

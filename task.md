@@ -1,20 +1,23 @@
 # Master Engineering Prompt v3 — Gemma 4 Offline AI
 
-- **Latest verified checkpoint:** Phase 1 (Environment Setup & Gate 1 PASS)
-- **Active Phase:** Phase 2 (Dataset Engineering) [IN_PROGRESS]
+- **Latest verified checkpoint:** Phase 0D (Dual-Slot Staging & On-Device Rollback Verified)
+- **Active Phase:** Phase 0D: Non-Destructive Model Staging and Rollback [VERIFIED]
 - **Current Branch:** `feature/gemma4-offline`
 - **Target Hardware:** Windows 11 Laptop, RTX 4060 Laptop (8 GB VRAM), 16 GB RAM
-- **Target Model:** `google/gemma-4-E2B-it` (Apache 2.0)
+- **Verified Baseline Model:** Gemma 3 1B IT int4 MediaPipe bundle (`gemma3-1B-it-int4.task`)
+- **Target Under Investigation:** `google/gemma-4-E2B-it` (Apache 2.0, mobile export unproven)
 - **Status Vocabulary:** VERIFIED, FAILED, BLOCKED, NOT TESTED, UNAVAILABLE.
 
 ## Phase Execution Summary
 
 | Phase | Name | Status | Evidence Path | Gate Result |
 |---|---|---|---|---|
-| **0A** | Project Configuration | VERIFIED | `docs/ai/PROJECT_CONFIG.md` | PASS |
-| **0B** | Baseline Audit and Feasibility Gate | VERIFIED | `docs/ai/BASELINE_AUDIT.md`, `docs/ai/COMPATIBILITY_MATRIX.md` | GATE 0 PASS |
-| **1** | Environment | VERIFIED | `docs/ai/TRAINING_SETUP.md`, `logs/phase1/20261016_check_gpu.log`, `logs/phase1/20261016_check_env.log`, `logs/phase1/20261016_model_access.log`, `requirements.lock.txt` | GATE 1 PASS |
-| **2** | Dataset Engineering | IN_PROGRESS | `scripts/validate_dataset.py`, `scripts/scan_pii.py`, `scripts/deduplicate_dataset.py`, `scripts/split_dataset.py`, `docs/ai/DATASET_GUIDE.md` | Tooling verified |
+| **0A** | Project Configuration | NOT VERIFIED | `docs/ai/PROJECT_CONFIG.md` | Regional/language/device fields UNAVAILABLE |
+| **0B** | Baseline Audit and Feasibility Gate | NOT VERIFIED | `docs/ai/BASELINE_AUDIT.md`, `docs/ai/COMPATIBILITY_MATRIX.md` | GATE 0 NOT VERIFIED (Export unproven) |
+| **0C** | Migration Safety Gate | NOT VERIFIED | `docs/ai/MIGRATION_AUDIT.md`, `docs/ai/ROLLBACK.md` | GATE 0C NOT VERIFIED (Gemma 4 compatibility unproven) |
+| **0D** | Non-Destructive Model Staging & Rollback | VERIFIED | `app/src/androidTest/java/com/meshlink/app/ai/DualSlotRollbackDeviceTest.kt`, `logs/phase0d_physical_rollback.log` | Dual-slot lifecycle & physical rollback VERIFIED on device; Baseline preserved |
+| **1** | Environment & Baseline Archive | PARTIAL | `docs/ai/TRAINING_SETUP.md`, `requirements.lock.txt`, `C:\Users\deeks\Downloads\gemma-3-tflite-gemma3-1b-it-int4-v1.tar.gz` | PyTorch/CUDA verified; Gemma 3 archive verified; 4-bit load PARTIAL |
+| **2** | Dataset Engineering | BLOCKED | `scripts/validate_dataset.py`, `scripts/scan_pii.py`, `scripts/deduplicate_dataset.py`, `scripts/split_dataset.py` | Tooling ready; zero reviewed rows; splits held |
 | **3** | Baselines and Fine-Tuning | NOT TESTED | Pending Gate 2 | NOT TESTED |
 | **4** | Evaluation | NOT TESTED | Pending Gate 3 | NOT TESTED |
 | **5** | Offline RAG | NOT TESTED | Pending Gate 4 | NOT TESTED |
@@ -23,70 +26,97 @@
 | **8** | Automated Testing | NOT TESTED | Pending Gate 7 | NOT TESTED |
 | **9** | Final Audit | NOT TESTED | Pending Gate 8 | NOT TESTED |
 
+
 ---
 
 ## Per-Phase Tracking Record
 
 ### Phase 0A: Project Configuration
-- **Status:** VERIFIED
+- **Status:** NOT VERIFIED
 - **Files Changed:** `docs/ai/PROJECT_CONFIG.md`
 - **Commands Run:** Repository inspection and emergency guide corpus audit.
-- **Results:** Documented 10 verified emergency guides (CPR, bleeding, burns, choking, earthquakes, floods, fire, fractures, shock, poisoning); target language English; minimum device requirements (Android 8.0+, arm64-v8a, 6+ GB RAM); cloud GPU budget cap $0.00 (not authorized). Unknown items marked `UNAVAILABLE`.
+- **Results:** Documented 10 verified emergency guides in `app/src/main/assets/emergency_packs/guides.json`. Operational scope incomplete: Target Country & Regional emergency localizations are `UNAVAILABLE`, Secondary languages are `UNAVAILABLE`, Physical test device connection is `UNAVAILABLE`.
 - **Evidence Paths:** [`docs/ai/PROJECT_CONFIG.md`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/docs/ai/PROJECT_CONFIG.md)
-- **Blockers:** None.
-- **Next Action:** Proceed to Phase 0B.
+- **Blockers:** Regional scope and multi-lingual requirements require stakeholder input.
 
 ### Phase 0B: Baseline Audit and Feasibility Gate
-- **Status:** VERIFIED
-- **Files Changed:** `docs/ai/BASELINE_AUDIT.md`, `docs/ai/COMPATIBILITY_MATRIX.md`, `docs/ai/DECISIONS.md`, `scripts/run_phase0_audit.ps1`
-- **Commands Run:**
-  - `powershell -ExecutionPolicy Bypass -File scripts\run_phase0_audit.ps1`
-  - `python scripts\preflight.py`
-  - Web research on official Google AI Edge / Hugging Face documentation for Gemma 4 E2B.
+- **Status:** NOT VERIFIED
+- **Files Changed:** `docs/ai/BASELINE_AUDIT.md`, `docs/ai/COMPATIBILITY_MATRIX.md`, `docs/ai/DECISIONS.md`, `docs/ai/MIGRATION_AUDIT.md`
+- **Commands Run:** Hardware and repository inspection.
 - **Results:**
-  - Git branch verified: `feature/gemma4-offline` (clean working tree with all user changes preserved).
-  - Host hardware verified: RTX 4060 Laptop (8,188 MiB VRAM, Driver 617.14, CUDA UMD 13.4, 6.75 GB free VRAM); 15.52 GB RAM; 24.0 GB paging file; 258.7 GB free disk.
-  - Model specs verified: `google/gemma-4-E2B-it`, Apache 2.0 license, gated repo on Hugging Face, Dense Transformer with Per-Layer Embeddings (PLE), 35 layers, 262,144 vocab size, ~5.1B total parameters, ~2.3B effective compute footprint.
-  - Gate 0 evaluation: (a) Model loads on GPU in 4-bit NF4 (~2.4 GB footprint, well within 8 GB VRAM); (b) Export route from merged weights to `.litertlm` container documented via Google AI Edge `litert-lm` / `ai-edge-torch`.
-  - Gate 0 verdict: **PASS**.
+  - Host hardware: RTX 4060 Laptop (8,188 MiB VRAM), 15.52 GB RAM (idle free RAM ~1.75 GB).
+  - Target model `google/gemma-4-E2B-it`: Hub metadata verified; official custom LoRA-to-mobile export tooling for PLE architecture is unproven.
+  - Gate 0 evaluation: Criterion (b) unproven. Gate 0 is **NOT VERIFIED**.
 - **Evidence Paths:**
-  - [`logs/phase0/20261016_190608_git_audit.log`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/logs/phase0/20261016_190608_git_audit.log)
-  - [`logs/phase0/20261016_190608_system_audit.log`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/logs/phase0/20261016_190608_system_audit.log)
-  - [`logs/phase0/20261016_190608_python_cuda_audit.log`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/logs/phase0/20261016_190608_python_cuda_audit.log)
-  - [`logs/phase0/20261016_190608_android_audit.log`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/logs/phase0/20261016_190608_android_audit.log)
-  - [`logs/phase0/20261016_preflight.log`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/logs/phase0/20261016_preflight.log)
   - [`docs/ai/BASELINE_AUDIT.md`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/docs/ai/BASELINE_AUDIT.md)
-  - [`docs/ai/COMPATIBILITY_MATRIX.md`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/docs/ai/COMPATIBILITY_MATRIX.md)
-  - [`docs/ai/DECISIONS.md`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/docs/ai/DECISIONS.md)
-- **Blockers:** None.
-- **Next Action:** Complete Phase 1 environment verification.
+  - [`docs/ai/MIGRATION_AUDIT.md`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/docs/ai/MIGRATION_AUDIT.md)
+- **Blockers:** Custom Gemma 4 export pipeline unverified.
 
-### Phase 1: Environment
+### Phase 0C: Migration Safety Gate
+- **Status:** NOT VERIFIED
+- **Files Changed:** `docs/ai/MIGRATION_AUDIT.md`, `docs/ai/ROLLBACK.md`, `docs/ai/DECISIONS.md`, `task.md`
+- **Criteria Evaluation:**
+  - 0C-1 (Baseline build): VERIFIED (`assembleDebug` exit 0, APK 188.1 MB).
+  - 0C-2 (Baseline unit tests): VERIFIED (`testDebugUnitTest` exit 0, 204 passed, 0 failed, 1 skipped across 32 suites).
+  - 0C-3 (Feature flag & kill switch): VERIFIED on physical device (Motorola edge 50 pro); default off verified; kill switch deallocated GPU/C++ runtime in 265ms, persisted `ai_enabled=false`, blocked subsequent queries, and preserved mesh/SOS operation.
+  - 0C-4 (Rollback procedure): VERIFIED (Dual-slot rollback verified via on-device instrumentation test `DualSlotRollbackDeviceTest` on Motorola edge 50 pro; baseline model preserved bit-for-bit without deletion or overwrite).
+  - 0C-5 (Android compatibility & inference): PARTIAL (VERIFIED for baseline Gemma 3 1B INT4 on Motorola edge 50 pro, Android 16; UNAVAILABLE for candidate Gemma 4 pending export tooling verification).
+  - 0C-6 (Out-of-repo safety snapshot): VERIFIED (`C:\nexus_snapshots\gemma4_f776ceb.bundle`).
+- **Gate 0C Verdict:** **NOT VERIFIED** (Gemma 4 target model compatibility and export remain unproven per Gate 0 criterion b; Gate 0C remains fail-closed until experimental model pipeline is approved).
+
+### Phase 0D: Non-Destructive Model Staging and Rollback
 - **Status:** VERIFIED
-- **Files Changed:** `requirements.txt`, `requirements.lock.txt`, `.gitignore`, `scripts/check_gpu.py`, `scripts/check_env.py`, `scripts/check_model_access.py`, `scripts/preflight.py`, `docs/ai/TRAINING_SETUP.md`
+- **Files Changed:**
+  - `app/src/main/java/com/meshlink/app/ai/domain/ModelAssetManager.kt`
+  - `app/src/main/java/com/meshlink/app/ai/data/ModelAssetManagerImpl.kt`
+  - `app/src/main/java/com/meshlink/app/ai/domain/OfflineAiCoordinator.kt`
+  - `app/src/main/java/com/meshlink/app/ai/coordinator/OfflineAiCoordinatorImpl.kt`
+  - `app/src/main/java/com/meshlink/app/ui/settings/SettingsViewModel.kt`
+  - `app/src/main/java/com/meshlink/app/ui/settings/SettingsScreen.kt`
+  - `app/src/test/java/com/meshlink/app/ai/data/ModelAssetManagerTest.kt`
+  - `app/src/test/java/com/meshlink/app/ai/coordinator/OfflineAiCoordinatorTest.kt`
+  - `app/src/test/java/com/meshlink/app/ui/settings/SettingsViewModelAiTest.kt`
+  - `app/src/test/java/com/meshlink/app/ai/fakes/FakeModelAssetManager.kt`
+  - `app/src/androidTest/java/com/meshlink/app/ai/DualSlotRollbackDeviceTest.kt`
+  - `docs/ai/MIGRATION_AUDIT.md`, `docs/ai/ROLLBACK.md`, `docs/ai/DECISIONS.md`, `task.md`
 - **Commands Run:**
-  - `py -3.14 -m venv .venv`
-  - `.\.venv\Scripts\pip.exe install --force-reinstall --no-deps --index-url https://download.pytorch.org/whl/cu126 torch` (`torch-2.14.1+cu126`)
-  - `.\.venv\Scripts\pip.exe install bitsandbytes numpy transformers peft accelerate datasets huggingface-hub sentencepiece protobuf pyyaml tqdm`
-  - `.\.venv\Scripts\python.exe scripts/check_gpu.py`
-  - `.\.venv\Scripts\python.exe scripts/check_env.py`
-  - `.\.venv\Scripts\python.exe scripts/check_model_access.py`
-  - `.\.venv\Scripts\pip.exe freeze > requirements.lock.txt`
+  - `.\gradlew.bat :app:testDebugUnitTest`: 204 passed, 0 failed, 1 skipped.
+  - `.\gradlew.bat :core:mesh:testDebugUnitTest`: 87/87 passing.
+  - `adb install -r -t app/build/outputs/apk/debug/app-debug.apk`: Success.
+  - `adb install -r -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`: Success.
+  - `adb shell am instrument -w -r -e class com.meshlink.app.ai.DualSlotRollbackDeviceTest com.meshlink.app.debug.test/com.meshlink.app.HiltTestRunner`: `OK (1 test)`, Time: 22.401s, status code -1.
 - **Results:**
-  - `torch-2.14.1+cu126` verified with CUDA 12.6, Ada Lovelace compute 8.9 capability, bf16/fp16/fp32 tensor ops verified.
-  - `bitsandbytes-0.50.2` verified with 4-bit `Linear4bit` execution on GPU without Windows DLL issues.
-  - `transformers-5.20.1`, `peft-0.21.2`, `accelerate-1.15.0`, `datasets-5.1.0` all verified.
-  - Hub metadata access to `google/gemma-4-E2B-it` passed (Commit: `3e22461f65`).
-  - Preflight headroom verified: 253.2 GB disk free, 6.57 GB VRAM free.
-  - Gate 1 verdict: **PASS**.
+  - Resolved path discrepancy: physical model artifact resides in `files/models/gemma3-1B-it-int4.task`, registered as slot `baseline`.
+  - Stream-hashed member in `C:\Users\deeks\Downloads\gemma-3-tflite-gemma3-1b-it-int4-v1.tar.gz`: SHA-256 `e3d981c01aeaaac69a84ffa0d4be13281b3176731063f1bea1c9fe6887bd9dee`, matching on-device model bit-for-bit.
+  - Implemented persistent dual-slot model registry (`model_registry.json`) with roles ACTIVE, STAGED, PREVIOUS.
+  - Enforced all 12 safety invariants across import, validation, staging, atomic manifest swap, rollback, and inference.
+  - On-device test demonstrated:
+    1. Initial active model: `baseline`.
+    2. Staging and promoting candidate copy to `slot_a` (`ACTIVE`); `baseline` moved to `PREVIOUS`.
+    3. Generating text with `slot_a` ("2 plus two equals four.").
+    4. Rollback to `baseline` (`ACTIVE`); `slot_a` retained as `PREVIOUS`.
+    5. Generating text with `baseline` ("2 plus two equals four.").
+    6. Kill switch deallocation and resource release.
+    7. Baseline artifact `files/models/gemma3-1B-it-int4.task` preserved bit-for-bit (554,661,243 bytes, identical SHA-256).
 - **Evidence Paths:**
-  - [`logs/phase1/20261016_check_gpu.log`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/logs/phase1/20261016_check_gpu.log)
-  - [`logs/phase1/20261016_check_env.log`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/logs/phase1/20261016_check_env.log)
-  - [`logs/phase1/20261016_model_access.log`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/logs/phase1/20261016_model_access.log)
-  - [`requirements.lock.txt`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/requirements.lock.txt)
+  - [`app/src/androidTest/java/com/meshlink/app/ai/DualSlotRollbackDeviceTest.kt`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/app/src/androidTest/java/com/meshlink/app/ai/DualSlotRollbackDeviceTest.kt)
+  - `logs/phase0d_physical_rollback.log`
+  - `logs/model_registry.json`
+
+
+### Phase 1: Environment & Baseline Archive
+- **Status:** PARTIAL
+- **Files Changed:** `requirements.txt`, `requirements.lock.txt`, `docs/ai/TRAINING_SETUP.md`
+- **Results:**
+  - `torch-2.14.1+cu126` and CUDA 12.6 verified.
+  - `bitsandbytes` 4-bit support PARTIAL (layer instantiation verified; full model forward/backward pass NOT TESTED).
+  - Local model archive verified at `C:\Users\deeks\Downloads\gemma-3-tflite-gemma3-1b-it-int4-v1.tar.gz` (contains compiled inference-only MediaPipe bundle `gemma3-1B-it-int4.task`, 554 MB, and `gemma3-1B-it-int4.tflite`, 549 MB). Zero training checkpoints.
+  - Gemma 4 weight access and full model download unapproved.
+- **Evidence Paths:**
   - [`docs/ai/TRAINING_SETUP.md`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/docs/ai/TRAINING_SETUP.md)
-- **Blockers:** None.
-- **Next Action:** Build curated dataset for Phase 2.
+  - [`requirements.lock.txt`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/requirements.lock.txt)
+  - `C:\Users\deeks\Downloads\gemma-3-tflite-gemma3-1b-it-int4-v1.tar.gz`
+
 
 ---
 
@@ -571,4 +601,3 @@
 1. **AI Assistant Documentation Mismatch:**
    - **Observation:** `README.md` (line 38) states: `| **Offline LLM Assistant** | Experimental | Currently mocked via delay() canned responses. |`, whereas `task.md` (Phases 1–15) documents the on-device LiteRT / MediaPipe Tasks GenAI implementation with Gemma 3 1B on physical hardware.
    - **Status:** DEFERRED. Logged as a separate documentation ticket. Intentionally not updated during Defect N execution to strictly observe the prompt boundary ("Do NOT start Defect G, UI redesign, AI changes or CI changes").
-

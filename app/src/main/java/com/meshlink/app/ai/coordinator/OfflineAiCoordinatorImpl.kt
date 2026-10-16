@@ -126,7 +126,36 @@ class OfflineAiCoordinatorImpl(
         Unit
     }
 
+    override suspend fun rollbackModel(): AiResult<Unit> = withContext(dispatcher) {
+        if (killSwitchActive.get()) {
+            return@withContext AiResult.Failure(AiError.DisabledByKillSwitch)
+        }
+
+        inferenceMutex.withLock {
+            AiLogger.i("Starting non-destructive model rollback to retained previous slot")
+            activeInferenceJob?.cancel()
+            activeInferenceJob = null
+            localAiEngine.unload()
+
+            val rollbackResult = modelAssetManager.rollbackToPrevious()
+            if (rollbackResult.isFailure) {
+                AiLogger.w("Rollback failed: ${(rollbackResult as AiResult.Failure).error}")
+                initialize()
+                return@withContext AiResult.Failure(rollbackResult.error)
+            }
+
+            AiLogger.i("Slot rollback successful on disk. Initializing restored model...")
+            val initState = initialize()
+            if (initState == AiCapabilityState.READY) {
+                AiResult.Success(Unit)
+            } else {
+                AiResult.Failure(AiError.RuntimeError("Failed to initialize restored model (state=$initState)"))
+            }
+        }
+    }
+
     override fun onSosActivated() {
+
         AiLogger.w("SOS ACTIVATED: Immediately pre-empting all AI inference tasks")
         isSosActive.set(true)
         activeInferenceJob?.cancel()

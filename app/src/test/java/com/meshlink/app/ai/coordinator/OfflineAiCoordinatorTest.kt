@@ -214,4 +214,36 @@ class OfflineAiCoordinatorTest {
         assertTrue(result.isFailure)
         assertTrue((result as AiResult.Failure).error is AiError.Timeout)
     }
+
+    @Test
+    fun rollbackModel_whenSuccessful_unloadsAndReinitializesRestoredModel() = testScope.runTest {
+        val originalFile = File.createTempFile("original_model", ".bin")
+        val candidateFile = File.createTempFile("candidate_model", ".bin")
+        fakeAssetManager.modelFileToReturn = candidateFile
+        fakeAssetManager.previousSlotToReturn = com.meshlink.app.ai.domain.ModelSlot(
+            slotId = "baseline",
+            file = originalFile,
+            sha256 = "orig_sha",
+            sizeBytes = 100L,
+            format = "bin",
+            role = com.meshlink.app.ai.domain.ModelSlotRole.PREVIOUS
+        )
+        coordinator.enableAi()
+
+        val rollbackResult = coordinator.rollbackModel()
+
+        assertTrue(rollbackResult.isSuccess)
+        assertTrue(fakeEngine.unloadCalled)
+        assertEquals(AiCapabilityState.READY, coordinator.state.value)
+    }
+
+    @Test
+    fun rollbackModel_whenKillSwitchActive_returnsDisabledError() = testScope.runTest {
+        coordinator.triggerKillSwitch()
+
+        val result = coordinator.rollbackModel()
+
+        assertTrue(result.isFailure)
+        assertEquals(AiError.DisabledByKillSwitch, (result as AiResult.Failure).error)
+    }
 }

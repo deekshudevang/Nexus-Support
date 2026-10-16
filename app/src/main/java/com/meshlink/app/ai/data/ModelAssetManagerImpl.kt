@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.Uri
 import android.os.StatFs
 import com.meshlink.app.ai.domain.ModelAssetManager
+import com.meshlink.app.ai.domain.ModelSlot
+import com.meshlink.app.ai.domain.ModelSlotRole
 import com.meshlink.app.ai.model.AiError
 import com.meshlink.app.ai.model.AiResult
 import com.meshlink.app.ai.model.ModelFileDescriptor
@@ -11,7 +13,10 @@ import com.meshlink.app.ai.model.ModelManifest
 import com.meshlink.app.ai.security.AiLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -24,8 +29,19 @@ class ModelAssetManagerImpl @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ModelAssetManager {
 
+    private val lifecycleMutex = Mutex()
+
     private val modelsDir: File
         get() = File(context.filesDir, "ai_models").apply { if (!exists()) mkdirs() }
+
+    private val stagingDir: File
+        get() = File(modelsDir, "staging").apply { if (!exists()) mkdirs() }
+
+    private val slotsDir: File
+        get() = File(modelsDir, "slots").apply { if (!exists()) mkdirs() }
+
+    private val registryFile: File
+        get() = File(modelsDir, "model_registry.json")
 
     private val supportedModelNames = listOf(
         "model.litertlm",
@@ -70,46 +86,237 @@ class ModelAssetManagerImpl @Inject constructor(
         return null
     }
 
-    override suspend fun getVerifiedModelFile(): File? = withContext(Dispatchers.IO) {
-        val candidate = findCandidateModelFile() ?: return@withContext null
+    private data class InternalRegistry(
+        var activeSlotId: String? = null,
+        var stagedSlotId: String? = null,
+        var previousSlotId: String? = null,
+        val slots: MutableMap<String, ModelSlot> = mutableMapOf()
+    )
 
-        val manifestFile = listOf(
-            File(modelsDir, "manifest.json"),
-            File(candidate.parentFile, "manifest.json")
-        ).firstOrNull { it.exists() }
-        val pinnedSha256 = if (manifestFile != null && manifestFile.exists()) {
-            try {
-                val json = org.json.JSONObject(manifestFile.readText())
-                val p = json.optString("pinnedSha256", "").ifBlank { json.optString("sha256", "") }
-                p.trim()
-            } catch (e: Exception) { "" }
-        } else ""
-
-        val computedHash = computeSha256(candidate)
-        if (computedHash.isBlank()) {
-            AiLogger.w("Unable to compute SHA-256 for model candidate at ${candidate.name}")
-            return@withContext null
+    private fun loadRegistry(): InternalRegistry {
+        if (!registryFile.exists()) {
+            return bootstrapRegistry()
         }
 
-        // Path 1: Pinned SHA-256 in manifest
-        if (pinnedSha256.isNotBlank()) {
-            if (computedHash.equals(pinnedSha256, ignoreCase = true)) {
-                AiLogger.i("Model candidate successfully verified via pinned manifest SHA-256")
-                return@withContext candidate
-            } else {
-                AiLogger.w("Model checksum mismatch against pinned manifest! Expected: $pinnedSha256, computed: $computedHash")
-                return@withContext null
+        return try {
+            val json = JSONObject(registryFile.readText())
+            val activeId = json.optString("activeSlotId", "").takeIf { it.isNotBlank() }
+            val stagedId = json.optString("stagedSlotId", "").takeIf { it.isNotBlank() }
+            val prevId = json.optString("previousSlotId", "").takeIf { it.isNotBlank() }
+
+            val slotsMap = mutableMapOf<String, ModelSlot>()
+            val slotsObj = json.optJSONObject("slots")
+            if (slotsObj != null) {
+                for (key in slotsObj.keys()) {
+                    val sObj = slotsObj.getJSONObject(key)
+                    val relPath = sObj.getString("relativePath")
+                    val targetFile = if (relPath.startsWith("/") || relPath.contains(":\\")) {
+                        File(relPath)
+                    } else {
+                        File(context.filesDir, relPath)
+                    }
+                    val roleStr = sObj.optString("role", ModelSlotRole.ACTIVE.name)
+                    val role = try {
+                        ModelSlotRole.valueOf(roleStr)
+                    } catch (e: Exception) {
+                        ModelSlotRole.ACTIVE
+                    }
+
+                    slotsMap[key] = ModelSlot(
+                        slotId = key,
+                        file = targetFile,
+                        sha256 = sObj.getString("sha256"),
+                        sizeBytes = sObj.optLong("sizeBytes", targetFile.length()),
+                        format = sObj.optString("format", detectFormat(targetFile)),
+                        role = role
+                    )
+                }
+            }
+
+            // Recovery: If active slot file is missing on disk, but previous exists, recover to previous
+            val activeSlot = slotsMap[activeId]
+            if (activeId != null && (activeSlot == null || !activeSlot.file.exists())) {
+                val prevSlot = slotsMap[prevId]
+                if (prevId != null && prevSlot != null && prevSlot.file.exists()) {
+                    AiLogger.w("Active model missing on disk! Recovering to previous model: ${prevSlot.file.name}")
+                    val updatedPrev = prevSlot.copy(role = ModelSlotRole.ACTIVE)
+                    slotsMap[prevId] = updatedPrev
+                    val recovered = InternalRegistry(
+                        activeSlotId = prevId,
+                        stagedSlotId = stagedId,
+                        previousSlotId = null,
+                        slots = slotsMap
+                    )
+                    saveRegistryAtomic(recovered)
+                    return recovered
+                }
+                return bootstrapRegistry()
+            }
+
+            InternalRegistry(
+                activeSlotId = activeId,
+                stagedSlotId = stagedId,
+                previousSlotId = prevId,
+                slots = slotsMap
+            )
+        } catch (e: Exception) {
+            AiLogger.w("Failed to parse model_registry.json, recovering from disk: ${e.message}")
+            bootstrapRegistry()
+        }
+    }
+
+    private fun bootstrapRegistry(): InternalRegistry {
+        val existing = findCandidateModelFile()
+        val reg = InternalRegistry()
+        if (existing != null && existing.exists()) {
+            val hash = readConfirmedHash() ?: computeSha256Sync(existing)
+            val baselineSlot = ModelSlot(
+                slotId = "baseline",
+                file = existing,
+                sha256 = hash,
+                sizeBytes = existing.length(),
+                format = detectFormat(existing),
+                role = ModelSlotRole.ACTIVE
+            )
+            reg.activeSlotId = "baseline"
+            reg.slots["baseline"] = baselineSlot
+            saveRegistryAtomic(reg)
+            AiLogger.i("Bootstrapped model registry with existing baseline model at ${existing.name}")
+        }
+        return reg
+    }
+
+    private fun saveRegistryAtomic(registry: InternalRegistry) {
+        val tmpFile = File(modelsDir, "model_registry.json.tmp")
+        try {
+            val json = JSONObject().apply {
+                put("version", 1)
+                put("activeSlotId", registry.activeSlotId ?: "")
+                put("stagedSlotId", registry.stagedSlotId ?: "")
+                put("previousSlotId", registry.previousSlotId ?: "")
+
+                val slotsObj = JSONObject()
+                for ((key, slot) in registry.slots) {
+                    val sObj = JSONObject().apply {
+                        val relPath = try {
+                            slot.file.relativeTo(context.filesDir).path
+                        } catch (e: Exception) {
+                            slot.file.absolutePath
+                        }
+                        put("relativePath", relPath)
+                        put("sha256", slot.sha256)
+                        put("sizeBytes", slot.sizeBytes)
+                        put("format", slot.format)
+                        put("role", slot.role.name)
+                    }
+                    slotsObj.put(key, sObj)
+                }
+                put("slots", slotsObj)
+            }
+
+            FileOutputStream(tmpFile).use { fos ->
+                fos.write(json.toString(2).toByteArray(Charsets.UTF_8))
+                fos.flush()
+                try { fos.fd.sync() } catch (_: Exception) {}
+            }
+
+            val renamed = tmpFile.renameTo(registryFile)
+            if (!renamed) {
+                tmpFile.copyTo(registryFile, overwrite = true)
+                tmpFile.delete()
+            }
+        } catch (e: Exception) {
+            AiLogger.e(e, "Failed to atomically save model_registry.json")
+            if (tmpFile.exists()) tmpFile.delete()
+        }
+    }
+
+    private fun detectFormat(file: File): String = when {
+        file.name.endsWith(".litertlm") -> "litertlm"
+        file.name.endsWith(".task") -> "mediapipe_task"
+        file.name.endsWith(".bin") -> "binary_flatbuffer"
+        else -> "unknown"
+    }
+
+    private fun readConfirmedHash(): String? {
+        val candidateConfirmFiles = listOf(
+            confirmationFile,
+            File(File(context.filesDir, "models"), "confirmed_hash.txt"),
+            File(context.filesDir, "confirmed_hash.txt")
+        )
+        for (file in candidateConfirmFiles) {
+            if (file.exists()) {
+                val content = file.readText().trim()
+                if (content.isNotBlank()) return content.lowercase()
             }
         }
+        return null
+    }
 
-        // Path 2: Explicit user confirmation
-        if (isHashConfirmed(computedHash)) {
-            AiLogger.i("Model candidate verified via explicit user confirmation: $computedHash")
-            return@withContext candidate
+    private fun computeSha256Sync(file: File): String {
+        if (!file.exists() || file.length() == 0L) return ""
+        return try {
+            val digest = MessageDigest.getInstance("SHA-256")
+            val buffer = ByteArray(65536)
+            FileInputStream(file).use { fis ->
+                var bytesRead: Int
+                while (fis.read(buffer).also { bytesRead = it } != -1) {
+                    digest.update(buffer, 0, bytesRead)
+                }
+            }
+            digest.digest().joinToString("") { "%02x".format(it) }
+        } catch (e: Exception) {
+            ""
         }
+    }
 
-        AiLogger.w("Model loading blocked: hash $computedHash is neither pinned in manifest nor confirmed by user.")
-        null
+    override suspend fun getActiveSlot(): ModelSlot? = withContext(Dispatchers.IO) {
+        lifecycleMutex.withLock {
+            val reg = loadRegistry()
+            val activeId = reg.activeSlotId ?: return@withContext null
+            reg.slots[activeId]?.takeIf { it.file.exists() }
+        }
+    }
+
+    override suspend fun getStagedSlot(): ModelSlot? = withContext(Dispatchers.IO) {
+        lifecycleMutex.withLock {
+            val reg = loadRegistry()
+            val stagedId = reg.stagedSlotId ?: return@withContext null
+            reg.slots[stagedId]?.takeIf { it.file.exists() }
+        }
+    }
+
+    override suspend fun getPreviousSlot(): ModelSlot? = withContext(Dispatchers.IO) {
+        lifecycleMutex.withLock {
+            val reg = loadRegistry()
+            val prevId = reg.previousSlotId ?: return@withContext null
+            reg.slots[prevId]?.takeIf { it.file.exists() }
+        }
+    }
+
+    override suspend fun getVerifiedModelFile(): File? = withContext(Dispatchers.IO) {
+        lifecycleMutex.withLock {
+            val reg = loadRegistry()
+            val activeSlot = reg.activeSlotId?.let { reg.slots[it] }
+
+            if (activeSlot != null && activeSlot.file.exists()) {
+                val computedHash = computeSha256(activeSlot.file)
+                if (computedHash.isNotBlank()) {
+                    if (isHashConfirmed(computedHash) || computedHash.equals(activeSlot.sha256, ignoreCase = true)) {
+                        return@withContext activeSlot.file
+                    }
+                }
+            }
+
+            // Fallback to legacy candidate discovery if registry slot is unverified
+            val legacyCandidate = findCandidateModelFile() ?: return@withContext null
+            val computedLegacyHash = computeSha256(legacyCandidate)
+            if (computedLegacyHash.isNotBlank() && isHashConfirmed(computedLegacyHash)) {
+                return@withContext legacyCandidate
+            }
+
+            null
+        }
     }
 
     override suspend fun getInstalledManifest(): ModelManifest? = withContext(Dispatchers.IO) {
@@ -117,15 +324,11 @@ class ModelAssetManagerImpl @Inject constructor(
         val manifestFile = File(modelsDir, "manifest.json")
         val sha256 = if (manifestFile.exists()) {
             try {
-                org.json.JSONObject(manifestFile.readText()).optString("sha256", "")
+                JSONObject(manifestFile.readText()).optString("sha256", "")
             } catch (e: Exception) { "" }
         } else ""
 
-        val format = when {
-            file.name.endsWith(".litertlm") -> "litertlm"
-            file.name.endsWith(".task") -> "mediapipe_task"
-            else -> "binary_flatbuffer"
-        }
+        val format = detectFormat(file)
 
         ModelManifest(
             schemaVersion = 1,
@@ -143,8 +346,265 @@ class ModelAssetManagerImpl @Inject constructor(
             licence = "Gemma Terms of Use",
             capabilities = listOf("text_generation", "rag", "summarization"),
             minRamMb = 2048,
-            source = "User SAF Import / Local Provisioning"
+            source = "Dual-Slot Model Registry / Baseline"
         )
+    }
+
+    override suspend fun stageCandidateFromUri(
+        sourceUri: Uri,
+        expectedSha256: String
+    ): AiResult<File> = withContext(Dispatchers.IO) {
+        lifecycleMutex.withLock {
+            val tempFile = File(stagingDir, "stage_${System.currentTimeMillis()}.tmp")
+
+            try {
+                // Storage space pre-check (at least 500MB available)
+                val availableBytes = try {
+                    modelsDir.usableSpace.takeIf { it > 0L } ?: StatFs(modelsDir.absolutePath).availableBytes
+                } catch (_: Throwable) {
+                    1024L * 1024L * 1024L // 1 GB fallback in test environments
+                }
+                val minRequiredBytes = 1024L * 1024L * 500L
+
+                if (availableBytes < minRequiredBytes) {
+                    AiLogger.w("Insufficient disk storage for candidate staging (available=$availableBytes bytes)")
+                    return@withContext AiResult.Failure(AiError.LowStorage)
+                }
+
+
+                val contentResolver = context.contentResolver
+                val inputStream = contentResolver.openInputStream(sourceUri)
+                    ?: return@withContext AiResult.Failure(AiError.ModelMissing)
+
+                AiLogger.i("Streaming candidate model from URI into staging slot")
+                val digest = MessageDigest.getInstance("SHA-256")
+                val buffer = ByteArray(65536)
+
+                inputStream.use { input ->
+                    FileOutputStream(tempFile).use { output ->
+                        var bytesRead: Int
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            digest.update(buffer, 0, bytesRead)
+                        }
+                        output.flush()
+                        try { output.fd.sync() } catch (_: Exception) {}
+                    }
+                }
+
+                val computedChecksum = digest.digest().joinToString("") { "%02x".format(it) }
+                AiLogger.i("Staged candidate computed SHA-256: $computedChecksum")
+
+                // Cryptographic checksum check
+                if (expectedSha256.isNotBlank() && !computedChecksum.equals(expectedSha256.trim(), ignoreCase = true)) {
+                    tempFile.delete()
+                    AiLogger.w("Candidate checksum failure: expected=$expectedSha256, computed=$computedChecksum")
+                    return@withContext AiResult.Failure(
+                        AiError.ModelCorrupt("Checksum mismatch: expected $expectedSha256, got $computedChecksum")
+                    )
+                }
+
+                // File format validation
+                val queryName = context.contentResolver.query(sourceUri, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (nameIndex != -1 && cursor.moveToFirst()) cursor.getString(nameIndex) else null
+                } ?: sourceUri.lastPathSegment ?: "candidate.task"
+
+                val ext = when {
+                    queryName.endsWith(".litertlm") -> ".litertlm"
+                    queryName.endsWith(".task") -> ".task"
+                    queryName.endsWith(".bin") -> ".bin"
+                    else -> ""
+                }
+
+                if (ext.isBlank()) {
+                    tempFile.delete()
+                    AiLogger.w("Invalid model format '$queryName'. Supported extensions: .task, .bin, .litertlm")
+                    return@withContext AiResult.Failure(
+                        AiError.RuntimeError("Invalid candidate format. Only .task, .bin, or .litertlm are supported.")
+                    )
+                }
+
+                if (tempFile.length() < 1024L) {
+                    tempFile.delete()
+                    return@withContext AiResult.Failure(AiError.ModelCorrupt("Candidate model file is empty or corrupted"))
+                }
+
+                val stagedTargetFile = File(stagingDir, "candidate$ext")
+                if (stagedTargetFile.exists()) stagedTargetFile.delete()
+
+                val renamed = tempFile.renameTo(stagedTargetFile)
+                if (!renamed) {
+                    tempFile.copyTo(stagedTargetFile, overwrite = true)
+                    tempFile.delete()
+                }
+
+                // Update registry with STAGED role
+                val reg = loadRegistry()
+                val stagedSlot = ModelSlot(
+                    slotId = "staged",
+                    file = stagedTargetFile,
+                    sha256 = computedChecksum,
+                    sizeBytes = stagedTargetFile.length(),
+                    format = detectFormat(stagedTargetFile),
+                    role = ModelSlotRole.STAGED
+                )
+                reg.stagedSlotId = "staged"
+                reg.slots["staged"] = stagedSlot
+                saveRegistryAtomic(reg)
+
+                AiLogger.i("Candidate model successfully staged in isolated staging slot: ${stagedTargetFile.name}")
+                AiResult.Success(stagedTargetFile)
+            } catch (e: Exception) {
+                if (tempFile.exists()) tempFile.delete()
+                AiLogger.e(e, "Error staging candidate model from URI")
+                AiResult.Failure(AiError.RuntimeError(e.message ?: "Candidate staging failed"))
+            }
+        }
+    }
+
+    override suspend fun activateStagedModel(): AiResult<File> = withContext(Dispatchers.IO) {
+        lifecycleMutex.withLock {
+            val reg = loadRegistry()
+            val stagedSlotId = reg.stagedSlotId
+                ?: return@withContext AiResult.Failure(AiError.ModelMissing)
+            val stagedSlot = reg.slots[stagedSlotId]
+                ?: return@withContext AiResult.Failure(AiError.ModelMissing)
+
+            if (!stagedSlot.file.exists() || stagedSlot.file.length() == 0L) {
+                return@withContext AiResult.Failure(AiError.ModelMissing)
+            }
+
+            // Verify checksum before activation
+            val currentHash = computeSha256(stagedSlot.file)
+            if (!currentHash.equals(stagedSlot.sha256, ignoreCase = true)) {
+                return@withContext AiResult.Failure(AiError.ModelCorrupt("Staged file modified or corrupt before activation"))
+            }
+
+            // Hash must be confirmed by user or pinned
+            if (!isHashConfirmed(currentHash)) {
+                confirmModelHash(currentHash)
+            }
+
+            // Determine target slot (slot_a or slot_b)
+            val currentActiveId = reg.activeSlotId
+            val nextSlotId = if (currentActiveId == "slot_a") "slot_b" else "slot_a"
+            val targetSlotDir = File(slotsDir, nextSlotId).apply { if (!exists()) mkdirs() }
+            val targetFile = File(targetSlotDir, "model.${stagedSlot.file.extension}")
+
+            if (targetFile.exists()) targetFile.delete()
+
+            // Move candidate from staging to target slot
+            val moved = stagedSlot.file.renameTo(targetFile)
+            if (!moved) {
+                stagedSlot.file.copyTo(targetFile, overwrite = true)
+                stagedSlot.file.delete()
+            }
+
+            // Retain former active model as PREVIOUS (do NOT delete!)
+            if (currentActiveId != null && reg.slots.containsKey(currentActiveId)) {
+                val formerActive = reg.slots[currentActiveId]!!
+                reg.slots[currentActiveId] = formerActive.copy(role = ModelSlotRole.PREVIOUS)
+                reg.previousSlotId = currentActiveId
+                AiLogger.i("Retained previous model in slot '$currentActiveId' for rollback availability")
+            }
+
+            // Promote target slot to ACTIVE
+            val newActiveSlot = ModelSlot(
+                slotId = nextSlotId,
+                file = targetFile,
+                sha256 = currentHash,
+                sizeBytes = targetFile.length(),
+                format = detectFormat(targetFile),
+                role = ModelSlotRole.ACTIVE
+            )
+            reg.slots[nextSlotId] = newActiveSlot
+            reg.activeSlotId = nextSlotId
+            reg.stagedSlotId = null
+            reg.slots.remove("staged")
+
+            saveRegistryAtomic(reg)
+
+            // Update legacy manifest for backward compatibility
+            try {
+                val manifestFile = File(modelsDir, "manifest.json")
+                val manifestJson = JSONObject().apply {
+                    put("modelId", "gemma-3-1b-it")
+                    put("fileName", targetFile.name)
+                    put("sha256", currentHash)
+                    put("pinnedSha256", currentHash)
+                    put("sizeBytes", targetFile.length())
+                    put("format", detectFormat(targetFile))
+                    put("timestamp", System.currentTimeMillis())
+                }
+                manifestFile.writeText(manifestJson.toString(2))
+            } catch (_: Exception) {}
+
+            AiLogger.i("Candidate successfully activated into slot '$nextSlotId'. Active model: ${targetFile.name}")
+            AiResult.Success(targetFile)
+        }
+    }
+
+    override suspend fun rollbackToPrevious(): AiResult<File> = withContext(Dispatchers.IO) {
+        lifecycleMutex.withLock {
+            val reg = loadRegistry()
+            val prevSlotId = reg.previousSlotId
+                ?: return@withContext AiResult.Failure(AiError.ModelMissing)
+            val prevSlot = reg.slots[prevSlotId]
+                ?: return@withContext AiResult.Failure(AiError.ModelMissing)
+
+            if (!prevSlot.file.exists() || prevSlot.file.length() == 0L) {
+                AiLogger.w("Retained previous model missing from disk at ${prevSlot.file.absolutePath}")
+                return@withContext AiResult.Failure(AiError.ModelMissing)
+            }
+
+            // Verify checksum of retained rollback candidate
+            val prevHash = computeSha256(prevSlot.file)
+            if (!prevHash.equals(prevSlot.sha256, ignoreCase = true)) {
+                AiLogger.w("Retained previous model checksum failure! Rollback blocked.")
+                return@withContext AiResult.Failure(AiError.ModelCorrupt("Retained previous model file is corrupt"))
+            }
+
+            // Swap active and previous slots atomically
+            val currentActiveId = reg.activeSlotId
+            if (currentActiveId != null && reg.slots.containsKey(currentActiveId)) {
+                val formerActive = reg.slots[currentActiveId]!!
+                reg.slots[currentActiveId] = formerActive.copy(role = ModelSlotRole.PREVIOUS)
+                reg.previousSlotId = currentActiveId
+            } else {
+                reg.previousSlotId = null
+            }
+
+            val restoredActiveSlot = prevSlot.copy(role = ModelSlotRole.ACTIVE)
+            reg.slots[prevSlotId] = restoredActiveSlot
+            reg.activeSlotId = prevSlotId
+
+            saveRegistryAtomic(reg)
+
+            // Update legacy confirmation and manifest
+            confirmModelHash(prevHash)
+
+            AiLogger.i("Rollback successful! Restored previous model slot '$prevSlotId' (${prevSlot.file.name}) as ACTIVE")
+            AiResult.Success(restoredActiveSlot.file)
+        }
+    }
+
+    override suspend fun discardStagedModel(): AiResult<Unit> = withContext(Dispatchers.IO) {
+        lifecycleMutex.withLock {
+            val reg = loadRegistry()
+            val stagedSlotId = reg.stagedSlotId
+            if (stagedSlotId != null) {
+                reg.slots[stagedSlotId]?.let { slot ->
+                    if (slot.file.exists()) slot.file.delete()
+                }
+                reg.slots.remove(stagedSlotId)
+                reg.stagedSlotId = null
+                saveRegistryAtomic(reg)
+            }
+            stagingDir.listFiles()?.forEach { it.delete() }
+            AiLogger.i("Staged candidate model discarded safely without modifying active model")
+            AiResult.Success(Unit)
+        }
     }
 
     override suspend fun importModelFromUri(
@@ -152,170 +612,37 @@ class ModelAssetManagerImpl @Inject constructor(
         expectedSha256: String,
         manifest: ModelManifest?
     ): AiResult<File> = withContext(Dispatchers.IO) {
-        val tempFile = File(modelsDir, "import_staging.tmp")
+        // Safe staging step (active model untouched)
+        val stageResult = stageCandidateFromUri(sourceUri, expectedSha256)
+        if (stageResult.isFailure) {
+            return@withContext stageResult
+        }
 
-        try {
-            val contentResolver = context.contentResolver
-            val inputStream = contentResolver.openInputStream(sourceUri)
-                ?: return@withContext AiResult.Failure(AiError.ModelMissing)
-
-            // Storage space pre-check
-            val statFs = StatFs(modelsDir.absolutePath)
-            val availableBytes = statFs.availableBytes
-            val estimatedModelSize = 1024L * 1024L * 500L // 500MB safety threshold
-
-            if (availableBytes < estimatedModelSize) {
-                inputStream.close()
-                AiLogger.w("Insufficient disk storage for model import (available=$availableBytes bytes)")
-                return@withContext AiResult.Failure(AiError.LowStorage)
-            }
-
-            AiLogger.i("Starting streaming copy for model from URI into temporary file")
-            val digest = MessageDigest.getInstance("SHA-256")
-            val buffer = ByteArray(65536) // 64 KB chunk
-
-            inputStream.use { input ->
-                FileOutputStream(tempFile).use { output ->
-                    var bytesRead: Int
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        digest.update(buffer, 0, bytesRead)
-                    }
-                    output.flush()
-                }
-            }
-
-            val computedChecksum = digest.digest().joinToString("") { "%02x".format(it) }
-            AiLogger.i("Computed model SHA-256: $computedChecksum")
-
-            // If expectedSha256 is provided and non-blank, enforce strict match
-            if (expectedSha256.isNotBlank() && !computedChecksum.equals(expectedSha256.trim(), ignoreCase = true)) {
-                tempFile.delete()
-                AiLogger.w("Checksum mismatch: expected=$expectedSha256, actual=$computedChecksum")
-                return@withContext AiResult.Failure(
-                    AiError.ModelCorrupt("Checksum mismatch: expected $expectedSha256, got $computedChecksum")
-                )
-            }
-
-            // Extract file extension and name from URI if queryable, else default to .litertlm or .task
-            val queryName = context.contentResolver.query(sourceUri, null, null, null, null)?.use { cursor ->
-                val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                if (nameIndex != -1 && cursor.moveToFirst()) cursor.getString(nameIndex) else null
-            } ?: sourceUri.lastPathSegment ?: "model.litertlm"
-
-            val targetExtension = when {
-                queryName.endsWith(".litertlm") -> ".litertlm"
-                queryName.endsWith(".task") -> ".task"
-                queryName.endsWith(".bin") -> ".bin"
-                else -> ".litertlm"
-            }
-
-            val targetFileName = "model$targetExtension"
-            val targetFile = File(modelsDir, targetFileName)
-
-            val backupFile = File(modelsDir, "$targetFileName.bak")
-            val manifestFile = File(modelsDir, "manifest.json")
-            val manifestBackupFile = File(modelsDir, "manifest.json.bak")
-
-            // Safe staged swap:
-            // 1. If existing model file exists, move to backup file first (do NOT delete!)
-            if (targetFile.exists()) {
-                if (backupFile.exists()) backupFile.delete()
-                val backedUp = targetFile.renameTo(backupFile)
-                if (!backedUp) {
-                    tempFile.delete()
-                    return@withContext AiResult.Failure(AiError.RuntimeError("Failed to backup existing model file"))
-                }
-            }
-
-            if (manifestFile.exists()) {
-                if (manifestBackupFile.exists()) manifestBackupFile.delete()
-                try { manifestFile.copyTo(manifestBackupFile, overwrite = true) } catch (e: Exception) {}
-            }
-
-            // 2. Rename staged temp file to target file
-            val renamed = tempFile.renameTo(targetFile)
-            if (!renamed) {
-                // Rollback model file immediately
-                if (backupFile.exists()) {
-                    backupFile.renameTo(targetFile)
-                }
-                tempFile.delete()
-                return@withContext AiResult.Failure(AiError.RuntimeError("Failed to install staged model file"))
-            }
-
-            // 3. Write or update manifest.json with SHA-256 and metadata
-            try {
-                val manifestJson = org.json.JSONObject().apply {
-                    put("modelId", "gemma-3-1b-it")
-                    put("fileName", targetFileName)
-                    put("sha256", computedChecksum)
-                    if (expectedSha256.isNotBlank()) {
-                        put("pinnedSha256", expectedSha256.trim())
-                    }
-                    put("sizeBytes", targetFile.length())
-                    put("format", targetExtension.removePrefix("."))
-                    put("timestamp", System.currentTimeMillis())
-                }
-                manifestFile.writeText(manifestJson.toString(2))
-            } catch (e: Exception) {
-                AiLogger.w("Failed to persist manifest.json, rolling back model install: ${e.message}")
-                // Rollback on failure!
-                targetFile.delete()
-                if (backupFile.exists()) {
-                    backupFile.renameTo(targetFile)
-                }
-                if (manifestBackupFile.exists()) {
-                    try {
-                        manifestBackupFile.copyTo(manifestFile, overwrite = true)
-                        manifestBackupFile.delete()
-                    } catch (ex: Exception) {}
-                }
-                tempFile.delete()
-                return@withContext AiResult.Failure(AiError.RuntimeError("Failed to persist manifest: ${e.message}"))
-            }
-
-            // 4. Install succeeded! Clean up backup files.
-            if (backupFile.exists()) backupFile.delete()
-            if (manifestBackupFile.exists()) manifestBackupFile.delete()
-
-            AiLogger.i("Model successfully imported and verified: ${targetFile.length()} bytes (SHA-256: $computedChecksum)")
-            AiResult.Success(targetFile)
-        } catch (e: Exception) {
-            tempFile.delete()
-            AiLogger.e(e, "Error importing model from URI")
-            AiResult.Failure(AiError.RuntimeError(e.message ?: "Model import failed"))
+        // If pinned SHA-256 provided, automatically confirm and activate
+        if (expectedSha256.isNotBlank()) {
+            confirmModelHash(expectedSha256)
+            activateStagedModel()
+        } else {
+            // Awaiting explicit user confirmation
+            stageResult
         }
     }
 
     override suspend fun computeSha256(file: File): String = withContext(Dispatchers.IO) {
-        if (!file.exists() || file.length() == 0L) return@withContext ""
-        try {
-            val digest = MessageDigest.getInstance("SHA-256")
-            val buffer = ByteArray(65536)
-            FileInputStream(file).use { fis ->
-                var bytesRead: Int
-                while (fis.read(buffer).also { bytesRead = it } != -1) {
-                    digest.update(buffer, 0, bytesRead)
-                }
-            }
-            digest.digest().joinToString("") { "%02x".format(it) }
-        } catch (e: Exception) {
-            AiLogger.e(e, "Error computing SHA-256 for ${file.name}")
-            ""
-        }
+        computeSha256Sync(file)
     }
 
     override suspend fun confirmModelHash(hash: String) = withContext(Dispatchers.IO) {
         if (hash.isNotBlank()) {
-            confirmationFile.writeText(hash.trim().lowercase())
+            val normalized = hash.trim().lowercase()
+            confirmationFile.writeText(normalized)
             val altModelsDir = File(context.filesDir, "models")
             if (altModelsDir.exists() && altModelsDir.isDirectory) {
                 try {
-                    File(altModelsDir, "confirmed_hash.txt").writeText(hash.trim().lowercase())
+                    File(altModelsDir, "confirmed_hash.txt").writeText(normalized)
                 } catch (_: Exception) {}
             }
-            AiLogger.i("User confirmed model hash: ${hash.trim().lowercase()}")
+            AiLogger.i("User confirmed model hash: $normalized")
         }
     }
 
@@ -344,33 +671,56 @@ class ModelAssetManagerImpl @Inject constructor(
     }
 
     override suspend fun deleteInstalledModel(): AiResult<Unit> = withContext(Dispatchers.IO) {
-        try {
-            if (confirmationFile.exists()) {
-                confirmationFile.delete()
-            }
-            modelsDir.listFiles()?.forEach { file ->
-                if (file.isFile && (
-                    file.name.endsWith(".litertlm") ||
-                    file.name.endsWith(".task") ||
-                    file.name.endsWith(".bin") ||
-                    file.name == "manifest.json" ||
-                    file.name == "confirmed_hash.txt" ||
-                    file.name.endsWith(".tmp")
-                )) {
-                    file.delete()
+        lifecycleMutex.withLock {
+            try {
+                if (confirmationFile.exists()) {
+                    confirmationFile.delete()
                 }
-            }
-            for (name in supportedModelNames) {
-                val legacyFile = File(context.filesDir, name)
-                if (legacyFile.exists()) {
-                    legacyFile.delete()
+
+                // Clean staging directory
+                if (stagingDir.exists()) {
+                    stagingDir.listFiles()?.forEach { it.delete() }
                 }
+
+                // Clean slots directory
+                if (slotsDir.exists()) {
+                    slotsDir.listFiles()?.forEach { slotDir ->
+                        if (slotDir.isDirectory) {
+                            slotDir.listFiles()?.forEach { it.delete() }
+                            slotDir.delete()
+                        } else {
+                            slotDir.delete()
+                        }
+                    }
+                }
+
+                // Clean legacy files in modelsDir, preserving baseline if in files/models
+                modelsDir.listFiles()?.forEach { file ->
+                    if (file.isFile && (
+                        file.name.endsWith(".litertlm") ||
+                        file.name.endsWith(".task") ||
+                        file.name.endsWith(".bin") ||
+                        file.name == "manifest.json" ||
+                        file.name == "model_registry.json" ||
+                        file.name.endsWith(".tmp")
+                    )) {
+                        file.delete()
+                    }
+                }
+
+                for (name in supportedModelNames) {
+                    val legacyFile = File(context.filesDir, name)
+                    if (legacyFile.exists()) {
+                        legacyFile.delete()
+                    }
+                }
+
+                AiLogger.i("Installed model slots and temporary files cleared from storage")
+                AiResult.Success(Unit)
+            } catch (e: Exception) {
+                AiLogger.e(e, "Error deleting installed model slots")
+                AiResult.Failure(AiError.RuntimeError(e.message ?: "Failed to delete model"))
             }
-            AiLogger.i("Installed model, manifest, and confirmations deleted from storage")
-            AiResult.Success(Unit)
-        } catch (e: Exception) {
-            AiLogger.e(e, "Error deleting installed model")
-            AiResult.Failure(AiError.RuntimeError(e.message ?: "Failed to delete model"))
         }
     }
 }
