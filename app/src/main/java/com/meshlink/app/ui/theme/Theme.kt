@@ -30,9 +30,9 @@ private val MeshLinkColorScheme = darkColorScheme(
     outline             = Outline,
     outlineVariant      = OutlineVariant,
 
-    error               = Primary,
+    error               = StatusError,
     onError             = TextOnPrimaryWhite,
-    errorContainer      = PrimaryLight,
+    errorContainer      = EmergencyRedContainer,
     onErrorContainer    = TextPrimary,
 
     scrim               = Neutral.copy(alpha = 0.32f)
