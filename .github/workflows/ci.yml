@@ -116,7 +116,15 @@ jobs:
 
       - name: Run Pytest Test Suite
         run: |
-          pytest cloud/backend/test_backend.py -v
+          mkdir -p test-results
+          pytest cloud/backend/test_backend.py -v --junitxml=test-results/backend-junit.xml
+
+      - name: Upload Backend Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: test-results/backend-junit.xml
 
   frontend-tests-and-build:
     name: Cloud Frontend Tests & Build
@@ -128,7 +136,7 @@ jobs:
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
           cache-dependency-path: cloud/frontend/package-lock.json
 
@@ -138,7 +146,16 @@ jobs:
 
       - name: Run Vitest Unit Tests
         working-directory: cloud/frontend
-        run: npm run test
+        run: |
+          mkdir -p test-results
+          npm run test -- --reporter=junit --outputFile=./test-results/frontend-junit.xml
+
+      - name: Upload Frontend Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: cloud/frontend/test-results/frontend-junit.xml
 
       - name: Build Production Dashboard Bundle
         working-directory: cloud/frontend
@@ -162,11 +179,11 @@ jobs:
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Check Frontend Dependencies
         working-directory: cloud/frontend
-        run: npm audit --audit-level=high || true
+        run: npm audit --audit-level=high
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -176,4 +193,4 @@ jobs:
       - name: Check Backend Dependencies
         run: |
           python -m pip install pip-audit
-          pip-audit -r cloud/backend/requirements.txt || true
+          pip-audit -r cloud/backend/requirements.txt
