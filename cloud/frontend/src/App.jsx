@@ -26,11 +26,20 @@ const DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
+// Treat only the legacy (0, 0) sentinel as missing; zero latitude or longitude
+// alone is a valid coordinate.
+const hasUsableCoordinates = (latitude, longitude) =>
+  Number.isFinite(Number(latitude)) &&
+  Number.isFinite(Number(longitude)) &&
+  latitude !== null &&
+  longitude !== null &&
+  !(Number(latitude) === 0 && Number(longitude) === 0);
+
 // Map controller for animated panning to selected alert
 function MapPanController({ targetCoords }) {
   const map = useMap();
   useEffect(() => {
-    if (targetCoords && targetCoords[0] !== 0 && targetCoords[1] !== 0) {
+    if (targetCoords && hasUsableCoordinates(targetCoords[0], targetCoords[1])) {
       map.flyTo(targetCoords, 14, { duration: 1.5 });
     }
   }, [targetCoords, map]);
@@ -272,10 +281,15 @@ export default function App() {
 
   const criticalCount = sosPackets.filter((p) => p.severity >= 8).length;
 
-  // Map center calculation
-  const mapCenter = sosPackets.length > 0 && sosPackets[0].latitude !== 0
-    ? [sosPackets[0].latitude, sosPackets[0].longitude]
-    : [37.7749, -122.4194];
+  // Center on a real incident when coordinates exist. Never imply a real incident
+  // is located in an arbitrary city when the feed has no usable location data.
+  const firstLocatedPacket = sosPackets.find((packet) =>
+    hasUsableCoordinates(packet.latitude, packet.longitude)
+  );
+  const mapHasCoordinates = Boolean(firstLocatedPacket);
+  const mapCenter = mapHasCoordinates
+    ? [Number(firstLocatedPacket.latitude), Number(firstLocatedPacket.longitude)]
+    : [20, 0];
 
   // ── Render Unauthorized State ──────────────────────────────────────────────
   if (!operatorToken) {
@@ -452,11 +466,16 @@ export default function App() {
                   role="button"
                   tabIndex={0}
                   aria-label={`Show map location for ${packet.emergencyType || 'emergency'} from ${packet.senderName || 'unknown sender'}`}
-                  onClick={() => setSelectedCoords([packet.latitude, packet.longitude])}
+                  onClick={() => {
+                    if (hasUsableCoordinates(packet.latitude, packet.longitude)) {
+                      setSelectedCoords([Number(packet.latitude), Number(packet.longitude)]);
+                    }
+                  }}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
+                    if ((event.key === 'Enter' || event.key === ' ') &&
+                        hasUsableCoordinates(packet.latitude, packet.longitude)) {
                       event.preventDefault();
-                      setSelectedCoords([packet.latitude, packet.longitude]);
+                      setSelectedCoords([Number(packet.latitude), Number(packet.longitude)]);
                     }
                   }}
                   style={{ ...styles.card, borderLeftColor: borderCol }}
@@ -488,12 +507,12 @@ export default function App() {
                       <span style={{ color: '#94a3b8' }}>ID: {packet.senderId?.substring(0, 10)}</span>
                     </div>
 
-                    {packet.latitude !== 0 && packet.longitude !== 0 && (
+                    {hasUsableCoordinates(packet.latitude, packet.longitude) && (
                       <button
                         style={styles.locateBtn}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedCoords([packet.latitude, packet.longitude]);
+                          setSelectedCoords([Number(packet.latitude), Number(packet.longitude)]);
                         }}
                       >
                         📍 LOCATE
@@ -520,7 +539,7 @@ export default function App() {
         <section className="incident-map" style={styles.mapArea} aria-label="Incident locations map">
           <MapContainer
             center={mapCenter}
-            zoom={13}
+            zoom={mapHasCoordinates ? 13 : 2}
             style={{ height: '100%', width: '100%', backgroundColor: '#0f172a' }}
           >
             <TileLayer
