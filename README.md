@@ -67,12 +67,25 @@ Deep technical specs and architectural decisions (ADRs) are maintained in the [`
 - 🧪 [**Device Test Matrix**](docs/testing/DEVICE_TEST_MATRIX.md)
 - 📊 [**Benchmarks**](docs/testing/BENCHMARKS.md)
 
+## 🏛️ Project Architecture & Modules
+
+The repository is organized into multi-module Android components and cloud gateway services:
+
+* **`:app`**: Application entrypoint, UI layer (Jetpack Compose, Material 3), ViewModels, Hilt dependency injection, and offline AI lifecycle coordination ([`OfflineAiCoordinator`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/app/src/main/java/com/meshlink/app/ai/coordinator/OfflineAiCoordinator.kt)).
+* **`:core:domain`**: Core pure Kotlin domain models, interfaces, packet abstractions ([`MeshPacket`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/core/domain/src/main/java/com/meshlink/app/domain/model/MeshPacket.kt)), and SOS payload definitions.
+* **`:core:data`**: Encrypted persistence layer utilizing Room over SQLCipher AES-256-CBC with verified migrations.
+* **`:core:mesh`**: Ad-hoc mesh networking engine implementing Google Nearby Connections (BLE / Wi-Fi Direct), external Meshtastic LoRa transport abstraction, Dijkstra multi-hop routing, and battery-adaptive duty cycling.
+* **`:core:crypto`**: Cryptographic security engine implementing ECDH ephemeral key exchange, HKDF key derivation, SAS numeric verification, and ECDSA P-256 digital signatures.
+* **`cloud/backend`**: High-performance FastAPI sync gateway for field relay and incident logging.
+* **`cloud/frontend`**: Vite + React geospatial incident monitoring dashboard.
+
 ## 🚀 Getting Started
 
 ### Prerequisites
-- JDK 17+
-- Android Studio
-- Physical Devices: 2 or more Android devices (API 26+) for hardware radio testing
+- JDK 17 or JDK 21
+- Android Studio / Android SDK 36 (minSdk 26)
+- Python 3.10+ (for `cloud/backend`)
+- Node.js 18+ (for `cloud/frontend`)
 
 ### Clone & Build
 
@@ -80,21 +93,23 @@ Deep technical specs and architectural decisions (ADRs) are maintained in the [`
 git clone https://github.com/deekshudevang/Nexus-Support.git
 cd Nexus-Support
 
-./gradlew assembleDebug test lint
-```
-
-## 🧪 Testing
-
-```bash
-# Run JVM unit tests exactly as CI does
-./gradlew testDebugUnitTest --continue
-
-# Run Android Lint exactly as CI does
-./gradlew lintDebug --continue
-
 # Assemble Debug APK
 ./gradlew assembleDebug
 ```
+
+## 🧪 Testing & Verification
+
+```bash
+# Run JVM unit tests across all modules (including pure Kotlin :core:domain)
+./gradlew testDebugUnitTest :core:domain:test --continue
+
+# Run Android Lint across all modules
+./gradlew lintDebug --continue
+
+# Assemble Debug APK and test artifacts
+./gradlew assembleDebug assembleDebugAndroidTest
+```
+
 
 ## 🗺️ Roadmap & Known Issues
 
