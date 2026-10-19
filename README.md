@@ -1,128 +1,146 @@
 <div align="center">
 
-# ⚡ Nexus Support
-### Decentralized Emergency Mesh Communication & Geospatial Intelligence
+# Nexus Support
+### Offline-first emergency communication and incident coordination
 
-[![CI Pipeline](https://github.com/deekshudevang/Nexus-Support/actions/workflows/ci.yml/badge.svg)](https://github.com/deekshudevang/Nexus-Support/actions/workflows/ci.yml)
+[![CI](https://github.com/deekshudevang/Nexus-Support/actions/workflows/ci.yml/badge.svg)](https://github.com/deekshudevang/Nexus-Support/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/deekshudevang/Nexus-Support/actions/workflows/codeql.yml/badge.svg)](https://github.com/deekshudevang/Nexus-Support/actions/workflows/codeql.yml)
-[![Android](https://img.shields.io/badge/Platform-Android%208.0%2B%20%28API%2026%2B%29-3DDC84?style=flat&logo=android&logoColor=white)](https://developer.android.com)
+[![Android](https://img.shields.io/badge/Android-API%2026%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-<p align="center">
-  <b>A multi-hop mesh network for disaster relief, off-grid operations, and field deployments.</b>
-  <br />
-  Operates completely independent of cellular towers, satellite uplinks, or centralized servers.
-</p>
-
-```text
-       [ Android Device A ]  <-- BLE / Wi-Fi Direct -->  [ Android Device B ]
-       | (UI & ViewModels) |                             | (UI & ViewModels) |
-       |-------------------|                             |-------------------|
-       | :core:mesh Router |                             | :core:mesh Router |
-       |-------------------|                             |-------------------|
-       | SQLCipher / DB    |                             | SQLCipher / DB    |
-       | StrongBox / Keys  |                             | StrongBox / Keys  |
-```
-
-## 🚥 Engineering Status
-
-| Feature / Component | Status | Notes |
-|---|---|---|
-| **P-256 StrongBox Enclave** | Implemented | Falls back to TEE gracefully on unsupported API 28+ devices. |
-| **AES-256-GCM / ECIES** | Implemented | Ephemeral keys generated per hop. Validated in unit tests. |
-| **SAS Identity Verification** | Implemented | UI workflow verified for out-of-band device authentication. |
-| **SQLCipher Storage** | Implemented | AES-256-CBC at rest with auto-generated passphrases. |
-| **Offline Map Rendering** | Implemented | Mapsforge vector engine functioning. |
-| **Mesh Discovery (Nearby)**| Device-dependent | Unvalidated in physical dense environments. |
-| **Cloud Sync / Stub** | Experimental | Backend stubbed via `MockMeshBackendService`. |
-| **Offline LLM Assistant** | Implemented (Verified on Device) | On-device MediaPipe Tasks GenAI engine running Gemma 3 1B INT4 with crash-safe dual-slot registry, emergency RAG, and instant SOS kill switch. |
-| **Large Scale Mesh** | Unvalidated | Simulation passes, but unvalidated on >5 physical radios. |
-
-*Note: Simulation metrics are never presented as physical field validation.*
+**A mobile-first emergency mesh communication project with encrypted local storage, offline capabilities, and an optional incident-monitoring dashboard.**
 
 </div>
 
-## 📖 Overview
+> **Release honesty:** CI passing is not the same as field readiness. Physical multi-hop/RF behavior, historical database migration coverage, 16 KB page-size compatibility, production HTTPS/WSS deployment, and manual accessibility checks remain release gates. See the [acceptance criteria](docs/ACCEPTANCE_CRITERIA.md) and [run checkpoint](docs/RUN_CHECKPOINT.md) for evidence and current status.
 
-**Nexus Support** connects Android smartphones into an ad-hoc mesh network. Using a hybrid combination of **Bluetooth Low Energy (BLE)** and **Wi-Fi Direct** via Google Nearby Connections, devices dynamically discover peers, establish encrypted links, and route emergency messages and GPS coordinates.
+## What is in this repository?
 
-## ⚡ Key Features
+- **Android app** — Kotlin, Jetpack Compose and Material 3 UI.
+- **Domain and data modules** — shared domain models and local persistence.
+- **Mesh and transport modules** — peer communication, routing and transport abstractions.
+- **Cryptography** — identity/key handling and message-protection components.
+- **Offline assistant** — on-device AI integration for emergency-oriented workflows; model availability and device performance depend on supported hardware and installed assets.
+- **Cloud backend** — FastAPI service for authorized incident and node APIs.
+- **Operations dashboard** — React/Vite interface with a Leaflet map, incident filtering, and live updates where the backend is configured.
 
-* **Multi-Hop Routing:** Dijkstra shortest-path pathfinding across ad-hoc graphs (up to 7 hops).
-* **Zero-Internet Maps:** Offline Mapsforge vector tile engine rendering topo & street maps.
-* **Store & Forward:** Persistent message buffer (48h TTL) for disconnected peers.
-* **End-to-End Encryption:** Direct AES-256-GCM sessions + multi-hop ECIES (Ephemeral ECDH + HKDF SHA-256).
-* **At-Rest Encryption:** Room SQLite database encrypted via SQLCipher AES-256-CBC.
-* **Tamper Proofing:** ECDSA SHA-256 signatures with temporal validity windows.
+The app's offline communication path and the optional cloud dashboard have different connectivity requirements. The dashboard/backend must not be described as an offline service.
 
-## 📚 Documentation
+## Architecture at a glance
 
-Deep technical specs and architectural decisions (ADRs) are maintained in the [`docs/`](docs/) directory:
+```text
+Android UI (Compose)
+        |
+ ViewModels / use cases
+        |
+ Domain contracts
+   |          |
+Local data   Mesh / transports
+(encrypted)  (peer communication)
 
-- 🏛️ [**Architecture & Submodules**](docs/architecture/ARCHITECTURE.md)
-- 📡 [**Mesh Routing & Protocol Specification**](docs/protocol/MESH_PROTOCOL.md)
-- 🔐 [**Cryptographic Security Specification**](docs/security/SECURITY_SPEC.md)
-- 🗺️ [**Offline Maps & GPS Engine**](docs/operations/OFFLINE_MAPS.md)
-- 🏗️ [**Architecture Decision Records (ADRs)**](docs/adr/)
-- 🧪 [**Device Test Matrix**](docs/testing/DEVICE_TEST_MATRIX.md)
-- 📊 [**Benchmarks**](docs/testing/BENCHMARKS.md)
+Optional cloud path:
+Android / field clients -> FastAPI -> authorized dashboard
+```
 
-## 🏛️ Project Architecture & Modules
+## Repository guide
 
-The repository is organized into multi-module Android components and cloud gateway services:
+| Path | Responsibility |
+|---|---|
+| `app/` | Android application, navigation and UI integration |
+| `core/domain/` | Domain models and contracts |
+| `core/data/` | Local persistence and data access |
+| `core/mesh/` | Peer discovery, transport and routing |
+| `core/crypto/` | Cryptographic primitives and identity workflows |
+| `cloud/backend/` | FastAPI endpoints and backend tests |
+| `cloud/frontend/` | React/Vite incident dashboard |
+| `docs/` | Architecture, security, operations, test matrices and release evidence |
+| `scripts/` | Repository validation and maintenance scripts |
 
-* **`:app`**: Application entrypoint, UI layer (Jetpack Compose, Material 3), ViewModels, Hilt dependency injection, and offline AI lifecycle coordination ([`OfflineAiCoordinator`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/app/src/main/java/com/meshlink/app/ai/coordinator/OfflineAiCoordinator.kt)).
-* **`:core:domain`**: Core pure Kotlin domain models, interfaces, packet abstractions ([`MeshPacket`](file:///c:/Users/deeks/OneDrive/Desktop/Meshlink--Offline-messaging-main/core/domain/src/main/java/com/meshlink/app/domain/model/MeshPacket.kt)), and SOS payload definitions.
-* **`:core:data`**: Encrypted persistence layer utilizing Room over SQLCipher AES-256-CBC with verified migrations.
-* **`:core:mesh`**: Ad-hoc mesh networking engine implementing Google Nearby Connections (BLE / Wi-Fi Direct), external Meshtastic LoRa transport abstraction, Dijkstra multi-hop routing, and battery-adaptive duty cycling.
-* **`:core:crypto`**: Cryptographic security engine implementing ECDH ephemeral key exchange, HKDF key derivation, SAS numeric verification, and ECDSA P-256 digital signatures.
-* **`cloud/backend`**: High-performance FastAPI sync gateway for field relay and incident logging.
-* **`cloud/frontend`**: Vite + React geospatial incident monitoring dashboard.
+For detailed module ownership, see [Architecture](docs/architecture/ARCHITECTURE.md). For protocol and security details, see [Mesh Protocol](docs/protocol/MESH_PROTOCOL.md) and [Security Specification](docs/security/SECURITY_SPEC.md).
 
-## 🚀 Getting Started
+## Getting started
 
-### Prerequisites
-- JDK 17 or JDK 21
-- Android Studio / Android SDK 36 (minSdk 26)
-- Python 3.10+ (for `cloud/backend`)
-- Node.js 18+ (for `cloud/frontend`)
+### Android
 
-### Clone & Build
+Requirements: Android Studio, Android SDK configured locally, and JDK 21 (the CI configuration uses JDK 21).
 
 ```bash
 git clone https://github.com/deekshudevang/Nexus-Support.git
 cd Nexus-Support
-
-# Assemble Debug APK
 ./gradlew assembleDebug
 ```
 
-## 🧪 Testing & Verification
+On Windows, use `gradlew.bat assembleDebug`.
+
+### Backend
+
+Requirements: Python 3.12 recommended for matching CI. Use a virtual environment and review the backend environment/configuration documentation before exposing the service.
 
 ```bash
-# Run JVM unit tests across all modules (including pure Kotlin :core:domain)
-./gradlew testDebugUnitTest :core:domain:test --continue
-
-# Run Android Lint across all modules
-./gradlew lintDebug --continue
-
-# Assemble Debug APK and test artifacts
-./gradlew assembleDebug assembleDebugAndroidTest
+cd cloud/backend
+python -m venv .venv
+# macOS/Linux:
+source .venv/bin/activate
+# Windows PowerShell:
+# .venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+pytest -v
 ```
 
+Do not commit production secrets or real operator credentials. Configure authentication, allowed origins, database settings and TLS according to the deployment environment.
 
-## 🗺️ Roadmap & Known Issues
+### Dashboard
 
-Check our GitHub Issues for ongoing tasks. Major upcoming items:
-- **Field Testing**: Validating store-and-forward TTLs under real-world drop-offs.
-- **Test Coverage**: Expanding tests for ViewModels and edge-case mesh packet routing.
+Requirements: Node.js 24 to match CI and npm.
 
-## 🤝 Contributing
+```bash
+cd cloud/frontend
+npm ci
+npm run test
+npm run build
+npm run dev
+```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions and guidelines.
+Set the dashboard API/WebSocket endpoints using the documented environment variables for the deployment. Never place passwords, bearer tokens, signing keys, or other secrets in `VITE_*` variables: frontend variables are included in the browser bundle. Use HTTPS/WSS in production and configure a restrictive backend CORS/origin allow-list.
 
-## 📄 License
-This project is licensed under the **MIT License** — see [LICENSE](LICENSE).
+## Quality checks
 
----
-**Last verified:** 2026-09-20 @ HEAD
+From the repository root:
+
+```bash
+./gradlew testDebugUnitTest :core:domain:test --continue
+./gradlew lintDebug --continue
+./gradlew assembleDebug
+```
+
+Backend and dashboard checks are listed above. GitHub Actions runs the configured checks on supported branches; inspect the exact commit's run and test artifacts before relying on a result.
+
+- [CI workflow](https://github.com/deekshudevang/Nexus-Support/actions/workflows/ci.yml)
+- [CodeQL workflow](https://github.com/deekshudevang/Nexus-Support/actions/workflows/codeql.yml)
+- [Acceptance criteria](docs/ACCEPTANCE_CRITERIA.md)
+- [Engineering checkpoint](docs/RUN_CHECKPOINT.md)
+- [Defect register](docs/audit/DEFECT_REGISTER.md)
+- [Device test matrix](docs/testing/DEVICE_TEST_MATRIX.md)
+
+## Release gates
+
+Before declaring a production release, close or explicitly scope each applicable gate with evidence tied to the exact release commit:
+
+1. Recover authentic Room schema history or define a safe, supported legacy-upgrade policy and test it.
+2. Exercise Meshtastic BLE/LoRa transmit, receive, acknowledgements and multi-hop routing on physical devices.
+3. Verify APK alignment **and** native ELF 16 KB page-size compatibility with current Android tooling.
+4. Deploy and verify real HTTPS/WSS, authentication, origin policy, expiry and reconnect behavior.
+5. Complete TalkBack/accessibility checks on the critical SOS, chat, map and settings flows.
+6. Build and publish the release artifact from the candidate SHA; record its checksum and signing status.
+7. Retain test reports and report passed, failed and skipped counts without combining results from different commits.
+
+See [open repository issues](https://github.com/deekshudevang/Nexus-Support/issues) for tracked follow-up work.
+
+## Contributing
+
+Please keep changes focused, preserve reproducible tests, update documentation when behavior changes, and distinguish automated evidence from device or production validation. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
