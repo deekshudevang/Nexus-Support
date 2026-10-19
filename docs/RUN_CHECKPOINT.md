@@ -120,3 +120,22 @@
 - Blockers / decisions needed: None for routing logic.
 - Not proven by this phase: Real physical LoRa RF packet transmission/reception, hardware BLE pairing with physical Meshtastic nodes.
 - Device/CI verification still required: Physical Meshtastic LoRa node BLE connection and RF transmission (logged in Pending verification register).
+
+---
+
+## Phase 5: Navigation  |  Status: VERIFIED
+- Claims verified:
+  - String routes (`chat/{deviceId}/{deviceName}`, manual URLEncoder): CONFIRMED (replaced with type-safe `@Serializable` Screen hierarchy, eliminating manual URL encoding/decoding and route pattern mismatch bugs).
+  - Navigation Compose 2.8+ type-safe routes: CONFIRMED (migrated `MeshLinkNavHost`, `Screen.kt`, `BottomNavBar.kt`, `MainActivity.kt`, and `ChatViewModel.kt`).
+  - Deep links: CONFIRMED (`meshlink://chat` intent filter in manifest + `navDeepLink<Screen.Chat>(basePath = "meshlink://chat")` in NavHost).
+  - Back-stack and arguments extraction: CONFIRMED (verified via `ChatViewModel` extraction from `SavedStateHandle` and unit tests).
+- Candidate deletions: None.
+- Commits:
+  - `a805294 feat(navigation): migrate to type-safe Navigation Compose 2.8+ with @Serializable routes`
+- Commands run:
+  - `.\gradlew.bat :app:testDebugUnitTest --tests "com.meshlink.app.ui.navigation.NavigationTypeSafetyTest"`
+  - `.\gradlew.bat testDebugUnitTest :core:domain:test --continue`
+- Results: BUILD SUCCESSFUL (5/5 tests passing in `NavigationTypeSafetyTest`, full project test suite: 349 tests passed, 0 failures, 0 skipped).
+- Blockers / decisions needed: None.
+- Not proven by this phase: End-to-end OS intent dispatch for deep links on physical device (covered by unit test, OS intent handling is standard Android framework behavior).
+- Device/CI verification still required: None for local navigation logic.
