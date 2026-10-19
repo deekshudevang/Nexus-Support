@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
+import './App.css';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -279,8 +280,8 @@ export default function App() {
   // ── Render Unauthorized State ──────────────────────────────────────────────
   if (!operatorToken) {
     return (
-      <div style={styles.authContainer}>
-        <div style={styles.authCard}>
+      <div className="auth-shell" style={styles.authContainer}>
+        <div className="auth-card" style={styles.authCard}>
           <div style={styles.authHeader}>
             <div style={styles.authIcon}>🛡️</div>
             <h2 style={styles.authTitle}>MESHLINK COMMAND TERMINAL</h2>
@@ -329,9 +330,9 @@ export default function App() {
 
   // ── Render Authenticated Dashboard ─────────────────────────────────────────
   return (
-    <div style={styles.dashboardContainer}>
+    <div className="dashboard-shell" style={styles.dashboardContainer}>
       {/* Tactical Top Bar */}
-      <header style={styles.topHeader}>
+      <header className="dashboard-header" style={styles.topHeader}>
         <div style={styles.brandGroup}>
           <span style={styles.brandIcon}>📡</span>
           <div>
@@ -343,7 +344,7 @@ export default function App() {
         </div>
 
         {/* Live Metrics & Status Indicators */}
-        <div style={styles.headerRight}>
+        <div className="dashboard-header-actions" style={styles.headerRight}>
           <div style={styles.metricPill}>
             <span style={styles.metricLabel}>INCIDENTS</span>
             <span style={styles.metricValue}>{sosPackets.length}</span>
@@ -383,7 +384,7 @@ export default function App() {
       </header>
 
       {/* Control Filter Bar */}
-      <div style={styles.controlBar}>
+      <div className="dashboard-controls" style={styles.controlBar}>
         <div style={styles.searchContainer}>
           <input
             data-testid="search-input"
@@ -424,9 +425,9 @@ export default function App() {
       </div>
 
       {/* Main Content Area: Sidebar Feed + Map */}
-      <div style={styles.mainLayout}>
+      <div className="dashboard-main" style={styles.mainLayout}>
         {/* Incidents Sidebar */}
-        <aside style={styles.sidebar}>
+        <aside className="incident-sidebar" style={styles.sidebar}>
           <div style={styles.sidebarHeader}>
             <span style={styles.sidebarTitle}>ACTIVE FEED ({filteredPackets.length})</span>
             {isLoading && <span style={styles.loadingSpinner}>UPDATING...</span>}
@@ -507,7 +508,7 @@ export default function App() {
         </aside>
 
         {/* Map View */}
-        <section style={styles.mapArea}>
+        <section className="incident-map" style={styles.mapArea} aria-label="Incident locations map">
           <MapContainer
             center={mapCenter}
             zoom={13}
