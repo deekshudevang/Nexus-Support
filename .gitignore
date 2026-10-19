@@ -106,3 +106,7 @@ models/
 .env.*
 hf_token*
 
+
+# Stray dumps & tools
+temp_head.kt
+.qodo/
