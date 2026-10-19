@@ -36,6 +36,39 @@ OPERATOR_TOKENS = {k.strip() for k in raw_op_tokens.split(",") if k.strip()}
 raw_revoked = os.getenv("REVOKED_CREDENTIALS", "")
 REVOKED_CREDENTIALS = {k.strip() for k in raw_revoked.split(",") if k.strip()}
 
+
+def validate_production_configuration(
+    environment: str,
+    gateway_keys: Set[str],
+    operator_tokens: Set[str],
+    allowed_origins: List[str],
+) -> None:
+    """Fail closed when production would start with development credentials or origins."""
+    if environment.strip().lower() != "production":
+        return
+
+    development_credentials = {"meshlink_gw_dev_secret", "meshlink_op_dev_secret"}
+    if (
+        not gateway_keys
+        or not operator_tokens
+        or gateway_keys.intersection(development_credentials)
+        or operator_tokens.intersection(development_credentials)
+    ):
+        raise RuntimeError(
+            "Unsafe production configuration: set explicit non-development gateway and operator credentials."
+        )
+
+    local_origins = {"http://localhost", "http://127.0.0.1", "http://localhost:5173",
+                     "http://localhost:3000", "http://127.0.0.1:5173"}
+    normalized_origins = {origin.strip().rstrip("/") for origin in allowed_origins if origin.strip()}
+    if not normalized_origins or "*" in normalized_origins or normalized_origins.intersection(local_origins):
+        raise RuntimeError(
+            "Unsafe production configuration: set an explicit HTTPS CORS origin allow-list without localhost or wildcard origins."
+        )
+
+
+validate_production_configuration(ENVIRONMENT, GATEWAY_API_KEYS, OPERATOR_TOKENS, CORS_ORIGINS)
+
 # Rate limiting settings (in-memory token bucket)
 RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "120"))
 RATE_LIMIT_WINDOW_SEC = int(os.getenv("RATE_LIMIT_WINDOW_SEC", "60"))
