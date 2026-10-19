@@ -56,7 +56,7 @@ dependencies {
     implementation(libs.retrofit.converter.gson)
     implementation(libs.sqlcipher.android)
     implementation(libs.tink.android)
-    implementation(libs.androidx.datastore.preferences)
+    api(libs.androidx.datastore.preferences)
 
     testImplementation(libs.junit)
     testImplementation(libs.turbine)

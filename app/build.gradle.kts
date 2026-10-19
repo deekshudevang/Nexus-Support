@@ -95,6 +95,7 @@ dependencies {
 
     // Core
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.datastore.preferences)
     implementation(libs.timber)
     implementation(libs.play.services.location)
     implementation(libs.kotlinx.coroutines.play.services)
