@@ -223,3 +223,21 @@
   - Physical Device Validation: Dual-slot staging, inference, rollback, and kill switch verified on Motorola edge 50 pro (Android 16).
 - **Evidence:** `docs/audit/FINAL_ENGINEERING_AUDIT.md`.
 - **Engineering Quality Score:** **9.0 / 10** (Defensible and evidence-backed).
+
+---
+
+## 3. Production Readiness Overhaul (Phases 0 to 10 Run)
+Authoritative per-phase execution log is tracked in [`docs/RUN_CHECKPOINT.md`](file:///docs/RUN_CHECKPOINT.md).
+
+- **Phase 0 (Baseline):** **VERIFIED** (Commit: `661a935`)
+- **Phase 1 (Repo Hygiene):** **VERIFIED** (Commits: `944f137`, `cfc3189`)
+- **Phase 2 (Data Layer & Migrations):** **VERIFIED** (Commits: `cb54903`, `6d01027`)
+- **Phase 3 (Settings Persistence):** **VERIFIED** (Commits: `9e3db98`, `a06a187`)
+- **Phase 4 (Meshtastic / LoRa Transport):** **IMPLEMENTED-PENDING-DEVICE** (Commits: `b4ac384`, `9ef9742`, `262fd01`)
+- **Phase 5 (Navigation):** **VERIFIED** (Commit: `a805294`)
+- **Phase 6 (Security & Dependencies):** **VERIFIED** (Commit: `168f82e`)
+  - Migrated SQLCipher to `net.zetetic:sqlcipher-android:4.9.0` with `PRAGMA cipher_migrate;` hook.
+  - Replaced deprecated `androidx.security:security-crypto:1.1.0-alpha06` with Android KeyStore + Google Tink AEAD (`Aead` AES-256-GCM) with legacy passphrase migration.
+  - Verified 16 KB page alignment for all 64-bit `.so` native libraries (`zipalign -c -v 4 app-release-unsigned.apk`).
+  - Minified release build assembled (`assembleRelease`: `app-release-unsigned.apk`).
+  - All 433 unit tests passed (0 failures, 1 skipped).

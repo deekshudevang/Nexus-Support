@@ -139,3 +139,29 @@
 - Blockers / decisions needed: None.
 - Not proven by this phase: End-to-end OS intent dispatch for deep links on physical device (covered by unit test, OS intent handling is standard Android framework behavior).
 - Device/CI verification still required: None for local navigation logic.
+
+---
+
+## Phase 6: Security & dependencies  |  Status: VERIFIED
+- Claims verified:
+  - Deprecation of legacy `net.zetetic:android-database-sqlcipher`: CONFIRMED (deprecated Community Edition). Replaced with official `net.zetetic:sqlcipher-android:4.9.0` (Maven Central / Zetetic official).
+  - `androidx.security:security-crypto:1.1.0-alpha06` alpha status: CONFIRMED. Completely eliminated; replaced with Android KeyStore + Google Tink AEAD (`Aead` AES-256-GCM) via `SecureDbPassphraseProvider` and `TinkSecureStorage`.
+  - Migration path for existing encrypted DBs and passphrases: CONFIRMED. `SecureDbPassphraseProvider` transparently reads and migrates legacy `meshlink_db_prefs` passphrase into Tink-encrypted prefs; `DatabaseModule` hook executes `PRAGMA cipher_migrate;` to migrate legacy cipher format.
+  - Manifest security & data extraction rules: CONFIRMED. Explicit exclusions for `meshlink.db` and sensitive keystore/crypto shared preferences in `data_extraction_rules.xml` and `backup_rules.xml`.
+  - 16 KB page alignment for targetSdk 35+: CONFIRMED locally (`zipalign -c -v 4 app-release-unsigned.apk` confirms all `.so` native libs including `libsqlcipher.so` aligned to 16 KB boundaries: offset 40796160 % 16384 == 0).
+  - R8 minification & resource shrinking: CONFIRMED (`assembleRelease` successfully built `app-release-unsigned.apk` with R8 minification, resource shrinking, baseline profiles, and proguard rules).
+- Candidate deletions: none.
+- Commits:
+  - `168f82e fix(security): migrate to net.zetetic:sqlcipher-android:4.9.0 and Tink AEAD key storage`
+- Commands run:
+  - `.\gradlew.bat :core:crypto:testDebugUnitTest :core:data:testDebugUnitTest`
+  - `.\gradlew.bat testDebugUnitTest :core:domain:test --continue`
+  - `.\gradlew.bat assembleRelease`
+  - `& "C:\Users\deeks\AppData\Local\Android\Sdk\build-tools\34.0.0\zipalign.exe" -c -v 4 "app\build\outputs\apk\release\app-release-unsigned.apk" | Select-String "\.so"`
+- Results:
+  - All unit tests passed (433 passed, 0 failures, 1 skipped).
+  - `assembleRelease` built `app-release-unsigned.apk` with R8 minification, resource shrinking, and baseline profiles.
+  - Native libs verified 16 KB page-aligned.
+- Blockers / decisions needed: None.
+- Not proven by this phase: Execution on real physical 16 KB page-size hardware (tracked in register as IMPLEMENTED-PENDING-DEVICE).
+- Device/CI verification still required: Boot and run on Android 15+ 16 KB page-size emulator/device (in register).
