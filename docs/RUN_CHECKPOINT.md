@@ -56,4 +56,25 @@
 - Not proven by this phase: N/A.
 - Device/CI verification still required: None.
 
+---
+
+## Phase 2: Data layer & tests  |  Status: VERIFIED
+- Claims verified:
+  - Test source set running `MigrationTestHelper`: CONFIRMED as JVM unit tests in `core/data/src/test/` using Robolectric.
+  - Assets directory misconfiguration: CONFIRMED (`assets.srcDirs("/schemas")` pointed to filesystem root `/schemas`; replaced with `"$projectDir/schemas"`).
+  - Schema restoration: CONFIRMED (`13.json` validated against `14.json` diff, `1.json`, `2.json`, `3.json` restored into `schemas/com.meshlink.app.data.local.AppDatabase/`).
+  - Missing intermediate schemas: CONFIRMED (schemas 4..12 never existed in git history).
+  - `fallbackToDestructiveMigration`: CONFIRMED gated strictly under `if (BuildConfig.DEBUG)` in `DatabaseModule.kt` (unreachable in release builds).
+- Candidate deletions: None.
+- Commits:
+  - `cb54903 test(data): fix schema assets path and verify Room migrations 1->2, 2->3, and 13->14`
+- Commands run:
+  - `.\gradlew.bat :core:data:testDebugUnitTest --tests "com.meshlink.app.data.local.MigrationTest"`
+  - `.\gradlew.bat testDebugUnitTest :core:domain:test --continue`
+- Results: 5/5 migration tests passing (`migrate1To2`, `migrate2To3`, `migrate1To3_chain`, `migrate13To14`, and `testAllIntermediateMigrationsExecuteWithoutSqlError`). Full project tests: **245 passed, 0 failures, 0 skipped**.
+- Blockers / decisions needed: Migrations 5..12 historical schema files do not exist in git history; tracked as BLOCKED in the pending verification register.
+- Not proven by this phase: Legacy device database migration from pre-v13 states without wipe.
+- Device/CI verification still required: None.
+
+
 
