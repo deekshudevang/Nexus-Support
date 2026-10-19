@@ -226,6 +226,7 @@
 - Candidate deletions: None.
 - Commits:
   - `8fbcbea ci: update CI for full-stack coverage, JDK 21, CodeQL triggers, and Dependabot ecosystems`
+  - `69f3b47 docs(checkpoint): update checkpoint for Phase 9 CI/CD workflows`
 - Commands run:
   - `py -3 -c "import yaml, glob; ... yaml.safe_load ..."`
   - `git merge-base --is-ancestor 4f6e61c5de8873ad6fa64f6398909c9347528b19 HEAD`
@@ -235,3 +236,27 @@
 - Blockers / decisions needed: None.
 - Not proven by this phase: Remote execution of workflows on GitHub runners (workflows are committed locally but not triggered or executed on remote; tracked in Pending verification register as IMPLEMENTED-UNEXECUTED).
 - Device/CI verification still required: Remote execution on GitHub Actions across `ci.yml`, `codeql.yml`, and `release.yml` (logged in register).
+
+---
+
+## Phase 10: Quality, documentation & final audit  |  Status: VERIFIED
+- Claims verified:
+  - Privacy-respecting error reporting: CONFIRMED (implemented `ErrorReporter` and `PrivacyAwareErrorReporter` with default-OFF opt-in gating, automated PII/GPS coordinate scrubbing, and zero third-party DSN keys committed).
+  - Settings UI & DataStore: CONFIRMED (added `crashReportingOptIn` to `SettingsRepository`, exposed via reactive Flow, and integrated into `SettingsScreen` under Privacy & Diagnostics card).
+  - Unit test suite coverage: CONFIRMED (all 284 Android unit tests passing with zero failures, including `PrivacyAwareErrorReporterTest`, `PrivacySafeCrashReporterTest`, `SettingsRepositoryTest`, and `SettingsViewModelTest`).
+  - Documentation completeness: CONFIRMED (created `PRIVACY.md` detailing offline-first zero telemetry policy, updated `SECURITY.md` with full STRIDE threat model and cryptographic controls, created `docs/audit/DEFECT_REGISTER.md` cataloging DEF-001 through DEF-012, verified MIT `LICENSE`).
+  - Final Engineering Audit: CONFIRMED (appended Section 7 to `docs/audit/FINAL_ENGINEERING_AUDIT.md` summarizing the 310-test cross-platform verification and phase-by-phase deliverables).
+- Candidate deletions: None.
+- Commits:
+  - `a540340 feat(quality): implement privacy-respecting crash reporting opt-in scaffolding and tests`
+- Commands run:
+  - `.\gradlew.bat :core:crypto:testDebugUnitTest :core:domain:test`
+  - `.\gradlew.bat :core:data:testDebugUnitTest :core:mesh:testDebugUnitTest :app:testDebugUnitTest`
+  - `powershell -Command "$t=0;$f=0;$s=0; Get-ChildItem -Recurse -Filter 'TEST-*.xml' | ..."`
+- Results:
+  - BUILD SUCCESSFUL: 284 Android tests passed, 0 failures, 0 skipped.
+  - Full project test suite: 310 total automated tests passing (284 Android + 20 FastAPI pytest + 6 React Vitest).
+- Blockers / decisions needed: None.
+- Not proven by this phase: Physical screen reader TalkBack navigation on device (logged in Pending verification register as IMPLEMENTED-PENDING-DEVICE).
+- Device/CI verification still required: TalkBack manual accessibility verification on physical hardware.
+
