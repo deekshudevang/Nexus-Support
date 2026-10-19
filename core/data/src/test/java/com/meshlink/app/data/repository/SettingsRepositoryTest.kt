@@ -48,6 +48,7 @@ class SettingsRepositoryTest {
         assertTrue("useNearby should default to true", repository.useNearby.first())
         assertFalse("useMeshtastic should default to false", repository.useMeshtastic.first())
         assertTrue("batteryOptimization should default to true", repository.batteryOptimization.first())
+        assertFalse("crashReportingOptIn should default to false", repository.crashReportingOptIn.first())
     }
 
     @Test
@@ -60,6 +61,9 @@ class SettingsRepositoryTest {
 
         repository.setBatteryOptimization(false)
         assertFalse(repository.batteryOptimization.first())
+
+        repository.setCrashReportingOptIn(true)
+        assertTrue(repository.crashReportingOptIn.first())
     }
 
     @Test
@@ -72,6 +76,7 @@ class SettingsRepositoryTest {
         repo1.setUseNearby(false)
         repo1.setUseMeshtastic(true)
         repo1.setBatteryOptimization(false)
+        repo1.setCrashReportingOptIn(true)
 
         // Cancel scope1 to release DataStore lock before opening reloadFile in a new store
         scope1.cancel()
@@ -83,6 +88,7 @@ class SettingsRepositoryTest {
         assertFalse("Persisted useNearby should be false", repo2.useNearby.first())
         assertTrue("Persisted useMeshtastic should be true", repo2.useMeshtastic.first())
         assertFalse("Persisted batteryOptimization should be false", repo2.batteryOptimization.first())
+        assertTrue("Persisted crashReportingOptIn should be true", repo2.crashReportingOptIn.first())
 
         scope2.cancel()
     }

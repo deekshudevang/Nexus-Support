@@ -30,6 +30,7 @@ class SettingsRepositoryImpl(
         val KEY_USE_NEARBY = booleanPreferencesKey("use_nearby")
         val KEY_USE_MESHTASTIC = booleanPreferencesKey("use_meshtastic")
         val KEY_BATTERY_OPTIMIZATION = booleanPreferencesKey("battery_optimization")
+        val KEY_CRASH_REPORTING_OPT_IN = booleanPreferencesKey("crash_reporting_opt_in")
     }
 
     override val useNearby: Flow<Boolean> = dataStore.data
@@ -68,6 +69,18 @@ class SettingsRepositoryImpl(
             preferences[KEY_BATTERY_OPTIMIZATION] ?: true
         }
 
+    override val crashReportingOptIn: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[KEY_CRASH_REPORTING_OPT_IN] ?: false // Default off: privacy-respecting
+        }
+
     override suspend fun setUseNearby(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[KEY_USE_NEARBY] = enabled
@@ -83,6 +96,12 @@ class SettingsRepositoryImpl(
     override suspend fun setBatteryOptimization(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[KEY_BATTERY_OPTIMIZATION] = enabled
+        }
+    }
+
+    override suspend fun setCrashReportingOptIn(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[KEY_CRASH_REPORTING_OPT_IN] = enabled
         }
     }
 }

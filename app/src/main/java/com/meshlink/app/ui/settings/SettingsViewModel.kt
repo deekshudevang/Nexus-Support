@@ -42,6 +42,9 @@ class SettingsViewModel @Inject constructor(
     val batteryOptimization: StateFlow<Boolean> = settingsRepository.batteryOptimization
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val crashReportingOptIn: StateFlow<Boolean> = settingsRepository.crashReportingOptIn
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val isAiEnabled: StateFlow<Boolean> = aiCoordinator.isAiEnabled
     val aiState: StateFlow<AiCapabilityState> = aiCoordinator.state
 
@@ -205,6 +208,12 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.setBatteryOptimization(enabled)
             val level = batteryMonitor.getBatteryLevel()
             adaptiveScanController.updateSettings(level, enabled)
+        }
+    }
+
+    fun setCrashReportingOptIn(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setCrashReportingOptIn(enabled)
         }
     }
 }

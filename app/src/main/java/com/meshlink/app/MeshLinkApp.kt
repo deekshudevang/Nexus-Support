@@ -24,6 +24,9 @@ class MeshLinkApp : Application(), Configuration.Provider {
     @Inject
     lateinit var aiCoordinator: dagger.Lazy<com.meshlink.app.ai.domain.OfflineAiCoordinator>
 
+    @Inject
+    lateinit var crashReporter: com.meshlink.app.telemetry.CrashReporter
+
     private val appScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
 
     override val workManagerConfiguration: Configuration
@@ -51,6 +54,7 @@ class MeshLinkApp : Application(), Configuration.Provider {
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
+        crashReporter.initialize()
         scheduleCleanupWork()
         scheduleCloudSyncWork()
     }

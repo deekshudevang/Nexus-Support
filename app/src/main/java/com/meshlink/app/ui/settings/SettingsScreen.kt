@@ -25,6 +25,7 @@ fun SettingsScreen(
     val useMeshtastic by viewModel.useMeshtastic.collectAsState()
     val useNearby by viewModel.useNearby.collectAsState()
     val batteryOptimization by viewModel.batteryOptimization.collectAsState()
+    val crashReportingOptIn by viewModel.crashReportingOptIn.collectAsState()
     
     val isMasterPaused by viewModel.isMasterScanningPaused.collectAsState()
 
@@ -314,6 +315,42 @@ fun SettingsScreen(
                             Text("EMERGENCY AI KILL SWITCH", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onError)
                         }
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Privacy & Diagnostics",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+
+            NexusCard(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Crash & Diagnostic Reporting",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Opt-in anonymous error reports to help diagnose crashes. Disabled by default to protect offline privacy and battery.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = crashReportingOptIn,
+                        onCheckedChange = { viewModel.setCrashReportingOptIn(it) }
+                    )
                 }
             }
 

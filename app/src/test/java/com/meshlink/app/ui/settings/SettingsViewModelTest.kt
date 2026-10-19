@@ -44,6 +44,7 @@ class SettingsViewModelTest {
     private val useNearbyFlow = MutableStateFlow(true)
     private val useMeshtasticFlow = MutableStateFlow(false)
     private val batteryOptFlow = MutableStateFlow(true)
+    private val crashReportingFlow = MutableStateFlow(false)
 
     @Before
     fun setUp() {
@@ -53,6 +54,7 @@ class SettingsViewModelTest {
         every { mockSettingsRepository.useNearby } returns useNearbyFlow
         every { mockSettingsRepository.useMeshtastic } returns useMeshtasticFlow
         every { mockSettingsRepository.batteryOptimization } returns batteryOptFlow
+        every { mockSettingsRepository.crashReportingOptIn } returns crashReportingFlow
         every { mockBatteryMonitor.getBatteryLevel() } returns 85
     }
 
@@ -135,5 +137,14 @@ class SettingsViewModelTest {
         assertFalse(vm.isMasterScanningPaused.value)
         verify { mockNearbyRepository.resumeScanning() }
         verify { mockLocationTracker.setManualPause(false) }
+    }
+
+    @Test
+    fun setCrashReportingOptIn_persistsValue() = runTest(testDispatcher) {
+        val vm = createViewModel()
+        vm.setCrashReportingOptIn(true)
+        advanceUntilIdle()
+
+        coVerify { mockSettingsRepository.setCrashReportingOptIn(true) }
     }
 }

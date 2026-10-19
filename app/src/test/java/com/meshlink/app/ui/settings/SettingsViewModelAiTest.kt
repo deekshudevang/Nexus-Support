@@ -58,6 +58,7 @@ class SettingsViewModelAiTest {
         every { mockSettingsRepository.useNearby } returns MutableStateFlow(true)
         every { mockSettingsRepository.useMeshtastic } returns MutableStateFlow(false)
         every { mockSettingsRepository.batteryOptimization } returns MutableStateFlow(true)
+        every { mockSettingsRepository.crashReportingOptIn } returns MutableStateFlow(false)
         every { mockBatteryMonitor.getBatteryLevel() } returns 100
     }
 

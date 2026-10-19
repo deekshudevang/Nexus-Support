@@ -43,7 +43,7 @@ dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:crypto"))   // Phase 3: encryption & identity
 
-    implementation(libs.play.services.nearby)
+    api(libs.play.services.nearby)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
