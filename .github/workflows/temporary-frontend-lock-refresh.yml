@@ -22,6 +22,8 @@ jobs:
           node-version: 24
       - name: Resolve the updated dependency graph
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Emit lockfile for remote review
+        run: cat package-lock.json
       - name: Upload generated lockfile for review
         if: always()
         uses: actions/upload-artifact@v4
