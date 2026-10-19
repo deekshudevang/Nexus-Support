@@ -77,7 +77,8 @@ class NearbyRepositoryImpl @Inject constructor(
     private val locationSyncManager: com.meshlink.app.domain.repository.LocationSyncManager,
     // Phase 8: SOS
     private val sosBeaconAdvertiser: com.meshlink.app.mesh.transport.SosBeaconAdvertiser,
-    private val sosNonceGenerator: com.meshlink.app.mesh.transport.SosNonceGenerator = com.meshlink.app.mesh.transport.SosNonceGenerator()
+    private val sosNonceGenerator: com.meshlink.app.mesh.transport.SosNonceGenerator = com.meshlink.app.mesh.transport.SosNonceGenerator(),
+    private val settingsRepository: com.meshlink.app.domain.repository.SettingsRepository? = null
 ) : NearbyRepository {
 
     companion object {
@@ -358,24 +359,25 @@ class NearbyRepositoryImpl @Inject constructor(
         
         // Listen to Meshtastic packets
         scope.launch {
-            meshtasticTransport.receivedPackets.collect { packet ->
-                val domainPacket = MeshPacket(
-                    senderId = packet.from.toString(),
-                    receiverId = packet.to.toString(),
-                    content = if (packet.hasDecoded()) packet.decoded.payload.toStringUtf8() else "",
-                    timestamp = packet.rxTime * 1000L,
-                    type = MeshPacket.PacketType.ROUTED_CHAT,
-                    messageId = packet.id.toString(),
-                    originId = packet.from.toString(),
-                    finalDestId = packet.to.toString(),
-                    hopCount = 0,
-                    maxHops = packet.hopLimit,
-                    priority = packet.priority
-                )
-                
+            meshtasticTransport.incomingPackets.collect { domainPacket ->
                 val result = meshRouter.route("meshtastic", domainPacket, _connectionStates.value.mapValues { it.key })
                 handleRoutingResult(result, domainPacket, "meshtastic")
                 _incomingPackets.emit(domainPacket)
+            }
+        }
+
+        // Drive Meshtastic lifecycle based on persistent settings toggle
+        settingsRepository?.let { settings ->
+            scope.launch {
+                settings.useMeshtastic.collect { enabled ->
+                    if (enabled) {
+                        Timber.i("NearbyRepository: Meshtastic enabled in settings, starting transport")
+                        meshtasticTransport.start()
+                    } else {
+                        Timber.i("NearbyRepository: Meshtastic disabled in settings, stopping transport")
+                        meshtasticTransport.stop()
+                    }
+                }
             }
         }
     }
@@ -468,7 +470,7 @@ class NearbyRepositoryImpl @Inject constructor(
                         )
                     }
                 }
-                result.forwardTargets.forEach { target -> dispatchToNearby(target) }
+                result.forwardTargets.forEach { target -> dispatchTarget(target) }
             }
             else -> { /* Queued / UnknownDestination don't happen for incoming */ }
         }
@@ -536,7 +538,7 @@ class NearbyRepositoryImpl @Inject constructor(
         isAdvertising = false
         isDiscovering = false
         _discoveredDevices.value = emptyList()
-        meshtasticTransport.stopScanning()
+        meshtasticTransport.stop()
         sosBeaconAdvertiser.stopScanning()
     }
 
@@ -546,7 +548,7 @@ class NearbyRepositoryImpl @Inject constructor(
         disconnectedTimestamps.clear()
         _connectionStates.value = emptyMap()
         routingTable.clear()
-        meshtasticTransport.disconnect()
+        meshtasticTransport.stop()
         sosBeaconAdvertiser.cleanup()
     }
 
@@ -629,7 +631,7 @@ class NearbyRepositoryImpl @Inject constructor(
                 timestamp         = packet.timestamp
             )
             when (result) {
-                is RoutingResult.Processed -> result.forwardTargets.forEach { dispatchToNearby(it) }
+                is RoutingResult.Processed -> result.forwardTargets.forEach { dispatchTarget(it) }
                 is RoutingResult.Queued    -> Timber.i("Message queued for $finalDestDeviceId")
                 is RoutingResult.UnknownDestination -> {
                     // Persist locally so the message appears in chat UI with a "queued" icon.
@@ -658,7 +660,7 @@ class NearbyRepositoryImpl @Inject constructor(
             val peers  = getConnectedPeers()
             val result = meshRouter.buildBroadcast(content, peers)
             if (result is RoutingResult.Processed) {
-                result.forwardTargets.forEach { dispatchToNearby(it) }
+                result.forwardTargets.forEach { dispatchTarget(it) }
             }
         }
     }
@@ -728,7 +730,7 @@ class NearbyRepositoryImpl @Inject constructor(
             val peers  = getConnectedPeers()
             val result = meshRouter.buildSos(finalContent, peers)
             if (result is RoutingResult.Processed) {
-                result.forwardTargets.forEach { dispatchToNearby(it) }
+                result.forwardTargets.forEach { dispatchTarget(it) }
             }
 
             // Phase 8: Start BLE beacon advertising using authoritative parameters from payload
@@ -817,6 +819,16 @@ class NearbyRepositoryImpl @Inject constructor(
     }
 
 
+    private fun dispatchTarget(target: ForwardTarget) {
+        if (target.transportType == com.meshlink.app.mesh.transport.TransportType.MESHTASTIC || target.endpointId == "meshtastic") {
+            scope.launch(Dispatchers.IO) {
+                meshtasticTransport.send(target.packet)
+            }
+        } else {
+            dispatchToNearby(target)
+        }
+    }
+
     /**
      * Sends a [ForwardTarget]'s packet over Nearby Connections.
      * No encryption is applied here — the packet's content is already in its final wire form
@@ -841,7 +853,7 @@ class NearbyRepositoryImpl @Inject constructor(
     }
 
     override fun dispatchRawPacket(endpointId: String, packet: MeshPacket) {
-        dispatchToNearby(ForwardTarget(endpointId, packet))
+        dispatchTarget(ForwardTarget(endpointId, packet))
     }
 
 

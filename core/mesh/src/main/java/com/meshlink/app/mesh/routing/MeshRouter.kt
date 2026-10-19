@@ -13,7 +13,11 @@ import com.meshlink.app.domain.repository.DeviceRepository
 import com.meshlink.app.domain.repository.MessageRepository
 import com.meshlink.app.domain.repository.PendingMessageRepository
 import com.meshlink.app.domain.repository.UserProfileManager
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.util.UUID
@@ -24,6 +28,7 @@ import android.content.Context
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.first
 
 /**
  * Core mesh routing engine — pure logic, no Nearby transport calls.
@@ -58,7 +63,8 @@ class MeshRouter(
     private val pendingMessageRepository: PendingMessageRepository,
     private val userProfileManager: UserProfileManager,
     private val seenBeaconCache: SeenMessageCache = SeenMessageCache(),
-    private val clock: () -> Long = { System.currentTimeMillis() }
+    private val clock: () -> Long = { System.currentTimeMillis() },
+    private val settingsRepository: com.meshlink.app.domain.repository.SettingsRepository? = null
 ) {
     @Inject
     constructor(
@@ -72,7 +78,8 @@ class MeshRouter(
         messageRepository: MessageRepository,
         deviceRepository: DeviceRepository,
         pendingMessageRepository: PendingMessageRepository,
-        userProfileManager: UserProfileManager
+        userProfileManager: UserProfileManager,
+        settingsRepository: com.meshlink.app.domain.repository.SettingsRepository
     ) : this(
         context = context,
         myDeviceId = myDeviceId,
@@ -86,17 +93,37 @@ class MeshRouter(
         pendingMessageRepository = pendingMessageRepository,
         userProfileManager = userProfileManager,
         seenBeaconCache = SeenMessageCache(),
-        clock = { System.currentTimeMillis() }
+        clock = { System.currentTimeMillis() },
+        settingsRepository = settingsRepository
     )
 
     private val notificationManager: NotificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    @Volatile private var isNearbyCached: Boolean = true
+    @Volatile private var isMeshtasticCached: Boolean = false
+    private val routerScope = kotlinx.coroutines.CoroutineScope(Dispatchers.Default + kotlinx.coroutines.SupervisorJob())
+
     init {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             val channel = NotificationChannel("sos_channel", "Emergency SOS", NotificationManager.IMPORTANCE_HIGH)
             channel.description = "Emergency SOS alerts from nearby peers"
             notificationManager.createNotificationChannel(channel)
         }
+
+        settingsRepository?.let { settings ->
+            routerScope.launch {
+                settings.useNearby.collect { isNearbyCached = it }
+            }
+            routerScope.launch {
+                settings.useMeshtastic.collect { isMeshtasticCached = it }
+            }
+        }
     }
+
+    private val isNearbyActive: Boolean
+        get() = (settingsRepository?.useNearby as? kotlinx.coroutines.flow.StateFlow<Boolean>)?.value ?: isNearbyCached
+
+    private val isMeshtasticActive: Boolean
+        get() = (settingsRepository?.useMeshtastic as? kotlinx.coroutines.flow.StateFlow<Boolean>)?.value ?: isMeshtasticCached
     companion object {
         private const val PENDING_TTL_MS = 48 * 60 * 60 * 1_000L  // 48 hours
         /** Minimum interval between accepted heartbeats from any single peer (anti-flood). */
@@ -355,8 +382,14 @@ class MeshRouter(
         val messageId         = UUID.randomUUID().toString()
         val localDisplayName  = userProfileManager.getDisplayName()
 
-        val directEndpoint = connectedPeers.entries
-            .firstOrNull { it.value == finalDestDeviceId }?.key
+        val useNearby = isNearbyActive
+        val useMeshtastic = isMeshtasticActive
+
+        val directEndpoint = if (useNearby) {
+            connectedPeers.entries.firstOrNull { it.value == finalDestDeviceId }?.key
+        } else {
+            null
+        }
 
         if (directEndpoint != null) {
             val sessionKey = sessionKeyStore.getSessionKey(directEndpoint)
@@ -395,7 +428,7 @@ class MeshRouter(
                 seenMessageCache.markSeen(messageId)
                 return@withContext RoutingResult.Processed(
                     localMessage   = null,
-                    forwardTargets = listOf(ForwardTarget(directEndpoint, packet))
+                    forwardTargets = listOf(ForwardTarget(directEndpoint, packet, com.meshlink.app.mesh.transport.TransportType.NEARBY))
                 )
             }
         }
@@ -419,12 +452,20 @@ class MeshRouter(
                 senderName   = localDisplayName
             )
 
-            val forwardTargets = buildForwardTargets(
-                packet         = packet,
-                fromEndpointId = null,       // no "from" for self-originated
-                connectedPeers = connectedPeers,
-                isForMe        = false
-            )
+            val forwardTargets = if (useNearby) {
+                buildForwardTargets(
+                    packet         = packet,
+                    fromEndpointId = null,       // no "from" for self-originated
+                    connectedPeers = connectedPeers,
+                    isForMe        = false
+                ).toMutableList()
+            } else {
+                mutableListOf()
+            }
+
+            if (useMeshtastic && forwardTargets.isEmpty()) {
+                forwardTargets.add(ForwardTarget("meshtastic", packet, com.meshlink.app.mesh.transport.TransportType.MESHTASTIC))
+            }
 
             val initialStatus = if (forwardTargets.isEmpty()) 0 else 1
 
@@ -446,7 +487,7 @@ class MeshRouter(
             seenMessageCache.markSeen(messageId)
 
             if (forwardTargets.isEmpty()) {
-                // No connected peers — queue it
+                // No connected peers or alternative transport — queue it
                 enqueuePending(packet, finalDestDeviceId, timestamp)
                 return@withContext RoutingResult.Queued(messageId)
             }
@@ -470,6 +511,9 @@ class MeshRouter(
         content: String,
         connectedPeers: Map<String, String>
     ): RoutingResult {
+        val useNearby = isNearbyActive
+        val useMeshtastic = isMeshtasticActive
+
         val messageId = UUID.randomUUID().toString()
         seenMessageCache.markSeen(messageId)
 
@@ -487,7 +531,13 @@ class MeshRouter(
             senderName  = userProfileManager.getDisplayName()
         )
 
-        val targets = connectedPeers.keys.map { ep -> ForwardTarget(ep, packet) }
+        val targets = mutableListOf<ForwardTarget>()
+        if (useNearby) {
+            targets.addAll(connectedPeers.keys.map { ep -> ForwardTarget(ep, packet, com.meshlink.app.mesh.transport.TransportType.NEARBY) })
+        }
+        if (useMeshtastic) {
+            targets.add(ForwardTarget("meshtastic", packet, com.meshlink.app.mesh.transport.TransportType.MESHTASTIC))
+        }
         return RoutingResult.Processed(localMessage = null, forwardTargets = targets)
     }
 
@@ -495,6 +545,9 @@ class MeshRouter(
         content: String,
         connectedPeers: Map<String, String>
     ): RoutingResult {
+        val useNearby = isNearbyActive
+        val useMeshtastic = isMeshtasticActive
+
         val parsedId = try {
             org.json.JSONObject(content).optString("uuid").ifEmpty { null }
         } catch (_: Exception) { null }
@@ -534,7 +587,13 @@ class MeshRouter(
             enqueuePending(packet, MeshPacket.BROADCAST_DEST, packet.timestamp)
         }
 
-        val targets = connectedPeers.keys.map { ep -> ForwardTarget(ep, packet) }
+        val targets = mutableListOf<ForwardTarget>()
+        if (useNearby) {
+            targets.addAll(connectedPeers.keys.map { ep -> ForwardTarget(ep, packet, com.meshlink.app.mesh.transport.TransportType.NEARBY) })
+        }
+        if (useMeshtastic) {
+            targets.add(ForwardTarget("meshtastic", packet, com.meshlink.app.mesh.transport.TransportType.MESHTASTIC))
+        }
         return RoutingResult.Processed(localMessage = null, forwardTargets = targets)
     }
 
@@ -949,7 +1008,8 @@ sealed class RoutingResult {
 
 data class ForwardTarget(
     val endpointId: String,
-    val packet: MeshPacket
+    val packet: MeshPacket,
+    val transportType: com.meshlink.app.mesh.transport.TransportType = com.meshlink.app.mesh.transport.TransportType.NEARBY
 )
 
 
