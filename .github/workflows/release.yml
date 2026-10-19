@@ -1,21 +1,32 @@
-name: Release Build
+name: Production Release Pipeline
 
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Release version name (e.g. 1.0.0)'
+        required: false
+        default: ''
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build-release:
-    name: Build & Package Release APK
+  build-and-sign-release:
+    name: Build & Package Production Artifacts
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -24,26 +35,57 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Grant Execute Permission
+      - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease
-
-      - name: Compute Checksums
+      - name: Configure Keystore from CI Secrets (if provided)
+        id: keystore-setup
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          mkdir -p release-output
-          cp app/build/outputs/apk/release/*.apk release-output/ || true
-          cd release-output
-          sha256sum *.apk > SHA256SUMS.txt || true
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Decoding release keystore from GitHub Actions secrets..."
+            echo "$KEYSTORE_BASE64" | base64 -d > app/release-keystore.jks
+            echo "has_keystore=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No signing keystore secret configured; building unsigned release artifacts for inspection."
+            echo "has_keystore=false" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Upload Release Assets
+      - name: Build Production APK & AAB Bundle
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease bundleRelease --stacktrace
+
+      - name: Clean Keystore File
+        if: always()
+        run: |
+          rm -f app/release-keystore.jks
+
+      - name: Organize Release Artifacts & Checksums
+        run: |
+          mkdir -p release-artifacts
+          find app/build/outputs/apk/release/ -name "*.apk" -exec cp {} release-artifacts/ \;
+          find app/build/outputs/bundle/release/ -name "*.aab" -exec cp {} release-artifacts/ \;
+          cd release-artifacts
+          sha256sum * > SHA256SUMS.txt
+          echo "Release artifacts generated:"
+          ls -la
+
+      - name: Create GitHub Release & Upload Artifacts
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            app/build/outputs/apk/release/*.apk
-            release-output/SHA256SUMS.txt
-          draft: false
+            release-artifacts/*.apk
+            release-artifacts/*.aab
+            release-artifacts/SHA256SUMS.txt
+          draft: true
           prerelease: false
           generate_release_notes: true

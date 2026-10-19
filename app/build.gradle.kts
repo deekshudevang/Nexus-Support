@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -56,6 +57,10 @@ android {
     }
 }
 
+hilt {
+    enableAggregatingTask = false
+}
+
 dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
@@ -72,6 +77,7 @@ dependencies {
 
     // Navigation
     implementation(libs.compose.navigation)
+    implementation(libs.kotlinx.serialization.json)
 
     // Hilt
     implementation(libs.hilt.android)
@@ -89,6 +95,7 @@ dependencies {
 
     // Core
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.datastore.preferences)
     implementation(libs.timber)
     implementation(libs.play.services.location)
     implementation(libs.kotlinx.coroutines.play.services)
@@ -99,7 +106,7 @@ dependencies {
     implementation(libs.mapsforge.themes)
     implementation(libs.osmbonuspack)
     implementation("com.google.mlkit:image-labeling:17.0.8")
-    implementation("com.google.mediapipe:tasks-genai:0.10.14")
+    implementation("com.google.mediapipe:tasks-genai:0.10.35")
 
     // Testing — unit tests
     testImplementation(libs.junit)
@@ -107,6 +114,7 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation("org.json:json:20210307")
+    testImplementation(libs.navigation.testing)
 
     // Testing — instrumented / Compose UI tests
     androidTestImplementation(libs.androidx.junit)

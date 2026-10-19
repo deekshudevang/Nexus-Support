@@ -43,6 +43,7 @@ fun SosScreen(
     onDashboardClick: () -> Unit = {}
 ) {
     val isBroadcasting by viewModel.isBroadcasting.collectAsState()
+    val deliveryStatus by viewModel.deliveryStatus.collectAsState()
     val satelliteLock by viewModel.satelliteLockStatus.collectAsState()
     val activeUplink by viewModel.activeUplink.collectAsState()
     val incidentType by viewModel.incidentType.collectAsState()
@@ -80,23 +81,39 @@ fun SosScreen(
                 color = errorColor.copy(alpha = 0.1f),
                 border = BorderStroke(1.dp, errorColor.copy(alpha = 0.3f))
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.padding(16.dp).fillMaxWidth()
                 ) {
-                    Icon(
-                        Icons.Default.Warning, 
-                        contentDescription = "Active Alert", 
-                        tint = errorColor
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Warning, 
+                            contentDescription = "Active Alert", 
+                            tint = errorColor
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "EMERGENCY SIGNAL ACTIVE",
+                            color = errorColor,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "EMERGENCY SIGNAL ACTIVE",
-                        color = errorColor,
-                        style = MaterialTheme.typography.titleMedium,
+                        text = when (deliveryStatus) {
+                            SosViewModel.SosDeliveryState.PEER_ACKNOWLEDGED -> "DELIVERY CONFIRMED: PEER ACK RECEIVED"
+                            SosViewModel.SosDeliveryState.TRANSMITTING -> "BROADCASTING BEACON (AWAITING PEER ACK)"
+                            SosViewModel.SosDeliveryState.IDLE -> ""
+                        },
+                        color = if (deliveryStatus == SosViewModel.SosDeliveryState.PEER_ACKNOWLEDGED) Color(0xFF4CAF50) else errorColor.copy(alpha = 0.85f),
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                        letterSpacing = 0.5.sp
                     )
                 }
             }

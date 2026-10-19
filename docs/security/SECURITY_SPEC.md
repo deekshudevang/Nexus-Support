@@ -57,13 +57,14 @@ Local caching of sensitive events is managed via **SQLCipher** (AES-256-CBC). Th
 
 ## 🛑 Threat Model
 
-| Threat | Implemented Mitigation | Validation Test Citation |
-|---|---|---|
-| First-Contact MITM | TOFU pinning + SAS ceremony | UNVALIDATED |
-| Repeat-Contact MITM | TOFU pinning (rejects on key mismatch) | `HandshakeManagerTest` (UNVALIDATED) |
-| Message Replay / Flooding | MeshRouter deduplication (`isAlreadySeen`) | UNVALIDATED |
-| Message Tampering | ECDSA Signature Verification | `LocationSyncManagerTest.test_out_of_order_delivery` (Mockito stubbed - UNVALIDATED device) |
-| Device Theft (At Rest) | SQLCipher with EncryptedSharedPreferences | UNVALIDATED |
+| Threat | Implemented Mitigation | Implementation File | Validation Test Citation |
+|---|---|---|---|
+| First-Contact MITM | TOFU pinning + SAS ceremony | `HandshakeManager.kt:computeSAS` | `HandshakeManagerTest.computeSAS produces identical 6-digit code on both peers` (VERIFIED) |
+| Repeat-Contact MITM | TOFU pinning (rejects on key mismatch) | `HandshakeManager.kt:processHandshake` | `HandshakeManagerTest.repeat-contact MITM attempt with mismatched public key is rejected` (VERIFIED) |
+| Message Replay / Flooding | MeshRouter deduplication (`isAlreadySeen`) & LRU replay protection | `MeshRouter.kt`, `SessionKeyStore.kt` | `SessionKeyStoreTest`, `MeshRouterTest`, `SosNonceAndReplayTest` (VERIFIED) |
+| Message Tampering | ECDSA Signature Verification & AES-256-GCM AEAD Tag | `ProductionKeyManager.kt`, `EncryptionService.kt`, `EciesService.kt` | `EcdsaSecurityTest`, `EncryptionServiceTest`, `EciesServiceTest` (VERIFIED) |
+| Multi-Hop Relay Snooping | ECIES with Ephemeral NIST P-256 Keypairs | `EciesService.kt:encrypt/decrypt` | `EciesServiceTest.encrypt and decrypt should return original plaintext` (VERIFIED) |
+| Device Theft (At Rest) | SQLCipher with EncryptedSharedPreferences | `DatabaseModule.kt:provideDatabase` | Room database builder configured with `SupportFactory` and KeyStore-backed AES-256-GCM passphrase |
 
 ---
-**Last verified:** 2026-09-20 @ HEAD
+**Last verified:** 2026-10-16 @ HEAD (f02d399 / repair)

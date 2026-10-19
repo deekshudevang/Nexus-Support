@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "activeSlotId": "baseline",
+  "stagedSlotId": "staged",
+  "previousSlotId": "",
+  "slots": {
+    "baseline": {
+      "relativePath": "models/gemma3-1B-it-int4.task",
+      "sha256": "e3d981c01aeaaac69a84ffa0d4be13281b3176731063f1bea1c9fe6887bd9dee",
+      "sizeBytes": 554661243,
+      "format": "mediapipe_task",
+      "role": "ACTIVE"
+    },
+    "staged": {
+      "relativePath": "ai_models/staging/candidate.task",
+      "sha256": "e3d981c01aeaaac69a84ffa0d4be13281b3176731063f1bea1c9fe6887bd9dee",
+      "sizeBytes": 554661243,
+      "format": "mediapipe_task",
+      "role": "STAGED"
+    }
+  }
+}

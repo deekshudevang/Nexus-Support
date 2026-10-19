@@ -12,8 +12,17 @@ interface MessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(message: MessageEntity)
 
-    @Query("UPDATE messages SET status = :status WHERE id = :id")
+    @Query("UPDATE messages SET status = :status, delivered = CASE WHEN :status = 2 THEN 1 ELSE delivered END WHERE id = :id")
     suspend fun updateStatus(id: String, status: Int)
+
+    @Query("DELETE FROM messages WHERE id = :id")
+    suspend fun deleteById(id: String)
+
+    @Query("SELECT EXISTS(SELECT 1 FROM messages WHERE id = :id)")
+    suspend fun existsById(id: String): Boolean
+
+    @Query("SELECT * FROM messages ORDER BY timestamp ASC")
+    suspend fun getAllMessages(): List<MessageEntity>
 
     @Query("SELECT * FROM messages WHERE senderId = :peerId OR receiverId = :peerId ORDER BY timestamp ASC")
     fun getByConversation(peerId: String): Flow<List<MessageEntity>>

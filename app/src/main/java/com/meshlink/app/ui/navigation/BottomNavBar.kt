@@ -16,17 +16,18 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WifiTethering
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.WifiTethering
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -35,39 +36,54 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hasRoute
 
 data class BottomNavItem(
+    val screen:         Screen,
     val route:          String,
     val label:          String,
     val selectedIcon:   ImageVector,
     val unselectedIcon: ImageVector,
-    val isSos:          Boolean = false
+    val isSos:          Boolean = false,
+    val labelRes:       Int? = null
 )
 
 val bottomNavItems = listOf(
     BottomNavItem(
+        screen         = Screen.Home,
         route          = Screen.Home.route,
         label          = "CHATS",
         selectedIcon   = Icons.Filled.Forum,
         unselectedIcon = Icons.Outlined.Forum
     ),
     BottomNavItem(
+        screen         = Screen.Discovery,
         route          = Screen.Discovery.route,
         label          = "DISCOVER",
         selectedIcon   = Icons.Filled.WifiTethering,
         unselectedIcon = Icons.Outlined.WifiTethering
     ),
     BottomNavItem(
+        screen         = Screen.Map,
         route          = Screen.Map.route,
         label          = "MAP",
         selectedIcon   = Icons.Filled.Map,
         unselectedIcon = Icons.Outlined.Map
     ),
     BottomNavItem(
+        screen         = Screen.AiAssistant,
+        route          = Screen.AiAssistant.route,
+        label          = "AI",
+        selectedIcon   = Icons.Filled.AutoAwesome,
+        unselectedIcon = Icons.Outlined.AutoAwesome,
+        labelRes       = com.meshlink.app.R.string.nav_ai
+    ),
+    BottomNavItem(
+        screen         = Screen.Sos,
         route          = Screen.Sos.route,
         label          = "SOS",
         selectedIcon   = Icons.Filled.Warning,
@@ -78,9 +94,9 @@ val bottomNavItems = listOf(
 
 @Composable
 fun MeshBottomNavBar(
-    currentRoute: String?,
-    onNavigate:   (String) -> Unit,
-    modifier:     Modifier = Modifier
+    currentDestination: NavDestination?,
+    onNavigate:         (Screen) -> Unit,
+    modifier:           Modifier = Modifier
 ) {
     Box(
         modifier = modifier
@@ -107,7 +123,52 @@ fun MeshBottomNavBar(
                 bottomNavItems.forEach { item ->
                     NavItem(
                         item     = item,
-                        selected = currentRoute == item.route,
+                        selected = currentDestination?.hasRoute(item.screen::class) == true,
+                        onClick  = { onNavigate(item.screen) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Backwards-compatible overload for string-based callers and tests.
+ */
+@Composable
+fun MeshBottomNavBar(
+    currentRoute: String?,
+    onNavigate:   (String) -> Unit,
+    modifier:     Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color.Transparent)
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(16.dp, RoundedCornerShape(32.dp), ambientColor = MaterialTheme.colorScheme.primary),
+            shape = RoundedCornerShape(32.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                    .selectableGroup(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                bottomNavItems.forEach { item ->
+                    val isSelected = currentRoute == item.route || currentRoute == item.screen::class.qualifiedName
+                    NavItem(
+                        item     = item,
+                        selected = isSelected,
                         onClick  = { onNavigate(item.route) },
                         modifier = Modifier.weight(1f)
                     )
@@ -154,9 +215,10 @@ private fun NavItem(
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
+            val labelText = item.labelRes?.let { stringResource(it) } ?: item.label
             Icon(
                 imageVector        = if (selected) item.selectedIcon else item.unselectedIcon,
-                contentDescription = item.label,
+                contentDescription = labelText,
                 tint               = iconColor,
                 modifier           = Modifier.size(24.dp)
             )

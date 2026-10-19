@@ -32,6 +32,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.meshlink.app.service.NearbyService
 import com.meshlink.app.ui.navigation.MeshLinkNavHost
 import com.meshlink.app.ui.navigation.MeshBottomNavBar
@@ -83,11 +85,13 @@ class MainActivity : ComponentActivity() {
                 if (permissionsGranted) {
                     val navController = rememberNavController()
                     val navBackStack  by navController.currentBackStackEntryAsState()
-                    val currentRoute  = navBackStack?.destination?.route
+                    val currentDestination = navBackStack?.destination
 
-                    // Bottom bar only on root tabs — not inside Chat or Medical Profile
-                    val bottomNavRoutes = bottomNavItems.map { it.route }.toSet()
-                    val showBottomBar   = currentRoute in bottomNavRoutes
+                    val currentNavItem = bottomNavItems.firstOrNull { item ->
+                        currentDestination?.hasRoute(item.screen::class) == true ||
+                            currentDestination?.route == item.route
+                    }
+                    val showBottomBar = currentNavItem != null
 
                     Scaffold(
                         containerColor = MaterialTheme.colorScheme.background,
@@ -98,11 +102,10 @@ class MainActivity : ComponentActivity() {
                                 exit    = slideOutVertically { it }
                             ) {
                                 MeshBottomNavBar(
-                                    currentRoute = currentRoute,
-                                    onNavigate   = { route ->
-                                        navController.navigate(route) {
-                                            // Pop up to start destination to avoid huge back stack
-                                            popUpTo(navController.graph.startDestinationId) {
+                                    currentDestination = currentDestination,
+                                    onNavigate         = { targetScreen ->
+                                        navController.navigate(targetScreen) {
+                                            popUpTo(navController.graph.findStartDestination().id) {
                                                 saveState = true
                                             }
                                             launchSingleTop = true

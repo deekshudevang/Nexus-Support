@@ -16,5 +16,6 @@ kotlin {
 
 dependencies {
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.gson)
     testImplementation(libs.junit)
 }

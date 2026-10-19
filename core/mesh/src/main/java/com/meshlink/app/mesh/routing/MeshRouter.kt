@@ -13,7 +13,11 @@ import com.meshlink.app.domain.repository.DeviceRepository
 import com.meshlink.app.domain.repository.MessageRepository
 import com.meshlink.app.domain.repository.PendingMessageRepository
 import com.meshlink.app.domain.repository.UserProfileManager
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.util.UUID
@@ -24,6 +28,7 @@ import android.content.Context
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.first
 
 /**
  * Core mesh routing engine — pure logic, no Nearby transport calls.
@@ -45,7 +50,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
  *   BROADCAST     → no encryption (public announcement)
  */
 @Singleton
-class MeshRouter @Inject constructor(
+class MeshRouter(
     @ApplicationContext private val context: Context,
     @Named("localDeviceId") private val myDeviceId: String,
     private val routingTable: RoutingTable,
@@ -56,25 +61,103 @@ class MeshRouter @Inject constructor(
     private val messageRepository: MessageRepository,
     private val deviceRepository: DeviceRepository,
     private val pendingMessageRepository: PendingMessageRepository,
-    private val userProfileManager: UserProfileManager
+    private val userProfileManager: UserProfileManager,
+    private val seenBeaconCache: SeenMessageCache = SeenMessageCache(),
+    private val clock: () -> Long = { System.currentTimeMillis() },
+    private val settingsRepository: com.meshlink.app.domain.repository.SettingsRepository? = null
 ) {
-    private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    @Inject
+    constructor(
+        @ApplicationContext context: Context,
+        @Named("localDeviceId") myDeviceId: String,
+        routingTable: RoutingTable,
+        seenMessageCache: SeenMessageCache,
+        encryptionService: EncryptionService,
+        eciesService: EciesService,
+        sessionKeyStore: SessionKeyStore,
+        messageRepository: MessageRepository,
+        deviceRepository: DeviceRepository,
+        pendingMessageRepository: PendingMessageRepository,
+        userProfileManager: UserProfileManager,
+        settingsRepository: com.meshlink.app.domain.repository.SettingsRepository
+    ) : this(
+        context = context,
+        myDeviceId = myDeviceId,
+        routingTable = routingTable,
+        seenMessageCache = seenMessageCache,
+        encryptionService = encryptionService,
+        eciesService = eciesService,
+        sessionKeyStore = sessionKeyStore,
+        messageRepository = messageRepository,
+        deviceRepository = deviceRepository,
+        pendingMessageRepository = pendingMessageRepository,
+        userProfileManager = userProfileManager,
+        seenBeaconCache = SeenMessageCache(),
+        clock = { System.currentTimeMillis() },
+        settingsRepository = settingsRepository
+    )
+
+    private val notificationManager: NotificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    @Volatile private var isNearbyCached: Boolean = true
+    @Volatile private var isMeshtasticCached: Boolean = false
+    private val routerScope = kotlinx.coroutines.CoroutineScope(Dispatchers.Default + kotlinx.coroutines.SupervisorJob())
+
     init {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             val channel = NotificationChannel("sos_channel", "Emergency SOS", NotificationManager.IMPORTANCE_HIGH)
             channel.description = "Emergency SOS alerts from nearby peers"
             notificationManager.createNotificationChannel(channel)
         }
+
+        settingsRepository?.let { settings ->
+            routerScope.launch {
+                settings.useNearby.collect { isNearbyCached = it }
+            }
+            routerScope.launch {
+                settings.useMeshtastic.collect { isMeshtasticCached = it }
+            }
+        }
     }
+
+    private val isNearbyActive: Boolean
+        get() = (settingsRepository?.useNearby as? kotlinx.coroutines.flow.StateFlow<Boolean>)?.value ?: isNearbyCached
+
+    private val isMeshtasticActive: Boolean
+        get() = (settingsRepository?.useMeshtastic as? kotlinx.coroutines.flow.StateFlow<Boolean>)?.value ?: isMeshtasticCached
     companion object {
         private const val PENDING_TTL_MS = 48 * 60 * 60 * 1_000L  // 48 hours
         /** Minimum interval between accepted heartbeats from any single peer (anti-flood). */
         private const val HEARTBEAT_MIN_INTERVAL_MS = 5_000L
+        /** Maximum number of unverified beacon alert records kept in memory to prevent exhaustion. */
+        const val MAX_UNVERIFIED_BEACONS = 100
+        /** Minimum interval between unverified beacon alerts from the same source hash (anti-flood). */
+        const val BEACON_MIN_INTERVAL_PER_SOURCE_MS = 2_000L
+        /** Sliding window limit: maximum unverified beacon alerts processed globally per minute. */
+        const val MAX_BEACONS_PER_MINUTE_GLOBAL = 30
     }
 
     /** Rate-limit table: peerDeviceId → timestamp of last accepted heartbeat. */
     private val heartbeatLastSeen = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
+    /** Rate-limit table: beaconDeviceHash → timestamp of last accepted beacon. */
+    private val beaconLastSeenPerSource = java.util.concurrent.ConcurrentHashMap<Int, Long>()
+    private val globalBeaconTimestamps = java.util.concurrent.ConcurrentLinkedQueue<Long>()
+
+    data class AuthenticatedSosRecord(
+        val messageId: String,
+        val originId: String,
+        val beaconKey: String?,
+        val timestamp: Long
+    )
+
+    data class UnverifiedBeaconRecord(
+        val messageId: String,
+        val deviceHash: Int,
+        val timestamp: Long
+    )
+
+    private val activeAuthenticatedSos = java.util.concurrent.CopyOnWriteArrayList<AuthenticatedSosRecord>()
+    private val unverifiedBeaconAlerts = java.util.concurrent.CopyOnWriteArrayList<UnverifiedBeaconRecord>()
 
     /**
      * Process an incoming [packet] received from [fromEndpointId].
@@ -92,8 +175,84 @@ class MeshRouter @Inject constructor(
         connectedPeers: Map<String, String>    // endpointId → peerDeviceId
     ): RoutingResult = withContext(Dispatchers.IO) {
 
+        // PATH A: Unauthenticated BLE SOS Beacon
+        // A beacon is unauthenticated and must never share a deduplication namespace with authenticated packets.
+        if (fromEndpointId == "sos-beacon") {
+            if (seenBeaconCache.isAlreadySeen(packet.messageId, isCritical = true)) {
+                Timber.d("MeshRouter: DROP duplicate beacon messageId=${packet.messageId}")
+                return@withContext RoutingResult.Drop
+            }
+
+            val parts = packet.messageId.split("-")
+            val idHash = if (parts.size >= 2) parts[1].toIntOrNull() ?: 0 else 0
+            val originHash = packet.originId.toIntOrNull() ?: idHash
+            val beaconDeviceHash = originHash
+
+            // Anti-flood: Per-source and global sliding-window rate limits
+            val now = clock()
+            val lastSeen = beaconLastSeenPerSource[beaconDeviceHash] ?: 0L
+            if (now - lastSeen < BEACON_MIN_INTERVAL_PER_SOURCE_MS) {
+                Timber.w("MeshRouter: Rate-limiting beacon flood from deviceHash $beaconDeviceHash")
+                return@withContext RoutingResult.Drop
+            }
+            while (globalBeaconTimestamps.peek()?.let { now - it > 60_000L } == true) {
+                globalBeaconTimestamps.poll()
+            }
+            if (globalBeaconTimestamps.size >= MAX_BEACONS_PER_MINUTE_GLOBAL) {
+                Timber.w("MeshRouter: Global beacon rate limit exceeded ($MAX_BEACONS_PER_MINUTE_GLOBAL/min)")
+                return@withContext RoutingResult.Drop
+            }
+
+            beaconLastSeenPerSource[beaconDeviceHash] = now
+            globalBeaconTimestamps.add(now)
+            seenBeaconCache.markSeen(packet.messageId)
+
+            // Prune expired records (> 10 minutes) and enforce hard bounds
+            unverifiedBeaconAlerts.removeAll { now - it.timestamp > 10 * 60 * 1_000L }
+            while (unverifiedBeaconAlerts.size >= MAX_UNVERIFIED_BEACONS) {
+                unverifiedBeaconAlerts.removeAt(0)
+            }
+            activeAuthenticatedSos.removeAll { now - it.timestamp > 10 * 60 * 1_000L }
+
+            // Matching rule: B matches E iff:
+            // (1) E carries beaconKey equal to B's triple (packet.messageId);
+            // (2) E's authenticated sender maps to B's deviceHash;
+            // (3) B's declared origin maps to the ID hash;
+            // (4) exactly 1 such E exists in the dedup window.
+            val matchingAuth = activeAuthenticatedSos.filter { auth ->
+                auth.beaconKey != null &&
+                    auth.beaconKey == packet.messageId &&
+                    com.meshlink.app.mesh.transport.SosBeaconCodec.crc32(auth.originId.toByteArray()) == beaconDeviceHash &&
+                    beaconDeviceHash == idHash
+            }
+
+            if (matchingAuth.size == 1) {
+                // S2 / S8: Linked to existing authenticated alert. No new alert created, no ACK, no forward.
+                Timber.i("MeshRouter: Beacon ${packet.messageId} linked to authenticated alert ${matchingAuth.first().messageId}")
+                return@withContext RoutingResult.Processed(localMessage = null, forwardTargets = emptyList())
+            }
+
+            // Unverified beacon alert (or ambiguous). Keep separate as an unverified alert.
+            unverifiedBeaconAlerts.add(
+                UnverifiedBeaconRecord(
+                    messageId = packet.messageId,
+                    deviceHash = beaconDeviceHash,
+                    timestamp = now
+                )
+            )
+
+            val unverifiedPacket = packet.copy(senderName = "Unverified Nearby SOS")
+            val localMessage = decryptAndPersist(unverifiedPacket)
+
+            // Invariants: A beacon NEVER generates an ACK, and NEVER forwards/floods to mesh peers.
+            return@withContext RoutingResult.Processed(
+                localMessage = localMessage,
+                forwardTargets = emptyList()
+            )
+        }
+
+        // PATH B: Authenticated / Standard Mesh Traffic
         // 1. Deduplication — drop packets we've already seen (loop prevention)
-        // NOTE: Relying strictly on messageId for dedup. A malicious node could pre-flood fake messageIds to suppress delivery of real messages later.
         val isCritical = packet.type == PacketType.SOS || packet.priority >= 10
         if (seenMessageCache.isAlreadySeen(packet.messageId, isCritical)) {
             Timber.d("MeshRouter: DROP duplicate messageId=${packet.messageId}")
@@ -127,6 +286,38 @@ class MeshRouter @Inject constructor(
             localMessage = decryptAndPersist(packet)
         }
 
+        // Correlation and merging for incoming authenticated mesh SOS
+        if (packet.type == PacketType.SOS) {
+            val beaconKey = try {
+                org.json.JSONObject(packet.content).optString("beaconKey").ifEmpty { null }
+            } catch (_: Exception) { null }
+
+            val originHash = com.meshlink.app.mesh.transport.SosBeaconCodec.crc32(packet.originId.toByteArray())
+            val authRecord = AuthenticatedSosRecord(
+                messageId = packet.messageId,
+                originId = packet.originId,
+                beaconKey = beaconKey,
+                timestamp = clock()
+            )
+            activeAuthenticatedSos.add(authRecord)
+
+            if (beaconKey != null) {
+                val candidateBeacons = unverifiedBeaconAlerts.filter { b ->
+                    b.messageId == beaconKey && b.deviceHash == originHash
+                }
+                val candidateAuthEvents = activeAuthenticatedSos.filter { a ->
+                    a.beaconKey == beaconKey && com.meshlink.app.mesh.transport.SosBeaconCodec.crc32(a.originId.toByteArray()) == originHash
+                }
+                // Only merge if exactly ONE beacon matches and exactly ONE auth event matches (unambiguous)
+                if (candidateBeacons.size == 1 && candidateAuthEvents.size == 1) {
+                    val matchingBeacon = candidateBeacons.first()
+                    Timber.i("MeshRouter: Merging unverified beacon ${matchingBeacon.messageId} into authenticated SOS ${packet.messageId}")
+                    messageRepository.deleteMessage(matchingBeacon.messageId)
+                    unverifiedBeaconAlerts.remove(matchingBeacon)
+                }
+            }
+        }
+
         // 4. Forward / flood
         val forwardTargets = mutableListOf<ForwardTarget>()
         if (needForward || isBroadcast) {
@@ -139,7 +330,9 @@ class MeshRouter @Inject constructor(
         }
 
         // 5. Generate ACK if we received a direct/routed message meant for us
-        if (isForMe && packet.type != PacketType.ACK && packet.type != PacketType.BROADCAST) {
+        // OR if we received an emergency SOS from another peer (peer receipt ACK)
+        val isSosFromPeer = packet.type == PacketType.SOS && packet.originId != myDeviceId
+        if ((isForMe && packet.type != PacketType.ACK && packet.type != PacketType.BROADCAST) || isSosFromPeer) {
             val ackPacket = MeshPacket(
                 senderId = myDeviceId,
                 receiverId = packet.originId,
@@ -150,7 +343,7 @@ class MeshRouter @Inject constructor(
                 finalDestId = packet.originId,
                 hopCount = 0,
                 maxHops = 10,
-                priority = 1
+                priority = if (packet.type == PacketType.SOS) 10 else 1
             )
             val nextHop = findNextHop(packet.originId, connectedPeers)
             if (nextHop != null) {
@@ -189,8 +382,14 @@ class MeshRouter @Inject constructor(
         val messageId         = UUID.randomUUID().toString()
         val localDisplayName  = userProfileManager.getDisplayName()
 
-        val directEndpoint = connectedPeers.entries
-            .firstOrNull { it.value == finalDestDeviceId }?.key
+        val useNearby = isNearbyActive
+        val useMeshtastic = isMeshtasticActive
+
+        val directEndpoint = if (useNearby) {
+            connectedPeers.entries.firstOrNull { it.value == finalDestDeviceId }?.key
+        } else {
+            null
+        }
 
         if (directEndpoint != null) {
             val sessionKey = sessionKeyStore.getSessionKey(directEndpoint)
@@ -229,7 +428,7 @@ class MeshRouter @Inject constructor(
                 seenMessageCache.markSeen(messageId)
                 return@withContext RoutingResult.Processed(
                     localMessage   = null,
-                    forwardTargets = listOf(ForwardTarget(directEndpoint, packet))
+                    forwardTargets = listOf(ForwardTarget(directEndpoint, packet, com.meshlink.app.mesh.transport.TransportType.NEARBY))
                 )
             }
         }
@@ -253,12 +452,20 @@ class MeshRouter @Inject constructor(
                 senderName   = localDisplayName
             )
 
-            val forwardTargets = buildForwardTargets(
-                packet         = packet,
-                fromEndpointId = null,       // no "from" for self-originated
-                connectedPeers = connectedPeers,
-                isForMe        = false
-            )
+            val forwardTargets = if (useNearby) {
+                buildForwardTargets(
+                    packet         = packet,
+                    fromEndpointId = null,       // no "from" for self-originated
+                    connectedPeers = connectedPeers,
+                    isForMe        = false
+                ).toMutableList()
+            } else {
+                mutableListOf()
+            }
+
+            if (useMeshtastic && forwardTargets.isEmpty()) {
+                forwardTargets.add(ForwardTarget("meshtastic", packet, com.meshlink.app.mesh.transport.TransportType.MESHTASTIC))
+            }
 
             val initialStatus = if (forwardTargets.isEmpty()) 0 else 1
 
@@ -280,7 +487,7 @@ class MeshRouter @Inject constructor(
             seenMessageCache.markSeen(messageId)
 
             if (forwardTargets.isEmpty()) {
-                // No connected peers — queue it
+                // No connected peers or alternative transport — queue it
                 enqueuePending(packet, finalDestDeviceId, timestamp)
                 return@withContext RoutingResult.Queued(messageId)
             }
@@ -304,6 +511,9 @@ class MeshRouter @Inject constructor(
         content: String,
         connectedPeers: Map<String, String>
     ): RoutingResult {
+        val useNearby = isNearbyActive
+        val useMeshtastic = isMeshtasticActive
+
         val messageId = UUID.randomUUID().toString()
         seenMessageCache.markSeen(messageId)
 
@@ -321,7 +531,13 @@ class MeshRouter @Inject constructor(
             senderName  = userProfileManager.getDisplayName()
         )
 
-        val targets = connectedPeers.keys.map { ep -> ForwardTarget(ep, packet) }
+        val targets = mutableListOf<ForwardTarget>()
+        if (useNearby) {
+            targets.addAll(connectedPeers.keys.map { ep -> ForwardTarget(ep, packet, com.meshlink.app.mesh.transport.TransportType.NEARBY) })
+        }
+        if (useMeshtastic) {
+            targets.add(ForwardTarget("meshtastic", packet, com.meshlink.app.mesh.transport.TransportType.MESHTASTIC))
+        }
         return RoutingResult.Processed(localMessage = null, forwardTargets = targets)
     }
 
@@ -329,7 +545,13 @@ class MeshRouter @Inject constructor(
         content: String,
         connectedPeers: Map<String, String>
     ): RoutingResult {
-        val messageId = UUID.randomUUID().toString()
+        val useNearby = isNearbyActive
+        val useMeshtastic = isMeshtasticActive
+
+        val parsedId = try {
+            org.json.JSONObject(content).optString("uuid").ifEmpty { null }
+        } catch (_: Exception) { null }
+        val messageId = parsedId ?: UUID.randomUUID().toString()
         seenMessageCache.markSeen(messageId)
 
         val packet = MeshPacket(
@@ -359,9 +581,19 @@ class MeshRouter @Inject constructor(
             status     = 1,
             isSos      = true
         )
-        kotlinx.coroutines.runBlocking { messageRepository.insertMessage(msg) }
+        kotlinx.coroutines.runBlocking {
+            messageRepository.insertMessage(msg)
+            // Enqueue into pending store-and-forward queue for offline persistence across app/peer restarts
+            enqueuePending(packet, MeshPacket.BROADCAST_DEST, packet.timestamp)
+        }
 
-        val targets = connectedPeers.keys.map { ep -> ForwardTarget(ep, packet) }
+        val targets = mutableListOf<ForwardTarget>()
+        if (useNearby) {
+            targets.addAll(connectedPeers.keys.map { ep -> ForwardTarget(ep, packet, com.meshlink.app.mesh.transport.TransportType.NEARBY) })
+        }
+        if (useMeshtastic) {
+            targets.add(ForwardTarget("meshtastic", packet, com.meshlink.app.mesh.transport.TransportType.MESHTASTIC))
+        }
         return RoutingResult.Processed(localMessage = null, forwardTargets = targets)
     }
 
@@ -536,6 +768,11 @@ class MeshRouter @Inject constructor(
             PacketType.ACK -> {
                 // The content is the original messageId in plaintext
                 messageRepository.updateMessageStatus(packet.content, 2)
+                // Clean up from pending message queue if it was an enqueued message / SOS
+                val allPending = pendingMessageRepository.getAllPending()
+                allPending.firstOrNull { it.packetJson.contains(packet.content) }?.let {
+                    pendingMessageRepository.remove(it.id)
+                }
                 return null
             }
 
@@ -593,22 +830,54 @@ class MeshRouter @Inject constructor(
         messageRepository.insertMessage(msg)
 
         // Attempt to extract GPS coordinates from payload
-        val contentStr = String(plaintext, Charsets.UTF_8)
-        val mapsUrlPrefix = "https://maps.google.com/?q="
-        val urlIndex = contentStr.indexOf(mapsUrlPrefix)
-        if (urlIndex != -1) {
+        val contentStr = String(plaintext, Charsets.UTF_8).trim()
+        var extractedLat: Double? = null
+        var extractedLon: Double? = null
+
+        if (contentStr.startsWith("{") && contentStr.endsWith("}")) {
             try {
-                val coords = contentStr.substring(urlIndex + mapsUrlPrefix.length).split(" ")[0].split(",")
-                if (coords.size >= 2) {
-                    val lat = coords[0].trim().toDoubleOrNull()
-                    val lon = coords[1].trim().toDoubleOrNull()
-                    if (lat != null && lon != null) {
-                        deviceRepository.updateLocation(packet.originId, lat, lon)
-                        Timber.i("MeshRouter: extracted location for ${packet.originId} -> $lat, $lon")
-                    }
+                val json = org.json.JSONObject(contentStr)
+                if (json.has("lat") || json.has("latitude")) {
+                    extractedLat = if (json.has("lat")) json.optDouble("lat", Double.NaN) else json.optDouble("latitude", Double.NaN)
+                    if (extractedLat.isNaN()) extractedLat = null
+                }
+                if (json.has("lon") || json.has("longitude")) {
+                    extractedLon = if (json.has("lon")) json.optDouble("lon", Double.NaN) else json.optDouble("longitude", Double.NaN)
+                    if (extractedLon.isNaN()) extractedLon = null
                 }
             } catch (e: Exception) {
-                Timber.w(e, "MeshRouter: failed to parse location coordinates")
+                Timber.w(e, "MeshRouter: failed to parse JSON payload for location")
+            }
+        }
+
+        if (extractedLat == null || extractedLon == null) {
+            val mapsUrlPrefix = "https://maps.google.com/?q="
+            val urlIndex = contentStr.indexOf(mapsUrlPrefix)
+            if (urlIndex != -1) {
+                try {
+                    val coords = contentStr.substring(urlIndex + mapsUrlPrefix.length).split(" ")[0].split(",")
+                    if (coords.size >= 2) {
+                        extractedLat = coords[0].trim().toDoubleOrNull()
+                        extractedLon = coords[1].trim().toDoubleOrNull()
+                    }
+                } catch (e: Exception) {
+                    Timber.w(e, "MeshRouter: failed to parse location coordinates from URL")
+                }
+            }
+        }
+
+        if (extractedLat != null && extractedLon != null) {
+            val isValidLat = !extractedLat.isNaN() && !extractedLat.isInfinite() && extractedLat in -90.0..90.0
+            val isValidLon = !extractedLon.isNaN() && !extractedLon.isInfinite() && extractedLon in -180.0..180.0
+            val isNullIsland = extractedLat == 0.0 && extractedLon == 0.0
+
+            if (isValidLat && isValidLon && !isNullIsland) {
+                deviceRepository.updateLocation(packet.originId, extractedLat, extractedLon)
+                Timber.i("MeshRouter: extracted valid location for ${packet.originId} -> $extractedLat, $extractedLon")
+            } else if (isNullIsland) {
+                Timber.i("MeshRouter: ignored placeholder 0.0, 0.0 location for ${packet.originId}")
+            } else {
+                Timber.w("MeshRouter: rejected out-of-bounds location for ${packet.originId} -> $extractedLat, $extractedLon")
             }
         }
 
@@ -623,15 +892,19 @@ class MeshRouter @Inject constructor(
         if (msg.isSos) {
             val sender = packet.senderName.ifEmpty { "Unknown Peer" }
             val text = String(plaintext, Charsets.UTF_8)
-            val notification = android.app.Notification.Builder(context, "sos_channel")
-                .setSmallIcon(android.R.drawable.ic_dialog_alert)
-                .setContentTitle("EMERGENCY SOS: $sender")
-                .setContentText(text)
-                .setStyle(android.app.Notification.BigTextStyle().bigText(text))
-                .setCategory(android.app.Notification.CATEGORY_ALARM)
-                .setAutoCancel(true)
-                .build()
-            notificationManager.notify(packet.originId.hashCode(), notification)
+            try {
+                val notification = android.app.Notification.Builder(context, "sos_channel")
+                    .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                    .setContentTitle("EMERGENCY SOS: $sender")
+                    .setContentText(text)
+                    .setStyle(android.app.Notification.BigTextStyle().bigText(text))
+                    .setCategory(android.app.Notification.CATEGORY_ALARM)
+                    .setAutoCancel(true)
+                    .build()
+                notificationManager.notify(packet.originId.hashCode(), notification)
+            } catch (t: Throwable) {
+                Timber.w(t, "MeshRouter: unable to post system notification")
+            }
         }
 
         return msg
@@ -735,7 +1008,8 @@ sealed class RoutingResult {
 
 data class ForwardTarget(
     val endpointId: String,
-    val packet: MeshPacket
+    val packet: MeshPacket,
+    val transportType: com.meshlink.app.mesh.transport.TransportType = com.meshlink.app.mesh.transport.TransportType.NEARBY
 )
 
 

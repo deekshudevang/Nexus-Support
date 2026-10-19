@@ -1,0 +1,30 @@
+--------- beginning of main
+10-16 21:39:57.537 D/InsetsController( 8231): show(ime(), fromIme=false)
+10-16 21:39:57.538 I/ImeTracker( 8231): com.meshlink.app.debug:c6faa3ae: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT_BY_INSETS_API fromUser false
+--------- beginning of system
+10-16 21:39:57.538 D/InsetsController( 8231): Setting requestedVisibleTypes to -1 (was -9)
+10-16 21:39:57.544 I/AssistStructure( 8231): Flattened final assist data: 524 bytes, containing 1 windows, 3 views
+10-16 21:39:57.559 I/ImeTracker( 8231): com.meshlink.app.debug:f21f5a11: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+10-16 21:39:57.559 D/InsetsController( 8231): show(ime(), fromIme=false)
+10-16 21:39:57.559 I/ImeTracker( 8231): com.meshlink.app.debug:f21f5a11: onCancelled at PHASE_CLIENT_REPORT_REQUESTED_VISIBLE_TYPES
+10-16 21:39:57.621 D/Autofill Status( 8231): Autofill popup isn't shown because autofill is not available.
+10-16 21:39:57.621 D/Autofill Status( 8231): 
+10-16 21:39:57.621 D/Autofill Status( 8231): Did you set up autofill?
+10-16 21:39:57.621 D/Autofill Status( 8231): 1. Go to Settings > System > Languages&input > Advanced > Autofill Service
+10-16 21:39:57.621 D/Autofill Status( 8231): 2. Pick a service
+10-16 21:39:57.621 D/Autofill Status( 8231): 
+10-16 21:39:57.621 D/Autofill Status( 8231): Did you add an account?
+10-16 21:39:57.621 D/Autofill Status( 8231): 1. Go to Settings > System > Languages&input > Advanced
+10-16 21:39:57.621 D/Autofill Status( 8231): 2. Click on the settings icon next to the Autofill Service
+10-16 21:39:57.621 D/Autofill Status( 8231): 3. Add your account
+10-16 21:39:57.906 I/ImeTracker( 8231): com.meshlink.app.debug:c6faa3ae: onShown
+10-16 21:40:10.989 I/native  ( 8231): I0000 00:00:1792167010.988993    8293 llm_inference_engine.cc:354] Session config: num_output_candidates: 1, topk: 40, temperature: 0.8, benchmark_info.input_token_limit: 0, benchmark_info.wait_for_input_processing: 0, has_prompt_templates: 0
+10-16 21:40:12.183 I/native  ( 8231): I0000 00:00:1792167012.183823   12608 jni_util.cc:43] GetEnv: not attached
+10-16 21:40:12.247 I/native  ( 8231): I0000 00:00:1792167012.247255   12606 jni_util.cc:43] GetEnv: not attached
+10-16 21:40:12.372 I/native  ( 8231): I0000 00:00:1792167012.372883   12601 jni_util.cc:43] GetEnv: not attached
+10-16 21:40:12.512 I/native  ( 8231): I0000 00:00:1792167012.512310   12605 jni_util.cc:43] GetEnv: not attached
+10-16 21:40:12.572 I/native  ( 8231): I0000 00:00:1792167012.572206   12604 jni_util.cc:43] GetEnv: not attached
+10-16 21:40:12.574 E/OfflineAi( 8231): Error initiating streaming generation
+10-16 21:40:12.574 E/OfflineAi( 8231): kotlinx.coroutines.JobCancellationException: ProducerCoroutine was cancelled; job=ProducerCoroutine{Cancelling}@618798a
+10-16 21:40:39.882 I/NearbyService$batteryReceiver( 8231): Charging GÇö resuming scanning
+10-16 21:40:39.882 D/AdaptiveScanController( 8231): AdaptiveScan: user active GåÆ reset to FAST mode

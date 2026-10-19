@@ -33,4 +33,13 @@ class MessageRepositoryImpl @Inject constructor(
         messageDao.updateStatus(messageId, status)
     }
 
+    override suspend fun deleteMessage(messageId: String) {
+        messageDao.deleteById(messageId)
+    }
+
+    override suspend fun getAllMessages(): List<Message> =
+        messageDao.getAllMessages().map { it.toDomain() }
+
+    override suspend fun messageExists(messageId: String): Boolean =
+        messageDao.existsById(messageId)
 }

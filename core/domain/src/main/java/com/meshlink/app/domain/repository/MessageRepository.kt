@@ -8,4 +8,7 @@ interface MessageRepository {
     fun getLatestMessagePerConversation(): Flow<List<Message>>
     suspend fun insertMessage(message: Message)
     suspend fun updateMessageStatus(messageId: String, status: Int)
+    suspend fun deleteMessage(messageId: String)
+    suspend fun getAllMessages(): List<Message>
+    suspend fun messageExists(messageId: String): Boolean = false
 }

@@ -18,6 +18,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 protobuf {
@@ -39,7 +43,7 @@ dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:crypto"))   // Phase 3: encryption & identity
 
-    implementation(libs.play.services.nearby)
+    api(libs.play.services.nearby)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
@@ -47,6 +51,11 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.timber)
 
+    testImplementation(project(":core:data"))
+    testImplementation(libs.room.runtime)
+    testImplementation(libs.room.testing)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)

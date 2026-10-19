@@ -94,6 +94,11 @@ interface NearbyRepository {
     fun onUserActive()
 
     /**
+     * Updates whether battery optimization (e.g. pausing scan when battery is critically low) is enabled.
+     */
+    fun setBatteryOptimizationEnabled(enabled: Boolean) {}
+
+    /**
      * Send an emergency broadcast to ALL currently connected peers and their reachable neighbors.
      * The message is delivered locally and flooded with [MeshPacket.PacketType.BROADCAST].
      *
@@ -111,6 +116,18 @@ interface NearbyRepository {
      * Stop broadcasting SOS emergency beacons and send an emergency cancellation packet if needed.
      */
     fun cancelSos()
+
+    /**
+     * Checks all currently connected or authenticated peers for activity.
+     * Peers inactive for longer than [timeoutMs] are disconnected and their routes invalidated.
+     * Returns list of stale endpointIds that were disconnected.
+     */
+    fun checkStalePeers(now: Long = System.currentTimeMillis(), timeoutMs: Long = 90_000L): List<String> = emptyList()
+
+    /**
+     * Prunes old DISCONNECTED entries from [connectionStates] to prevent memory growth.
+     */
+    fun pruneDisconnectedEntries(now: Long = System.currentTimeMillis(), maxAgeMs: Long = 300_000L) {}
 
     /** Clean up resources and coroutines */
     fun cleanup()

@@ -7,10 +7,10 @@ import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+import com.meshlink.app.crypto.storage.TinkSecureStorage
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
+import java.io.File
 import java.security.KeyFactory
 import java.security.KeyPair
 import java.security.KeyPairGenerator
@@ -41,7 +41,9 @@ class ProductionKeyManager @Inject constructor(
         private const val KEYSTORE_ALIAS = "meshlink_identity_ec_p256"
     }
 
-    private val encryptedPrefs: SharedPreferences by lazy { createEncryptedPrefs() }
+    private val secureStorage: TinkSecureStorage by lazy {
+        TinkSecureStorage(context, "meshlink_identity_secure_v2", "meshlink_identity_master_key")
+    }
 
     @Volatile
     private var cachedKeyPair: KeyPair? = null
@@ -111,8 +113,30 @@ class ProductionKeyManager @Inject constructor(
     }
 
     private fun loadLegacySoftwareKeys(): KeyPair? {
-        val storedPriv = encryptedPrefs.getString(KEY_PRIVATE, null)
-        val storedPub  = encryptedPrefs.getString(KEY_PUBLIC,  null)
+        // 1. Try reading from TinkSecureStorage first
+        var storedPriv = secureStorage.getString(KEY_PRIVATE)
+        var storedPub = secureStorage.getString(KEY_PUBLIC)
+
+        // 2. Migration: check if legacy SharedPreferences file exists
+        if (storedPriv == null || storedPub == null) {
+            val legacyFile = File(context.applicationInfo.dataDir, "shared_prefs/$PREFS_FILE.xml")
+            if (legacyFile.exists()) {
+                try {
+                    val legacyPrefs = context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
+                    val priv = legacyPrefs.getString(KEY_PRIVATE, null)
+                    val pub = legacyPrefs.getString(KEY_PUBLIC, null)
+                    if (priv != null && pub != null) {
+                        Timber.i("ProductionKeyManager: migrating legacy identity software keys to TinkSecureStorage")
+                        secureStorage.putString(KEY_PRIVATE, priv)
+                        secureStorage.putString(KEY_PUBLIC, pub)
+                        storedPriv = priv
+                        storedPub = pub
+                    }
+                } catch (e: Exception) {
+                    Timber.w(e, "ProductionKeyManager: failed to read legacy identity prefs during migration")
+                }
+            }
+        }
 
         if (storedPriv != null && storedPub != null) {
             return try {
@@ -176,33 +200,6 @@ class ProductionKeyManager @Inject constructor(
             } else {
                 throw e
             }
-        }
-    }
-
-    private fun createEncryptedPrefs(): SharedPreferences {
-        return try {
-            val masterKey = MasterKey.Builder(context)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            EncryptedSharedPreferences.create(
-                context,
-                PREFS_FILE,
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
-        } catch (e: Exception) {
-            context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE).edit().clear().apply()
-            val masterKey = MasterKey.Builder(context)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            EncryptedSharedPreferences.create(
-                context,
-                PREFS_FILE,
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
         }
     }
 

@@ -30,9 +30,10 @@ class SessionKeyStore @Inject constructor() {
     private val recentMessageIds: MutableSet<String> = Collections.synchronizedSet(
         object : LinkedHashSet<String>() {
             override fun add(element: String): Boolean {
+                if (contains(element)) return false
                 if (size >= MAX_MESSAGE_IDS) {
                     // Evict oldest entry
-                    iterator().apply { next(); remove() }
+                    iterator().apply { if (hasNext()) { next(); remove() } }
                 }
                 return super.add(element)
             }

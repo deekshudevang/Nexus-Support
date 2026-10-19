@@ -83,3 +83,31 @@ scratch/
 # Node
 node_modules/
 
+# Python Virtual Environments & Cache
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# AI Model Weights, Checkpoints & Runs (Zero Weights in Git)
+checkpoints/
+runs/
+models/
+*.safetensors
+*.bin
+*.task
+*.litertlm
+*.pt
+*.pth
+*.onnx
+
+# AI Secrets & Tokens
+.env
+.env.*
+!.env.example
+hf_token*
+
+
+# Stray dumps & tools
+temp_head.kt
+.qodo/

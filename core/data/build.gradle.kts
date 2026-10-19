@@ -24,7 +24,7 @@ android {
     }
 
     sourceSets {
-        getByName("test").assets.srcDirs("/schemas")
+        getByName("test").assets.srcDirs("$projectDir/schemas")
     }
 
     buildFeatures {
@@ -39,6 +39,7 @@ ksp {
 
 dependencies {
     implementation(project(":core:domain"))
+    implementation(project(":core:crypto"))
 
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
@@ -54,8 +55,11 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.gson)
     implementation(libs.sqlcipher.android)
-    implementation(libs.androidx.security.crypto)
+    implementation(libs.tink.android)
+    api(libs.androidx.datastore.preferences)
 
+    testImplementation(libs.junit)
+    testImplementation(libs.turbine)
     testImplementation(libs.robolectric)
     testImplementation(libs.room.testing)
     testImplementation(libs.androidx.junit)
