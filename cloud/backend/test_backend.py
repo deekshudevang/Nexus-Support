@@ -12,7 +12,7 @@ os.environ["GATEWAY_API_KEYS"] = "gw_key_valid_1,gw_key_valid_2"
 os.environ["OPERATOR_TOKENS"] = "op_token_valid_1,op_token_valid_2"
 os.environ["REVOKED_CREDENTIALS"] = "gw_revoked_key,op_revoked_token"
 
-from main import app, init_db, get_db, generate_ws_ticket, _ws_tickets
+from main import app, init_db, get_db, generate_ws_ticket, _ws_tickets, validate_production_configuration
 
 @pytest.fixture(autouse=True)
 def setup_isolated_db():
@@ -31,6 +31,41 @@ def setup_isolated_db():
 @pytest.fixture
 def client():
     return TestClient(app)
+
+# ── Production Configuration Guardrails ──────────────────────────────────────
+def test_production_configuration_accepts_explicit_secure_values():
+    validate_production_configuration(
+        "production",
+        {"fresh-gateway-key"},
+        {"fresh-operator-token"},
+        ["https://dispatch.example.org"],
+    )
+
+
+@pytest.mark.parametrize(
+    ("gateway_keys", "operator_tokens", "origins"),
+    [
+        ({"meshlink_gw_dev_secret"}, {"fresh-operator-token"}, ["https://dispatch.example.org"]),
+        ({"fresh-gateway-key"}, {"meshlink_op_dev_secret"}, ["https://dispatch.example.org"]),
+        ({"fresh-gateway-key"}, {"fresh-operator-token"}, ["http://dispatch.example.org"]),
+        ({"fresh-gateway-key"}, {"fresh-operator-token"}, ["https://localhost:8443"]),
+        ({"fresh-gateway-key"}, {"fresh-operator-token"}, ["*"]),
+        ({"fresh-gateway-key"}, {"fresh-operator-token"}, []),
+    ],
+)
+def test_production_configuration_rejects_unsafe_values(gateway_keys, operator_tokens, origins):
+    with pytest.raises(RuntimeError, match="Unsafe production configuration"):
+        validate_production_configuration("production", gateway_keys, operator_tokens, origins)
+
+
+def test_development_configuration_keeps_local_defaults_available():
+    validate_production_configuration(
+        "development",
+        {"meshlink_gw_dev_secret"},
+        {"meshlink_op_dev_secret"},
+        ["http://localhost:5173"],
+    )
+
 
 # ── Health Endpoint ──────────────────────────────────────────────────────────
 def test_health_endpoint(client):
