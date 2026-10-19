@@ -24,7 +24,7 @@ android {
     }
 
     sourceSets {
-        getByName("test").assets.srcDirs("/schemas")
+        getByName("test").assets.srcDirs("$projectDir/schemas")
     }
 
     buildFeatures {
