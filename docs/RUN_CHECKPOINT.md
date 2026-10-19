@@ -165,3 +165,26 @@
 - Blockers / decisions needed: None.
 - Not proven by this phase: Execution on real physical 16 KB page-size hardware (tracked in register as IMPLEMENTED-PENDING-DEVICE).
 - Device/CI verification still required: Boot and run on Android 15+ 16 KB page-size emulator/device (in register).
+
+---
+
+## Phase 7: Cloud backend (FastAPI)  |  Status: VERIFIED (Code & Tests) / IMPLEMENTED-UNEXECUTED (Docker & Production TLS)
+- Claims verified:
+  - CORS wildcard `allow_origins=["*"]`: CONFIRMED (replaced with environment-configured allowlist via `CORS_ORIGINS`).
+  - Sensitive endpoints lack authentication: CONFIRMED (implemented strict role-based auth: `X-Gateway-Key` for write endpoints `POST /api/sync/sos` and `POST /api/sync/nodes`, `Authorization: Bearer <token>` for read endpoints `GET /api/sos` and `GET /api/nodes`).
+  - Role separation: CONFIRMED and enforced (Gateway keys cannot read operator endpoints; Operator tokens cannot write gateway sync endpoints; revoked credentials rejected).
+  - WebSocket alerts endpoint `/ws/alerts`: CONFIRMED (implemented authenticated WebSocket with single-use ticket handshake and time-limited initial auth message, origin header validation against allowlist, connection cap of 50, and max message size of 16 KB).
+  - Real-time SOS alert broadcast: CONFIRMED (SOS ingestion broadcasts payload to all authenticated dashboard WebSockets in real time).
+  - SQLite WAL mode and indexes: CONFIRMED (`PRAGMA journal_mode=WAL;`, `PRAGMA busy_timeout=5000;`, indexes on `sos_packets(timestamp DESC)`, `sos_packets(severity)`, and `node_status(timestamp DESC)`).
+  - Unauthenticated `/health` endpoint: CONFIRMED (returns status and timestamp with zero secrets).
+- Candidate deletions:
+  - `cloud/backend/__pycache__/main.cpython-314.pyc` (executed: deleted in commit `18427ff`).
+- Commits:
+  - `18427ff chore(backend): remove tracked python cache artifact`
+  - `609986d feat(backend): implement role-based auth, authenticated WebSocket alerts, WAL SQLite, and tests`
+- Commands run:
+  - `py -3 -m pytest cloud/backend/test_backend.py`
+- Results: 20 passed in 1.15s (100% tests passing, 0 failures, 0 skipped).
+- Blockers / decisions needed: None.
+- Not proven by this phase: Production WSS TLS termination (requires real domain/reverse proxy with TLS cert; tracked in register as IMPLEMENTED-UNEXECUTED). Local Docker build execution (Docker daemon not running locally; tracked in register as IMPLEMENTED-UNEXECUTED).
+- Device/CI verification still required: Production WSS TLS termination (logged in Pending verification register).
