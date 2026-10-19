@@ -188,3 +188,29 @@
 - Blockers / decisions needed: None.
 - Not proven by this phase: Production WSS TLS termination (requires real domain/reverse proxy with TLS cert; tracked in register as IMPLEMENTED-UNEXECUTED). Local Docker build execution (Docker daemon not running locally; tracked in register as IMPLEMENTED-UNEXECUTED).
 - Device/CI verification still required: Production WSS TLS termination (logged in Pending verification register).
+
+---
+
+## Phase 8: Dashboard (Vite/React)  |  Status: VERIFIED
+- Claims verified:
+  - Hardcoded `http://localhost:8000`: CONFIRMED (replaced with configurable `import.meta.env.VITE_API_URL` and `VITE_WS_URL` in `src/api.js`; created `.env.example`).
+  - Secret handling: CONFIRMED (zero secrets in `VITE_*` env vars or client bundle; operator authentication performed at runtime with credentials held in memory/sessionStorage only; `dist/` verified via regex grep).
+  - Outdated Vite 4: CONFIRMED (upgraded from Vite 4.4.5 to Vite 5.4.14 with Vitest 2.1.8; production build successful).
+  - Authenticated WebSocket stream with ticket handshake: CONFIRMED (implements single-use ticket handshake with automatic reconnect backoff and fallback polling to `/api/sos`).
+  - Incident filters, search, hop count, and audio alerts: CONFIRMED (implemented search, severity tabs, emergency type badges, hop-count pill, Web Audio API chime for severity >= 8, and browser notifications).
+  - UI states: CONFIRMED (unauthorized login modal, loading spinner, error banner, empty state, and map view).
+- Candidate deletions:
+  - `cloud/frontend/src/test/setup.js` (executed: replaced with `setup.jsx`).
+- Commits:
+  - `21f5082 feat(dashboard): upgrade to Vite 5 with tactical dark theme, auth terminal, live alerts, and tests`
+- Commands run:
+  - `npm run test` (in `cloud/frontend`)
+  - `npm run build` (in `cloud/frontend`)
+  - `Select-String -Path "cloud\frontend\dist\assets\*.js" -Pattern "meshlink_gw_dev_secret","meshlink_op_dev_secret","gw_key_valid","op_token_valid"`
+- Results:
+  - Vitest: 6/6 tests passed in 207ms (100% tests passing, 0 failures, 0 skipped).
+  - Vite build: successfully produced `dist/` bundle (index.html: 0.68 kB, css: 15.61 kB, js: 319.24 kB).
+  - Grep verification: 0 secrets found in production assets.
+- Blockers / decisions needed: None.
+- Not proven by this phase: Physical audio output fidelity across diverse hardware browsers (verified via Web Audio API unit mocks).
+- Device/CI verification still required: None for local dashboard logic.
