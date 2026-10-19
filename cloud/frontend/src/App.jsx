@@ -70,7 +70,7 @@ export default function App() {
 
   useEffect(() => {
     soundEnabledRef.current = soundEnabled;
-  }, []);
+  }, [soundEnabled]);
 
   // WebSocket Connection State
   const [wsStatus, setWsStatus] = useState('DISCONNECTED'); // CONNECTED, RECONNECTING, POLLING, DISCONNECTED
@@ -263,7 +263,7 @@ export default function App() {
           connectWebSocket(token);
         }, 5000);
       });
-  }, [soundEnabled]);
+  }, []);
 
   // Main lifecycle trigger
   useEffect(() => {
