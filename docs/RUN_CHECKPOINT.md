@@ -99,23 +99,24 @@
 
 ## Phase 4: Meshtastic / LoRa transport  |  Status: IMPLEMENTED-PENDING-DEVICE
 - Claims verified:
-  - `MeshtasticTransport` bound in `NearbyModule` but unrouted by `NearbyRepositoryImpl` and `MeshRouter`: CONFIRMED (neither routing engine nor repo used Meshtastic).
-  - Official Meshtastic BLE characteristic UUIDs verified against official docs:
-    - Service: `6ba1b218-15a8-461f-9fa8-5dcae273eafd` (CONFIRMED)
-    - ToRadio: `f75c76d2-129e-4dad-a1dd-7866124401e7` (CONFIRMED; audit speculation about "...d6" is WRONG)
-    - FromRadio: `2c55e69e-4993-11ed-b878-0242ac120002` (CONFIRMED)
-    - FromNum: `ed9da18c-a800-4f66-a670-aa7547e34453` (CONFIRMED)
-  - API 33+ `writeCharacteristic` and legacy backwards compatibility: CONFIRMED and implemented.
+  - `MeshtasticTransport` bound in `NearbyModule` but unrouted by `NearbyRepositoryImpl` and `MeshRouter`: CONFIRMED (previously inert; now integrated into `MeshRouter` and `NearbyRepositoryImpl` as active parallel transport).
+  - BLE Characteristic UUIDs audit claim: PARTIAL / WRONG on ToRadio.
+    - Verified against official Meshtastic BLE documentation:
+      - Service: `6ba1b218-15a8-461f-9fa8-5dcae273eafd` (CONFIRMED)
+      - ToRadio: `f75c76d2-129e-4dad-a1dd-7866124401e7` (CONFIRMED; audit recommendation to change to `...d6` was WRONG)
+      - FromRadio: `2c55e69e-4993-11ed-b878-0242ac120002` (CONFIRMED)
+      - FromNum: `ed9da18c-a800-4f66-a670-aa7547e34453` (CONFIRMED)
+  - API 33+ GATT write methods: CONFIRMED (implemented `writeCharacteristic(char, value, writeType)` and `writeDescriptorCompat` with API 33+ `BluetoothStatusCodes` and backwards-compatible legacy fallback for API < 33).
   - Lifecycle, scanning, MTU negotiation (512), bonding, exponential backoff reconnect: CONFIRMED and implemented.
   - `MeshTransport` abstraction implemented and unified with `MeshRouter`: CONFIRMED.
-  - Multi-transport parallel broadcast/SOS and fallback routing: CONFIRMED and unit-tested.
+  - Multi-transport parallel broadcast/SOS and fallback routing driven by Settings toggles: CONFIRMED and unit-tested.
 - Candidate deletions: None.
 - Commits:
   - `b4ac384 feat(mesh): implement MeshTransport abstraction and Meshtastic BLE lifecycle with settings routing`
 - Commands run:
+  - `.\gradlew.bat :core:mesh:testDebugUnitTest --tests "com.meshlink.app.mesh.transport.MeshTransportRoutingTest"`
   - `.\gradlew.bat :core:mesh:testDebugUnitTest`
-  - `.\gradlew.bat :app:testDebugUnitTest`
-- Results: BUILD SUCCESSFUL (All unit tests passing, fake transport routing verified for broadcast, SOS, and fallback unicast).
-- Blockers / decisions needed: None.
+- Results: 6/6 tests passing in `MeshTransportRoutingTest`, 98/98 tests passing in `:core:mesh` (0 failures, 0 errors, 0 skipped).
+- Blockers / decisions needed: None for routing logic.
 - Not proven by this phase: Real physical LoRa RF packet transmission/reception, hardware BLE pairing with physical Meshtastic nodes.
 - Device/CI verification still required: Physical Meshtastic LoRa node BLE connection and RF transmission (logged in Pending verification register).
