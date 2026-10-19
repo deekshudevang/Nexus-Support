@@ -7,6 +7,7 @@ import secrets
 import sqlite3
 import time
 from typing import Dict, List, Optional, Set
+from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -58,10 +59,13 @@ def validate_production_configuration(
             "Unsafe production configuration: set explicit non-development gateway and operator credentials."
         )
 
-    local_origins = {"http://localhost", "http://127.0.0.1", "http://localhost:5173",
-                     "http://localhost:3000", "http://127.0.0.1:5173"}
     normalized_origins = {origin.strip().rstrip("/") for origin in allowed_origins if origin.strip()}
-    if not normalized_origins or "*" in normalized_origins or normalized_origins.intersection(local_origins):
+    unsafe_origin = any(
+        urlparse(origin).scheme != "https"
+        or urlparse(origin).hostname in {"localhost", "127.0.0.1", "::1"}
+        for origin in normalized_origins
+    )
+    if not normalized_origins or "*" in normalized_origins or unsafe_origin:
         raise RuntimeError(
             "Unsafe production configuration: set an explicit HTTPS CORS origin allow-list without localhost or wildcard origins."
         )
