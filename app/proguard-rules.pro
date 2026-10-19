@@ -28,9 +28,12 @@
     @androidx.room.Delete <methods>;
 }
 
-# ── SQLCipher ─────────────────────────────────────────────────────────────────
+# ── SQLCipher (Legacy & net.zetetic:sqlcipher-android) ────────────────────────
+-keep class net.zetetic.** { *; }
+-keep class net.zetetic.database.** { *; }
 -keep class net.sqlcipher.** { *; }
 -keep class net.sqlcipher.database.** { *; }
+-dontwarn net.zetetic.**
 -dontwarn net.sqlcipher.**
 
 # ── Retrofit / Gson ───────────────────────────────────────────────────────────
@@ -101,3 +104,20 @@
 -dontwarn autovalue.shaded.**
 -dontwarn com.google.auto.value.**
 -dontwarn javax.annotation.processing.**
+
+# ── Google Tink ───────────────────────────────────────────────────────────────
+-keep class com.google.crypto.tink.** { *; }
+-dontwarn com.google.crypto.tink.**
+
+# ── Kotlinx Serialization ─────────────────────────────────────────────────────
+-keepattributes *Annotation*,InnerClasses
+-dontnote kotlinx.serialization.SerializationKt
+-keepclassmembers class * {
+    *** Companion;
+}
+-keepclasseswithmembers class * {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keep,allowobfuscation,allowshrinking class * {
+    <init>(...);
+}

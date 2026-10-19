@@ -39,6 +39,7 @@ ksp {
 
 dependencies {
     implementation(project(":core:domain"))
+    implementation(project(":core:crypto"))
 
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
@@ -54,7 +55,7 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.gson)
     implementation(libs.sqlcipher.android)
-    implementation(libs.androidx.security.crypto)
+    implementation(libs.tink.android)
     implementation(libs.androidx.datastore.preferences)
 
     testImplementation(libs.junit)
