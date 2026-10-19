@@ -401,7 +401,7 @@ export default function App() {
           )}
         </div>
 
-        <div style={styles.filterGroup}>
+        <div className="severity-filters" style={styles.filterGroup}>
           <span style={styles.filterLabel}>SEVERITY:</span>
           {['ALL', 'CRITICAL', 'HIGH', 'LOW'].map((filter) => (
             <button
@@ -449,7 +449,16 @@ export default function App() {
                 <div
                   key={packet.uuid}
                   data-testid="sos-card"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Show map location for ${packet.emergencyType || 'emergency'} from ${packet.senderName || 'unknown sender'}`}
                   onClick={() => setSelectedCoords([packet.latitude, packet.longitude])}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setSelectedCoords([packet.latitude, packet.longitude]);
+                    }
+                  }}
                   style={{ ...styles.card, borderLeftColor: borderCol }}
                 >
                   <div style={styles.cardHeaderRow}>
