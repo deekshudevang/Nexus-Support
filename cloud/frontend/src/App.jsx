@@ -66,6 +66,11 @@ export default function App() {
   const [severityFilter, setSeverityFilter] = useState('ALL'); // ALL, CRITICAL (>=8), HIGH (>=5), LOW (<5)
   const [selectedCoords, setSelectedCoords] = useState(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const soundEnabledRef = useRef(soundEnabled);
+
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+  }, []);
 
   // WebSocket Connection State
   const [wsStatus, setWsStatus] = useState('DISCONNECTED'); // CONNECTED, RECONNECTING, POLLING, DISCONNECTED
@@ -86,11 +91,22 @@ export default function App() {
     setSosPackets([]);
     setNodes([]);
     if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.onerror = null;
+      wsRef.current.onmessage = null;
+      wsRef.current.onopen = null;
       wsRef.current.close();
       wsRef.current = null;
     }
-    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-    if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    setWsStatus('DISCONNECTED');
   };
 
   // Login handler
@@ -152,6 +168,9 @@ export default function App() {
 
     if (wsRef.current) {
       try {
+        // Prevent an intentional replacement from triggering the old socket's
+        // reconnect handler.
+        wsRef.current.onclose = null;
         wsRef.current.close();
       } catch (e) {}
       wsRef.current = null;
@@ -192,7 +211,7 @@ export default function App() {
               });
 
               // Trigger alert sound and notification
-              if (soundEnabled && newPacket.severity >= 8) {
+              if (soundEnabledRef.current && newPacket.severity >= 8) {
                 playEmergencyAlert(newPacket.severity);
               }
               sendBrowserNotification(
@@ -254,11 +273,21 @@ export default function App() {
     }
     return () => {
       if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.onerror = null;
+        wsRef.current.onmessage = null;
+        wsRef.current.onopen = null;
         wsRef.current.close();
         wsRef.current = null;
       }
-      if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
     };
   }, [operatorToken, loadInitialData, connectWebSocket]);
 
