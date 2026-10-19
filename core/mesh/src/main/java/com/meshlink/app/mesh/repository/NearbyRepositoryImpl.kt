@@ -882,6 +882,10 @@ class NearbyRepositoryImpl @Inject constructor(
         Timber.i("AdaptiveScan: scanning RESUMED")
     }
 
+    override fun setBatteryOptimizationEnabled(enabled: Boolean) {
+        adaptiveScanController.setOptimizationEnabled(enabled)
+    }
+
     override fun onUserActive() {
         adaptiveScanController.onUserActive()
         if (adaptiveScanController.scanStrategy.value != com.meshlink.app.domain.model.ScanStrategy.PAUSED) {

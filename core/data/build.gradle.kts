@@ -55,7 +55,10 @@ dependencies {
     implementation(libs.retrofit.converter.gson)
     implementation(libs.sqlcipher.android)
     implementation(libs.androidx.security.crypto)
+    implementation(libs.androidx.datastore.preferences)
 
+    testImplementation(libs.junit)
+    testImplementation(libs.turbine)
     testImplementation(libs.robolectric)
     testImplementation(libs.room.testing)
     testImplementation(libs.androidx.junit)

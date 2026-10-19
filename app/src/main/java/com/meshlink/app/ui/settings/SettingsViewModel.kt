@@ -16,13 +16,31 @@ import kotlinx.coroutines.launch
 
 import com.meshlink.app.ai.domain.ModelAssetManager
 
+import com.meshlink.app.domain.repository.SettingsRepository
+import com.meshlink.app.mesh.battery.AdaptiveScanController
+import com.meshlink.app.mesh.battery.BatteryMonitor
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val nearbyRepository: NearbyRepository,
     private val locationTracker: LocationTracker,
     val aiCoordinator: OfflineAiCoordinator,
-    val modelAssetManager: ModelAssetManager
+    val modelAssetManager: ModelAssetManager,
+    private val settingsRepository: SettingsRepository,
+    private val adaptiveScanController: AdaptiveScanController,
+    private val batteryMonitor: BatteryMonitor
 ) : ViewModel() {
+
+    val useNearby: StateFlow<Boolean> = settingsRepository.useNearby
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val useMeshtastic: StateFlow<Boolean> = settingsRepository.useMeshtastic
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val batteryOptimization: StateFlow<Boolean> = settingsRepository.batteryOptimization
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val isAiEnabled: StateFlow<Boolean> = aiCoordinator.isAiEnabled
     val aiState: StateFlow<AiCapabilityState> = aiCoordinator.state
@@ -51,6 +69,12 @@ class SettingsViewModel @Inject constructor(
 
     init {
         refreshRollbackState()
+        viewModelScope.launch {
+            settingsRepository.batteryOptimization.collect { enabled ->
+                val level = batteryMonitor.getBatteryLevel()
+                adaptiveScanController.updateSettings(level, enabled)
+            }
+        }
     }
 
     fun refreshRollbackState() {
@@ -156,6 +180,31 @@ class SettingsViewModel @Inject constructor(
         } else {
             nearbyRepository.resumeScanning()
             locationTracker.setManualPause(false)
+        }
+    }
+
+    fun setUseNearby(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setUseNearby(enabled)
+            if (!enabled) {
+                nearbyRepository.pauseScanning()
+            } else if (!_isMasterScanningPaused.value) {
+                nearbyRepository.resumeScanning()
+            }
+        }
+    }
+
+    fun setUseMeshtastic(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setUseMeshtastic(enabled)
+        }
+    }
+
+    fun setBatteryOptimization(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setBatteryOptimization(enabled)
+            val level = batteryMonitor.getBatteryLevel()
+            adaptiveScanController.updateSettings(level, enabled)
         }
     }
 }

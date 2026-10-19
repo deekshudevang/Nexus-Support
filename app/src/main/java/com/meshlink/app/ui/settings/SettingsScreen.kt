@@ -22,9 +22,9 @@ fun SettingsScreen(
     onDebugDashboardClick: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    // Note: In a real app we would persist these settings to SharedPreferences or DataStore.
-    var useMeshtastic by remember { mutableStateOf(false) }
-    var useNearby by remember { mutableStateOf(true) }
+    val useMeshtastic by viewModel.useMeshtastic.collectAsState()
+    val useNearby by viewModel.useNearby.collectAsState()
+    val batteryOptimization by viewModel.batteryOptimization.collectAsState()
     
     val isMasterPaused by viewModel.isMasterScanningPaused.collectAsState()
 
@@ -79,7 +79,7 @@ fun SettingsScreen(
                     }
                     Switch(
                         checked = useNearby,
-                        onCheckedChange = { useNearby = it }
+                        onCheckedChange = { viewModel.setUseNearby(it) }
                     )
                 }
             }
@@ -106,7 +106,7 @@ fun SettingsScreen(
                     }
                     Switch(
                         checked = useMeshtastic,
-                        onCheckedChange = { useMeshtastic = it }
+                        onCheckedChange = { viewModel.setUseMeshtastic(it) }
                     )
                 }
             }
@@ -120,7 +120,6 @@ fun SettingsScreen(
                 fontWeight = FontWeight.Bold
             )
 
-            var batteryOptimization by remember { mutableStateOf(true) }
             NexusCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -143,7 +142,7 @@ fun SettingsScreen(
                     }
                     Switch(
                         checked = batteryOptimization,
-                        onCheckedChange = { batteryOptimization = it }
+                        onCheckedChange = { viewModel.setBatteryOptimization(it) }
                     )
                 }
             }

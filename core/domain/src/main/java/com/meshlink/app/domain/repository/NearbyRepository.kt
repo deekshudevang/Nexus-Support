@@ -94,6 +94,11 @@ interface NearbyRepository {
     fun onUserActive()
 
     /**
+     * Updates whether battery optimization (e.g. pausing scan when battery is critically low) is enabled.
+     */
+    fun setBatteryOptimizationEnabled(enabled: Boolean) {}
+
+    /**
      * Send an emergency broadcast to ALL currently connected peers and their reachable neighbors.
      * The message is delivered locally and flooded with [MeshPacket.PacketType.BROADCAST].
      *

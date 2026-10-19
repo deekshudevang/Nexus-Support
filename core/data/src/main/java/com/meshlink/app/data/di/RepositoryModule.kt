@@ -10,6 +10,8 @@ import com.meshlink.app.domain.repository.MessageRepository
 import com.meshlink.app.domain.repository.PendingMessageRepository
 import com.meshlink.app.domain.repository.UserProfileManager
 import com.meshlink.app.data.repository.EmergencyGuideRepositoryImpl
+import com.meshlink.app.data.repository.SettingsRepositoryImpl
+import com.meshlink.app.domain.repository.SettingsRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -33,4 +35,7 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindEmergencyGuideRepository(impl: EmergencyGuideRepositoryImpl): EmergencyGuideRepository
+
+    @Binds
+    abstract fun bindSettingsRepository(impl: SettingsRepositoryImpl): SettingsRepository
 }

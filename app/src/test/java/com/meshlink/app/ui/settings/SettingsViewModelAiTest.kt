@@ -7,7 +7,10 @@ import com.meshlink.app.ai.model.AiCapabilityState
 import com.meshlink.app.ai.model.AiError
 import com.meshlink.app.ai.model.AiResult
 import com.meshlink.app.domain.repository.NearbyRepository
+import com.meshlink.app.domain.repository.SettingsRepository
 import com.meshlink.app.location.LocationTracker
+import com.meshlink.app.mesh.battery.AdaptiveScanController
+import com.meshlink.app.mesh.battery.BatteryMonitor
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -38,6 +41,9 @@ class SettingsViewModelAiTest {
     private val mockLocationTracker: LocationTracker = mockk(relaxed = true)
     private val mockCoordinator: OfflineAiCoordinator = mockk(relaxed = true)
     private val mockAssetManager: ModelAssetManager = mockk(relaxed = true)
+    private val mockSettingsRepository: SettingsRepository = mockk(relaxed = true)
+    private val mockAdaptiveScanController: AdaptiveScanController = mockk(relaxed = true)
+    private val mockBatteryMonitor: BatteryMonitor = mockk(relaxed = true)
 
     private val coordinatorState = MutableStateFlow(AiCapabilityState.READY)
     private val isAiEnabled = MutableStateFlow(true)
@@ -49,6 +55,10 @@ class SettingsViewModelAiTest {
         every { mockCoordinator.isAiEnabled } returns isAiEnabled
         coEvery { mockCoordinator.initialize() } returns AiCapabilityState.READY
         coEvery { mockAssetManager.activateStagedModel() } returns AiResult.Success(File("gemma.bin"))
+        every { mockSettingsRepository.useNearby } returns MutableStateFlow(true)
+        every { mockSettingsRepository.useMeshtastic } returns MutableStateFlow(false)
+        every { mockSettingsRepository.batteryOptimization } returns MutableStateFlow(true)
+        every { mockBatteryMonitor.getBatteryLevel() } returns 100
     }
 
     @After
@@ -61,7 +71,10 @@ class SettingsViewModelAiTest {
             nearbyRepository = mockNearbyRepository,
             locationTracker = mockLocationTracker,
             aiCoordinator = mockCoordinator,
-            modelAssetManager = mockAssetManager
+            modelAssetManager = mockAssetManager,
+            settingsRepository = mockSettingsRepository,
+            adaptiveScanController = mockAdaptiveScanController,
+            batteryMonitor = mockBatteryMonitor
         )
     }
 
