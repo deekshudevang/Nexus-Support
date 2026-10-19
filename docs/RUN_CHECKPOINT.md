@@ -214,3 +214,24 @@
 - Blockers / decisions needed: None.
 - Not proven by this phase: Physical audio output fidelity across diverse hardware browsers (verified via Web Audio API unit mocks).
 - Device/CI verification still required: None for local dashboard logic.
+
+---
+
+## Phase 9: CI/CD & release engineering  |  Status: IMPLEMENTED-UNEXECUTED
+- Claims verified:
+  - `codeql.yml` triggers and JDK: CONFIRMED (updated to include `feature/**`, `fix/**`, and `release/**` branches; upgraded JDK from 17 to 21; added `chmod +x gradlew`).
+  - Full-stack CI pipeline: CONFIRMED (updated `ci.yml` to run Android unit/migration tests, Android lint, Python FastAPI pytest, React dashboard Vitest & Vite build, and dependency vulnerability scans).
+  - Release workflow: CONFIRMED (`release.yml` automated production release pipeline supporting AAB bundle generation, signing from CI secrets via `SIGNING_KEYSTORE_BASE64`, checksums generation, and GitHub release draft upload).
+  - Dependabot ecosystems: CONFIRMED (`dependabot.yml` configured for `gradle`, `github-actions`, `pip` for `/cloud/backend`, and `npm` for `/cloud/frontend`).
+- Candidate deletions: None.
+- Commits:
+  - `8fbcbea ci: update CI for full-stack coverage, JDK 21, CodeQL triggers, and Dependabot ecosystems`
+- Commands run:
+  - `py -3 -c "import yaml, glob; ... yaml.safe_load ..."`
+  - `git merge-base --is-ancestor 4f6e61c5de8873ad6fa64f6398909c9347528b19 HEAD`
+- Results:
+  - All 7 YAML workflow and configuration files parsed valid with zero syntax errors.
+  - Baseline documentation ancestor check passed cleanly.
+- Blockers / decisions needed: None.
+- Not proven by this phase: Remote execution of workflows on GitHub runners (workflows are committed locally but not triggered or executed on remote; tracked in Pending verification register as IMPLEMENTED-UNEXECUTED).
+- Device/CI verification still required: Remote execution on GitHub Actions across `ci.yml`, `codeql.yml`, and `release.yml` (logged in register).
