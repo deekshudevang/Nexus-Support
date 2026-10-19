@@ -246,15 +246,21 @@
   - Unit test suite coverage: CONFIRMED (all 284 Android unit tests passing with zero failures, including `PrivacyAwareErrorReporterTest`, `PrivacySafeCrashReporterTest`, `SettingsRepositoryTest`, and `SettingsViewModelTest`).
   - Documentation completeness: CONFIRMED (created `PRIVACY.md` detailing offline-first zero telemetry policy, updated `SECURITY.md` with full STRIDE threat model and cryptographic controls, created `docs/audit/DEFECT_REGISTER.md` cataloging DEF-001 through DEF-012, verified MIT `LICENSE`).
   - Final Engineering Audit: CONFIRMED (appended Section 7 to `docs/audit/FINAL_ENGINEERING_AUDIT.md` summarizing the 310-test cross-platform verification and phase-by-phase deliverables).
+  - Release Build Assembly: CONFIRMED (`.\gradlew.bat assembleRelease` succeeded with full R8 code minification, resource shrinking, and ProGuard rules; produced `app-release-unsigned.apk` 173,148,864 bytes).
 - Candidate deletions: None.
 - Commits:
   - `a540340 feat(quality): implement privacy-respecting crash reporting opt-in scaffolding and tests`
+  - `0a6ca45 docs(audit): finalize Phase 10 documentation, threat model, and defect register`
+  - `0e55dc3 chore(build): increase Gradle JVM memory limits and expose DataStore preferences`
+  - `1abef90 docs(checkpoint): record branch push to origin in verification register`
 - Commands run:
   - `.\gradlew.bat :core:crypto:testDebugUnitTest :core:domain:test`
   - `.\gradlew.bat :core:data:testDebugUnitTest :core:mesh:testDebugUnitTest :app:testDebugUnitTest`
+  - `.\gradlew.bat assembleRelease`
   - `powershell -Command "$t=0;$f=0;$s=0; Get-ChildItem -Recurse -Filter 'TEST-*.xml' | ..."`
 - Results:
   - BUILD SUCCESSFUL: 284 Android tests passed, 0 failures, 0 skipped.
+  - Release variant: `assembleRelease` succeeded in 3m 5s with R8 minification and resource shrinking.
   - Full project test suite: 310 total automated tests passing (284 Android + 20 FastAPI pytest + 6 React Vitest).
 - Blockers / decisions needed: None.
 - Not proven by this phase: Physical screen reader TalkBack navigation on device (logged in Pending verification register as IMPLEMENTED-PENDING-DEVICE).
