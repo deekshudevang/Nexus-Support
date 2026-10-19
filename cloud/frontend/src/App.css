@@ -185,7 +185,7 @@ input::placeholder { color: #71839a; opacity: 1; }
 
   .dashboard-controls > * { width: 100%; max-width: none !important; }
   .dashboard-controls input { width: 100%; }
-  .dashboard-controls [style*="filterGroup"] { flex-wrap: wrap; }
+  .severity-filters { flex-wrap: wrap; }
 
   .dashboard-main {
     flex-direction: column;
