@@ -76,5 +76,39 @@
 - Not proven by this phase: Legacy device database migration from pre-v13 states without wipe.
 - Device/CI verification still required: None.
 
+---
+
+## Phase 3: Settings persistence  |  Status: VERIFIED
+- Claims verified:
+  - SettingsScreen ephemeral state: CONFIRMED (`useNearby`, `useMeshtastic`, `batteryOptimization` were stored in `remember { mutableStateOf }` and reset on navigation/restart; migrated to `SettingsRepository` backed by Jetpack DataStore Preferences).
+  - Toggles driving real behavior: CONFIRMED (`useNearby` drives `nearbyRepository.pauseScanning()`/`resumeScanning()`, `batteryOptimization` drives `adaptiveScanController.updateSettings()`, and `useMeshtastic` is persisted to drive transport selection in Phase 4).
+- Candidate deletions: None.
+- Commits:
+  - `9e3db98 feat(settings): persist toggles via DataStore and drive scan behavior`
+- Commands run:
+  - `.\gradlew.bat :core:data:testDebugUnitTest :app:testDebugUnitTest`
+  - `.\gradlew.bat testDebugUnitTest :core:domain:test --continue`
+- Results: BUILD SUCCESSFUL (SettingsRepositoryTest: 3 passed, SettingsViewModelTest: 6 passed, SettingsViewModelAiTest: 9 passed, MigrationTest: 5 passed; 0 failures, 0 skipped).
+- Blockers / decisions needed: None.
+- Not proven by this phase: Physical radio RF toggling under OS Doze mode (requires device).
+- Device/CI verification still required: None.
 
 
+---
+
+## Phase 3: Settings persistence  |  Status: VERIFIED
+- Claims verified:
+  - `SettingsScreen.kt` keeps `useNearby`, `useMeshtastic`, `batteryOptimization` in `remember { mutableStateOf }`: CONFIRMED (switches were ephemeral and reset upon leaving screen or process death).
+  - Settings now backed by DataStore Preferences: CONFIRMED (`SettingsRepository` in domain, implemented with `androidx.datastore.preferences` in `SettingsRepositoryImpl`).
+  - Toggles drive real behavior: CONFIRMED (`useNearby` drives `nearbyRepository.pauseScanning()` / `resumeScanning()`, `batteryOptimization` drives `adaptiveScanController.setOptimizationEnabled(enabled)` and updates scan strategy).
+- Candidate deletions: None.
+- Commits:
+  - `9e3db98 feat(settings): persist toggles via DataStore and drive scan behavior`
+- Commands run:
+  - `.\gradlew.bat :core:data:testDebugUnitTest --tests "com.meshlink.app.data.repository.SettingsRepositoryTest"`
+  - `.\gradlew.bat :app:testDebugUnitTest --tests "com.meshlink.app.ui.settings.SettingsViewModelTest"`
+  - `.\gradlew.bat testDebugUnitTest :core:domain:test --continue`
+- Results: BUILD SUCCESSFUL (261 passed, 0 failures, 0 errors, 0 skipped across all modules).
+- Blockers / decisions needed: None.
+- Not proven by this phase: Real BLE/LoRa physical device radio behavior when toggles are flipped (Phase 4 scope, IMPLEMENTED-PENDING-DEVICE).
+- Device/CI verification still required: None for local persistence logic.
