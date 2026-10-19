@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.WifiTethering
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -202,6 +203,7 @@ private fun NavItem(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
+        val labelText = item.labelRes?.let { stringResource(it) } ?: item.label
         Box(
             modifier         = Modifier
                 .clip(RoundedCornerShape(16.dp))
@@ -215,13 +217,19 @@ private fun NavItem(
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
-            val labelText = item.labelRes?.let { stringResource(it) } ?: item.label
             Icon(
                 imageVector        = if (selected) item.selectedIcon else item.unselectedIcon,
-                contentDescription = labelText,
+                contentDescription = null,
                 tint               = iconColor,
                 modifier           = Modifier.size(24.dp)
             )
         }
+        Text(
+            text = labelText,
+            style = MaterialTheme.typography.labelSmall,
+            color = iconColor,
+            maxLines = 1,
+            softWrap = false
+        )
     }
 }
