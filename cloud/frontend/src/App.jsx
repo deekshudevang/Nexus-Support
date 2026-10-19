@@ -333,13 +333,13 @@ export default function App() {
 
           <form onSubmit={handleLoginSubmit} style={styles.authForm}>
             <label style={styles.authLabel} htmlFor="token-input">
-              Operator Authorization Token
+              Operator Bearer Token or Password
             </label>
             <input
               id="token-input"
               data-testid="token-input"
               type="password"
-              placeholder="Enter operator bearer token"
+              placeholder="Enter operator token or password"
               value={loginInput}
               onChange={(e) => setLoginInput(e.target.value)}
               style={styles.authInput}
@@ -364,7 +364,7 @@ export default function App() {
           </form>
 
           <div style={styles.authFooter}>
-            🔒 Strict Role Separation: Operator read access. Device credentials and tokens are held in-memory for this session only.
+            🔒 Operator read access. This credential is stored in this browser tab's session storage until sign-out or tab closure.
           </div>
         </div>
       </div>
