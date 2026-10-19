@@ -104,6 +104,7 @@ models/
 # AI Secrets & Tokens
 .env
 .env.*
+!.env.example
 hf_token*
 
 
