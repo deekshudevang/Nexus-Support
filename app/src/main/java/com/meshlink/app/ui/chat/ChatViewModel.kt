@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.net.URLDecoder
+import androidx.navigation.toRoute
+import com.meshlink.app.ui.navigation.Screen
 import javax.inject.Inject
 import javax.inject.Named
 
@@ -39,15 +41,19 @@ class ChatViewModel @Inject constructor(
     @Named("localDeviceId") val localDeviceId: String
 ) : ViewModel() {
 
+    private val chatRoute: Screen.Chat? = runCatching {
+        savedStateHandle.toRoute<Screen.Chat>()
+    }.getOrNull()
+
     /**
      * Volatile Nearby endpointId from nav args.
      * Only used for Nearby API calls (requestConnection etc.).
      * Never used as a Room key — use [peerDeviceId] for that.
      */
-    val deviceId: String = checkNotNull(savedStateHandle["deviceId"])
+    val deviceId: String = chatRoute?.deviceId ?: checkNotNull(savedStateHandle["deviceId"])
 
-    val deviceName: String = (savedStateHandle.get<String>("deviceName"))?.let {
-        URLDecoder.decode(it, "UTF-8")
+    val deviceName: String = chatRoute?.deviceName ?: (savedStateHandle.get<String>("deviceName"))?.let {
+        try { URLDecoder.decode(it, "UTF-8") } catch (_: Exception) { it }
     } ?: deviceId
 
     /**

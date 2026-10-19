@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -72,6 +73,7 @@ dependencies {
 
     // Navigation
     implementation(libs.compose.navigation)
+    implementation(libs.kotlinx.serialization.json)
 
     // Hilt
     implementation(libs.hilt.android)
@@ -107,6 +109,7 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation("org.json:json:20210307")
+    testImplementation(libs.navigation.testing)
 
     // Testing — instrumented / Compose UI tests
     androidTestImplementation(libs.androidx.junit)
