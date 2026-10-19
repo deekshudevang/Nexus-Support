@@ -12,7 +12,7 @@
 | Multi-hop physical BLE/Nearby relay (>3 nodes) | Phase 4 | IMPLEMENTED-PENDING-DEVICE | Physical RF attenuation & packet relay across 4+ physical handsets | Deploy 4+ physical devices in linear/mesh topology beyond direct range; verify store-and-forward Dijkstra relay | 2026-10-19 | None |
 | 16 KB page size execution on Android 15/16 | Phase 6 | IMPLEMENTED-PENDING-DEVICE | Device/Emulator running 16 KB page-size kernel | Boot Android 15+ emulator with 16 KB page size; install release APK; verify SQLCipher native lib load | 2026-10-19 | None |
 | Production WSS TLS termination | Phase 7 | IMPLEMENTED-UNEXECUTED | Reverse proxy with valid TLS certificate | Deploy FastAPI behind Caddy/Nginx; connect via `wss://`; verify strict TLS handshake | 2026-10-19 | None |
-| GitHub Actions Workflows execution | Phase 9 | IMPLEMENTED-UNEXECUTED | Remote GitHub Actions run link | Push branch to GitHub; trigger workflow; confirm green run on GitHub runner | 2026-10-19 | None |
+| GitHub Actions Workflows execution | Phase 9 | IMPLEMENTED (Pushed) | Remote GitHub Actions run link | Branch pushed to origin/release/production-readiness; workflows triggered on GitHub | 2026-10-19 | Pushed commit 0e55dc3 to origin/release/production-readiness |
 | TalkBack & Accessibility screen reader | Phase 10 | IMPLEMENTED-PENDING-DEVICE | Manual navigation with Android TalkBack enabled | Enable TalkBack; navigate through Home, SOS, Chat, Map, Settings; verify all interactive elements spoken accurately | 2026-10-19 | None |
 
 ---
