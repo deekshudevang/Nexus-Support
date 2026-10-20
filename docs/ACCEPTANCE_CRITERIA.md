@@ -18,7 +18,7 @@
 | ID | Area | Acceptance criterion | Current status | Evidence / next action |
 |---|---|---|---|---|
 | AR-01 | Repository hygiene | No debug dumps, stale dead implementation, or tracked runtime database artifacts | VERIFIED (prior audit) | Confirm again on release candidate; keep generated databases untracked |
-| AR-02 | Android build | Debug build and Android lint pass on the release candidate | PASSING-CI | CI run [39300831075](https://github.com/deekshudevang/Nexus-Support/actions/runs/39300831075), SHA `aaec744ead6872dcd2686759f6d8dffbe708f707); re-run after code changes |
+| AR-02 | Android build | Debug build and Android lint pass on the release candidate | PASSING-CI | CI run [39304382472](https://github.com/deekshudevang/Nexus-Support/actions/runs/39304382472), SHA `aaec744ead6872dcd2686759f6d8dffbe708f707); re-run after code changes |
 | AR-03 | Android unit tests | Test report lists total, passed, failed, skipped for the exact SHA | PARTIALLY VERIFIED | CI unit-test job passed; preserve and aggregate JUnit XMLs before claiming a cross-stack grand total |
 | AR-04 | Room migrations | Every supported historical schema has a preserved source schema and migration test | BLOCKED | Schema versions 4–12 are absent. Recover from an authentic archive or explicitly define unsupported legacy versions and a user-safe upgrade policy; do not fabricate schema files |
 | AR-05 | Database destructive fallback | Destructive migration fallback is impossible in release builds | VERIFIED (reported in audit) | Confirm with release variant test/configuration and keep this assertion covered |
