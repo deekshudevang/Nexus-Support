@@ -183,7 +183,6 @@ jobs:
         with:
           pattern: "*-test-results"
           path: aggregated-test-results
-          merge-multiple: true
 
       - name: Summarize JUnit XML reports
         id: summarize
@@ -221,8 +220,8 @@ jobs:
           report_lines += ["", f"**Totals:** {totals['tests']} tests; {totals['failures']} failures; {totals['errors']} errors; {totals['skipped']} skipped."]
           Path("test-summary.md").write_text("\n".join(report_lines) + "\n")
           print("\n".join(report_lines))
-          with open("test-summary.md", encoding="utf-8") as report:
-              print(report.read(), file=open("/dev/stdout", "w"))
+          if totals["failures"] or totals["errors"]:
+              sys.exit(1)
           PY
           cat test-summary.md >> "$GITHUB_STEP_SUMMARY"
 
