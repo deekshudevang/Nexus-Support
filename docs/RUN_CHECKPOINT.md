@@ -4,8 +4,8 @@
 
 - **Baseline tag:** `pre-production-baseline` was recorded at `661a935` by the local audit.
 - **Branch:** `release/production-readiness`.
-- **Latest remotely observed CI-tested SHA before this documentation update:** `aaec744ead6872dcd2686759f6d8dffbe708f707`.
-- **Full-stack CI:** [Run 39300831075](https://github.com/deekshudevang/Nexus-Support/actions/runs/39300831075) completed with conclusion `success` on 2026-10-19. The Android build/lint, Android unit/migration tests, dependency scan, frontend tests/build and backend pytest jobs succeeded.
+- **Latest remotely observed CI-tested SHA before this documentation update:** `86ef3e23938d35e7c5210792ffcab58734148727`.
+- **Full-stack CI:** [Run 39304382472](https://github.com/deekshudevang/Nexus-Support/actions/runs/39304382472) completed with conclusion `success` on 2026-10-19 for SHA `86ef3e23938d35e7c5210792ffcab58734148727`. All six configured jobs succeeded: Android build/lint, Android unit/migration tests, dependency scan, frontend tests/build, backend pytest and structural doc sync.
 - **Counting caveat:** CI success proves the configured tasks passed, not a total of 310 tests with zero skips. Earlier local report records a skipped Room migration test and lacks a reproducible aggregate report on this SHA. Do not claim a cross-stack grand total until JUnit XML from the same SHA has been aggregated and retained.
 - **CodeQL:** At least one CodeQL run for the earlier SHA was reported successful. Recheck run result and exact SHA before using it as evidence for a later commit.
 
