@@ -1,4 +1,9 @@
-# DEFECT_REGISTER.md
+# Historical Engineering Defect Register (Archived)
+
+> This is a retained historical snapshot from 2026-10-10. Its statuses and evidence may be stale and are not a current release sign-off. The canonical current register is [`docs/audit/DEFECT_REGISTER.md`](../audit/DEFECT_REGISTER.md). Use [`docs/ACCEPTANCE_CRITERIA.md`](../ACCEPTANCE_CRITERIA.md) and [`docs/RUN_CHECKPOINT.md`](../RUN_CHECKPOINT.md) for current release gates.
+
+---
+
 Last updated: Saturday, October 10, 2026 9:41:50 PM | HEAD: f9dd205cf242502f7d72eed3fe5e476ca5e3cf24 | Source fingerprint: 4CCAC4FB40260A075F34C6F679966C503F1901CDB511E89EF0903EEE69183BBB
 Levels: L1 compiles, L2 automated tests, L3 physical devices, L4 deployment. Nothing here is L3/L4 verified.
 
