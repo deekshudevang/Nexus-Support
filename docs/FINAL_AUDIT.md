@@ -1,37 +1,30 @@
-# Final Audit Report
+# Historical Engineering Audit (Archived)
 
-**Last verified:** 2026-09-20 @ 4f6e61c5de8873ad6fa64f6398909c9347528b19
+**Historical audit date:** 2026-09-20  
+**Historical source commit:** `4f6e61c5de8873ad6fa64f6398909c9347528b19`  
+**Current release scope:** `release/production-readiness`
 
-This document records the exact validation results of the Nexus-Support repository after executing the senior engineering upgrade across Phases 0-4.
+> **Important:** This document is a historical record, not a current release sign-off. The claims below were recorded against an older repository state and must not be treated as proof that the current branch has passed the same tests or physical-device procedures. In particular, historical multi-hop field-test notes do not close the current release branch's Meshtastic, 4+ device, 16 KB, TLS, Room schema-history, or TalkBack gates.
 
-## Verified Capabilities
+## Source-of-truth documents
 
-*   **JVM Unit Tests & Android Lint (`./gradlew testDebugUnitTest lintDebug --continue`)**: Core domain logic tests, location sync CRDT logic tests, and mesh router flow metrics successfully execute and pass. Lint passes with all false-positive warnings suppressed or resolved.
-*   **Android Build Pipeline (`./gradlew assembleDebug`)**: Full Android APK assembly is VERIFIED and compiles successfully with JDK 17. The `jlink` and Android API 36 environment issues are resolved.
-*   **Cryptographic Primitives**: 
-    * StrongBox fallback to TEE is implemented and logically verified. 
-    * `ProductionKeyManager` successfully unified the `deviceId` ECDH key and signature ECDSA key into the same hardware enclave root (ADR-0006).
-*   **First-Contact / MITM UI Workflow (SAS)**: 
-    *   *Result:* **VERIFIED**.
-    *   *Citation:* The cryptographic SAS mechanism is fully connected to the UI via `ChatScreen`, `ChatViewModel`, and `DeviceDao.markAsVerified`. The database schema successfully tracks the `isVerified` flag.
-*   **Repository Hygiene**: The `.idea/misc.xml` has been completely untracked from the repository via `git rm --cached`, stopping persistent commit churn.
-*   **Physical Device Hardware Tests (Multi-Hop Relay)**:
-    *   *Result:* **VERIFIED (Field Test)**.
-    *   *Citation:* A 3-node string topology (Pixel 7 -> Galaxy S23 -> OnePlus 9) spanning ~60m successfully demonstrated a multi-hop routing payload (ECIES encrypted) without loops. Details in `DEVICE_TEST_MATRIX.md`.
+Use these maintained documents for current release decisions:
 
-*   **Destructive Migrations**: Gated strictly to `BuildConfig.DEBUG` in `DatabaseModule.kt` to prevent silent user data loss in production. See `ADR-0007-Gated-Destructive-Migration.md`.
-*   **Documentation Rigor**: PR template created with explicit documentation cross-check triggers. Benchmark harness (`BENCHMARK_PROCEDURE.md`) strictly separates simulation results from physical ones. Failure injection procedures (`FAILURE_INJECTION_PROCEDURES.md`) created for relay dropouts and Faraday-bag partition splits.
+- [Production acceptance criteria](ACCEPTANCE_CRITERIA.md)
+- [Current run checkpoint](RUN_CHECKPOINT.md)
+- [Current engineering audit](audit/FINAL_ENGINEERING_AUDIT.md)
+- [Canonical defect register](audit/DEFECT_REGISTER.md)
+- [Device test matrix](testing/DEVICE_TEST_MATRIX.md)
+- [Product UI/UX standards](design/PRODUCT_UX_GUIDELINES.md)
 
-## Unvalidated / Failing Capabilities
+## Historical findings retained for traceability
 
-*   **Large Scale Store-and-Forward / Battery Metrics**:
-    *   *Result:* **UNVALIDATED**.
-    *   *Reason:* Store-and-forward TTLs, partition reconnection mechanics, battery drain/hour, and topologies exceeding 3 nodes remain unvalidated in physical environments.
-    *   *Conclusion:* All >3 node routing, discovery speed, and latency metrics are currently derived strictly from simulation (`LargeScaleMeshSimTest`) and are explicitly labeled `[SIMULATOR]` in benchmarks.
+The prior audit recorded local Android build, JVM test and lint runs, cryptographic implementation checks, SAS identity-verification workflow, gated destructive migrations, and a three-device mesh field exercise. These are retained as historical notes only. They must be reproduced on the exact release candidate before being used as current acceptance evidence.
 
-## Command Execution Log
+The earlier audit also recorded that large-scale store-and-forward TTLs, battery metrics, partition reconnection and topologies beyond three devices were not validated in physical environments.
 
-The following commands were run to verify the repository state:
+## Evidence rule
 
-1.  **Test, Lint, & Build**: `./gradlew testDebugUnitTest lintDebug --continue` and `./gradlew assembleDebug` (All passing locally).
-2.  **Git Status**: `git status --porcelain` (Verified clean working tree after build, confirming `misc.xml` untrack was successful).
+A test result or device claim is current only when it includes the exact commit SHA, reproducible command or procedure, outcome, and supporting artifact/log. Automated tests, simulation, physical-device testing, and production deployment evidence are separate categories and must not be conflated.
+
+Do not update this historical record to imply a newer verification. Update the source-of-truth documents above when new evidence is produced.
