@@ -3,14 +3,14 @@
 **Document ID:** `docs/audit/FINAL_ENGINEERING_AUDIT.md`  
 **Updated:** 2026-10-19  
 **Scope:** `release/production-readiness`  
-**Latest CI-tested commit before this documentation correction:** `aaec744ead6872dcd2686759f6d8dffbe708f707`  
-**CI evidence:** [GitHub Actions run 39300831075](https://github.com/deekshudevang/Nexus-Support/actions/runs/39300831075)
+**Latest CI-tested commit before this documentation correction:** `86ef3e23938d35e7c5210792ffcab58734148727`  
+**CI evidence:** [GitHub Actions run 39304382472](https://github.com/deekshudevang/Nexus-Support/actions/runs/39304382472)
 
 > **Scope correction:** Earlier sections in this document contain historical findings from `feature/gemma4-offline`, including Gemma model and Motorola device traces. Those observations are not automatically proof of the current production-readiness branch or of current Meshtastic/TLS/16 KB release behavior. Treat those sections as historical records only unless each artifact and test is reproduced on the exact release candidate.
 
 ## Current release-branch verification
 
-GitHub Actions run 39300831075 completed successfully on 2026-10-19 for commit `aaec744ead6872dcd2686759f6d8dffbe708f707`. The configured jobs succeeded:
+GitHub Actions run 39304382472 completed successfully on 2026-10-19 for commit `86ef3e23938d35e7c5210792ffcab58734148727`. The configured jobs succeeded:
 
 - Structural documentation synchronization.
 - Android build and lint.
