@@ -50,7 +50,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: android-test-results
           path: |
             **/build/reports/tests/
             **/build/test-results/
@@ -169,6 +169,69 @@ jobs:
             exit 1
           fi
 
+  aggregate-test-results:
+    name: Aggregate Cross-Stack Test Reports
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - android-unit-and-migration-tests
+      - backend-tests
+      - frontend-tests-and-build
+    steps:
+      - name: Download test report artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*-test-results"
+          path: aggregated-test-results
+          merge-multiple: true
+
+      - name: Summarize JUnit XML reports
+        id: summarize
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+          import sys
+
+          files = sorted(Path("aggregated-test-results").rglob("*.xml"))
+          totals = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+          report_lines = ["## Cross-stack test report", "", "| Report | Tests | Failures | Errors | Skipped |", "|---|---:|---:|---:|---:|"]
+          if not files:
+              report_lines += ["", "No JUnit XML files were downloaded. This is not evidence that tests passed."]
+              Path("test-summary.md").write_text("\n".join(report_lines) + "\n")
+              print("No JUnit XML reports found.")
+              sys.exit(1)
+
+          for file in files:
+              try:
+                  root = ET.parse(file).getroot()
+              except (ET.ParseError, OSError) as exc:
+                  print(f"Invalid JUnit report {file}: {exc}", file=sys.stderr)
+                  sys.exit(1)
+              suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
+              counts = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+              for suite in suites:
+                  for key in counts:
+                      counts[key] += int(suite.attrib.get(key, 0))
+              for key in totals:
+                  totals[key] += counts[key]
+              label = file.name.replace("|", "-")
+              report_lines.append(f"| {label} | {counts['tests']} | {counts['failures']} | {counts['errors']} | {counts['skipped']} |")
+
+          report_lines += ["", f"**Totals:** {totals['tests']} tests; {totals['failures']} failures; {totals['errors']} errors; {totals['skipped']} skipped."]
+          Path("test-summary.md").write_text("\n".join(report_lines) + "\n")
+          print("\n".join(report_lines))
+          with open("test-summary.md", encoding="utf-8") as report:
+              print(report.read(), file=open("/dev/stdout", "w"))
+          PY
+          cat test-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload aggregate test summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aggregate-test-summary
+          path: test-summary.md
   vulnerability-scan:
     name: Dependency Vulnerability Scan
     runs-on: ubuntu-latest
