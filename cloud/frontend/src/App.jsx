@@ -348,7 +348,7 @@ export default function App() {
             />
 
             {loginError && (
-              <div data-testid="auth-error" style={styles.authError}>
+              <div data-testid="auth-error" role="alert" aria-live="assertive" style={styles.authError}>
                 ⚠️ {loginError}
               </div>
             )}
@@ -431,8 +431,9 @@ export default function App() {
         <div style={styles.searchContainer}>
           <input
             data-testid="search-input"
-            type="text"
-            placeholder="Search by keywords, sender, emergency type..."
+            type="search"
+            aria-label="Search incidents by message, sender, emergency type or ID"
+            placeholder="Search incidents, sender, type or ID…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={styles.searchInput}
@@ -450,6 +451,7 @@ export default function App() {
             <button
               key={filter}
               data-testid={`filter-${filter.toLowerCase()}`}
+              aria-pressed={severityFilter === filter}
               onClick={() => setSeverityFilter(filter)}
               style={styles.filterTab(severityFilter === filter, filter)}
             >
@@ -460,6 +462,8 @@ export default function App() {
 
         <button
           onClick={() => loadInitialData(operatorToken)}
+          disabled={isLoading}
+          aria-label={isLoading ? 'Refreshing incidents' : 'Refresh incidents'}
           style={styles.refreshButton}
           title="Refresh incidents"
         >
@@ -477,7 +481,7 @@ export default function App() {
           </div>
 
           {errorMessage && (
-            <div data-testid="error-banner" style={styles.errorBanner}>
+            <div data-testid="error-banner" role="alert" aria-live="polite" style={styles.errorBanner}>
               ⚠️ {errorMessage}
             </div>
           )}
@@ -553,7 +557,7 @@ export default function App() {
             })}
 
             {filteredPackets.length === 0 && !isLoading && (
-              <div data-testid="empty-state" style={styles.emptyState}>
+              <div data-testid="empty-state" role="status" aria-live="polite" style={styles.emptyState}>
                 <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📡</div>
                 <div>No active incidents matching criteria.</div>
                 <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem' }}>
@@ -578,8 +582,8 @@ export default function App() {
             <MapPanController targetCoords={selectedCoords} />
 
             {sosPackets.map((packet) => (
-              packet.latitude !== 0 && packet.longitude !== 0 && (
-                <Marker key={packet.uuid} position={[packet.latitude, packet.longitude]}>
+              hasUsableCoordinates(packet.latitude, packet.longitude) && (
+                <Marker key={packet.uuid} position={[Number(packet.latitude), Number(packet.longitude)]}>
                   <Popup>
                     <div style={{ minWidth: '180px', color: '#0f172a' }}>
                       <strong style={{ color: packet.severity >= 8 ? '#dc2626' : '#2563eb' }}>
