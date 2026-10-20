@@ -118,6 +118,7 @@ Backend and dashboard checks are listed above. GitHub Actions runs the configure
 
 - [CI workflow](https://github.com/deekshudevang/Nexus-Support/actions/workflows/ci.yml)
 - [CodeQL workflow](https://github.com/deekshudevang/Nexus-Support/actions/workflows/codeql.yml)
+- [Product UI/UX and accessibility standards](docs/design/PRODUCT_UX_GUIDELINES.md)
 - [Acceptance criteria](docs/ACCEPTANCE_CRITERIA.md)
 - [Engineering checkpoint](docs/RUN_CHECKPOINT.md)
 - [Defect register](docs/audit/DEFECT_REGISTER.md)
