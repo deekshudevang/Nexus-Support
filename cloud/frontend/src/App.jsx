@@ -570,6 +570,13 @@ export default function App() {
 
         {/* Map View */}
         <section className="incident-map" style={styles.mapArea} aria-label="Incident locations map">
+          {!mapHasCoordinates && (
+            <div className="map-empty-note" role="status" aria-live="polite">
+              <span aria-hidden="true">⌖</span>
+              <span>No incident coordinates available</span>
+              <small>Map locations appear when incoming reports include GPS coordinates.</small>
+            </div>
+          )}
           <MapContainer
             center={mapCenter}
             zoom={mapHasCoordinates ? 13 : 2}
