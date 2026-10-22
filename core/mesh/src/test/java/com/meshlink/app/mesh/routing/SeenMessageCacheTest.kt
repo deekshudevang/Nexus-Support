@@ -68,4 +68,31 @@ class SeenMessageCacheTest {
         t1.join(); t2.join()
         // No assertion — test just verifies no crash / deadlock under concurrent access
     }
+
+    @Test
+    fun `entry expires and is treated as unseen after 10-minute TTL`() {
+        var simulatedTime = 100_000L
+        val timedCache = SeenMessageCache { simulatedTime }
+
+        timedCache.markSeen("ttl-msg-1")
+        assertTrue("Message should be seen immediately after marking", timedCache.isAlreadySeen("ttl-msg-1"))
+
+        // Advance simulated time past 10-minute TTL (10 * 60 * 1000 = 600,000ms)
+        simulatedTime += 600_001L
+
+        assertFalse("Message should be treated as unseen after TTL expiry", timedCache.isAlreadySeen("ttl-msg-1"))
+    }
+
+    @Test
+    fun `critical messages bypass Bloom filter false positives`() {
+        var simulatedTime = 100_000L
+        val timedCache = SeenMessageCache { simulatedTime }
+
+        // When not in LRU (e.g. evicted or never seen, but potential Bloom false-positive),
+        // isCritical = true must return false so critical emergency packets are not dropped
+        assertFalse(
+            "Critical emergency messages must bypass Bloom filter false positives",
+            timedCache.isAlreadySeen("unseen-critical-sos-123", isCritical = true)
+        )
+    }
 }
