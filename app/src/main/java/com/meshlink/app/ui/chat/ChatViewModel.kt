@@ -187,11 +187,5 @@ class ChatViewModel @Inject constructor(
         nearbyRepository.sendBroadcast(content)
     }
 
-    // --- MOCK TELEMETRY FOR UI REDESIGN ---
-    val snr = MutableStateFlow("+8.2 dB")
-    val signalStrength = MutableStateFlow("-62 dBm")
     val battery = MutableStateFlow(batteryMonitor.getBatteryLevel().toString())
-    val protocol = MutableStateFlow("NOISE-XX PROTOCOL")
-    val modulation = MutableStateFlow("SF11 / BW: 125 kHz")
-    val dutyCycleAirtime = MutableStateFlow("~0.84s")
 }
