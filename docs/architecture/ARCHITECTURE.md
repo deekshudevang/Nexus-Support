@@ -53,7 +53,7 @@ graph TD
 - **Components**:
   - `AppDatabase`: Room database backed by **SQLCipher AES-256-CBC**.
   - DAOs: `DeviceDao`, `MessageDao`, `PendingMessageDao`, `LocationEventDao`, `ProcessedEventDao`.
-  - `MockMeshBackendService` / `MeshBackendService`: Retrofit REST interface for opportunistic cloud synchronization when internet connectivity returns.
+  - `MeshBackendService`: Retrofit REST interface for opportunistic cloud synchronization when internet connectivity returns.
 
 ### 5. `:app` (Application & Presentation Layer)
 - **Role**: Jetpack Compose UI, Material 3 design system, state holders (ViewModels), background workers.
