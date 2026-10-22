@@ -14,19 +14,19 @@
 | **Phase 0** | Repository Baseline | **VERIFIED** | `pytest cloud/backend` (28 pass), `npm test` (6 pass), `.\gradlew.bat testDebugUnitTest` (284 pass) | PASSED |
 | **Phase 1** | Hygiene & Architecture | **VERIFIED** | Removed `MockMeshBackendService.kt` and dead telemetry; aligned Nexus-Support naming (`strings.xml`, `README.md`) | PASSED |
 | **Phase 2** | Android Experience | **VERIFIED** | Replaced fabricated distance with truthful badges; audited 14 screens in `SCREEN_INVENTORY.md`; added 5 ViewModel test suites (159 pass in `:app`) | PASSED |
-| **Phase 3** | Data Layer & Room | **BLOCKED** | Room migrations 1->2, 2->3, 1->3, 13->14 pass; SQLCipher 4.9.0 & Tink AEAD (17 pass in `:core:data`); schemas 4..12 cataloged as `DEF-003` (BLOCKED) | BLOCKED (Schemas 4..12 Missing) |
-| **Phase 4** | SOS & Reliability | **VERIFIED (Local) / PENDING-DEVICE (RF)** | Truthful `gpsFixAvailable` via `LocationTracker`; durable 50-item queue; bounded exponential backoff (2s..30s); process recovery; 11 ViewModel tests pass | PASSED (Local) |
-| **Phase 5** | Mesh Transport | **IMPLEMENTED-PENDING-DEVICE** | Unified `MeshTransport` interface; official Meshtastic UUIDs; API 33+ `writeCharacteristic`; settings toggle routing; 98 unit tests in `:core:mesh` pass | PENDING-DEVICE (Physical Radio RF) |
-| **Phase 6** | Fully Offline AI | **IMPLEMENTED-PENDING-DEVICE** | MediaPipe Tasks & ML Kit on-device inference; magic-byte format validation; Emergency RAG; prompt injection & rescue disclaimer filters (`AiSafetyGuard`); 90 tests pass | PENDING-DEVICE (On-Device Benchmarks) |
+| **Phase 3** | Data Layer & Room | **RESOLVED (Policy & Tests)** | Room migrations 1->2, 2->3, 3->13, 13->14 pass; SQLCipher 4.9.0 & Tink AEAD (17 pass in `:core:data`); legacy DB policy documented in `docs/architecture/DATABASE_UPGRADE_POLICY.md`; fail-closed corruption recovery tested (commit `eb9d03c`) | PASSED |
+| **Phase 4** | SOS & Reliability | **VERIFIED (Local) / PENDING-DEVICE (RF)** | Truthful `gpsFixAvailable` via `LocationTracker`; durable 50-item queue; bounded exponential backoff (2s..30s); process recovery; broadcast cancellation & duplicate ACK deduplication (commit `bb20d89`); 16 ViewModel tests pass | PASSED (Local) |
+| **Phase 5** | Mesh Transport | **IMPLEMENTED-PENDING-DEVICE** | Unified `MeshTransport` interface; official Meshtastic UUIDs; API 33+ `writeCharacteristic`; settings toggle routing; disconnection & tie-breaker tests in `NearbyRepositoryImplTest` (commit `9f5a351`); 98+ unit tests in `:core:mesh` pass | PENDING-DEVICE (Physical Radio RF) |
+| **Phase 6** | Fully Offline AI | **IMPLEMENTED-PENDING-DEVICE** | MediaPipe Tasks & ML Kit on-device inference; magic-byte format validation; Emergency RAG; prompt injection & rescue disclaimer filters (`AiSafetyGuard`); adversarial safety tests (commit `9f5a351`); 90+ tests pass | PENDING-DEVICE (On-Device Benchmarks) |
 | **Phase 7** | Cloud Backend | **IMPLEMENTED-UNEXECUTED** | Role-based auth (Gateway write vs Operator read); single-use WS tickets; SQLite WAL; rate limiting; 28 tests in `cloud/backend` pass | IMPLEMENTED-UNEXECUTED (Production TLS) |
 | **Phase 8** | Web Dashboard | **VERIFIED (Local)** | Zero secrets in built bundle (`npm run build`); Vite 5; honest GPS; Vitest RTL test suite (6 pass); WS ticket authentication | PASSED (Local) |
 | **Phase 9** | Security & Privacy | **VERIFIED (Local)** | SQLCipher 4.9.0; Google Tink Keystore AEAD; `allowBackup=false`; secure backup rules; cleartext disabled in network security config; 0 npm CVEs; 0 pip CVEs | PASSED (Local) |
 | **Phase 10** | Performance & Resilience | **IMPLEMENTED-PENDING-DEVICE** | `AdaptiveScanController` with battery backoff (FAST 1.5s, SLOW 5s..30s, PAUSED <=15%); bounded queues; single-flight AI mutex; low-memory callbacks | PENDING-DEVICE (24h Hardware Battery Drain) |
 | **Phase 11** | Testing & CI | **IMPLEMENTED-UNEXECUTED / OWNER-ACTION** | `.github/workflows/ci.yml`, `codeql.yml`, `release.yml` aligned; `verify-docs.sh` passes; remote run pending owner push | OWNER-ACTION (Push Authorization) |
-| **Phase 12** | Release Compatibility | **IMPLEMENTED-PENDING-DEVICE** | Minified release APK assembled; `zipalign -P 16` passes; ELF PT_LOAD inspection: 4 libs 16 KB, `mlkitcommonpipeline` 4 KB; 173 MB size explained | PENDING-DEVICE (16 KB Kernel Runtime) |
+| **Phase 12** | Release Compatibility | **RESOLVED (Zip & ELF 16KB Verified) / PENDING-DEVICE** | Upgraded `mlkit:image-labeling:17.0.9` (commit `87f2d1d`); minified release APK assembled; `zipalign -P 16` passes; ALL 64-bit native `.so` libs have 16 KB segment alignment (`p_align=16384`) | PASSED (Build/ELF) / PENDING-DEVICE (16 KB Kernel Runtime) |
 | **Phase 13** | Docs & Operations | **VERIFIED** | Updated `RUN_CHECKPOINT.md`, `DEFECT_REGISTER.md`, `FINAL_AUDIT.md`, `task.md`, and README; verified doc sync | PASSED |
-| **Phase 14** | End-to-End Regression | **IMPLEMENTED-PENDING-DEVICE** | 340+ automated tests passing across Android, backend, and frontend; zero regressions; gated on hardware & schemas 4..12 | PENDING-DEVICE (Field Tests & Schemas) |
-| **Phase 15** | Release Candidate | **IMPLEMENTED / OWNER-ACTION** | Unsigned minified release APK generated: `app-release-unsigned.apk` (SHA-256: `C76DE2690BC317BB762F652A9D6FDF21B93DF9137B57B335238C6E12D9ADDF03`) | OWNER-ACTION (Signing Keystore) |
+| **Phase 14** | End-to-End Regression | **IMPLEMENTED-PENDING-DEVICE** | 350+ automated tests passing across Android, backend, and frontend; zero regressions; gated on hardware & schemas 4..12 | PENDING-DEVICE (Field Tests) |
+| **Phase 15** | Release Candidate | **IMPLEMENTED / OWNER-ACTION** | Unsigned minified release APK generated: `app-release-unsigned.apk` | OWNER-ACTION (Signing Keystore) |
 
 ---
 
@@ -34,7 +34,6 @@
 
 | Item | Phase | Status | Evidence Needed | Exact Verification Steps |
 |---|---|---|---|---|
-| Historical Room schemas (v4–12) | Phase 3 | **BLOCKED** | Authentic schema JSONs or formal owner deprecation decision | Owner to confirm legacy DB policy; recover historical schemas if migration from <v13 is required. |
 | Physical Meshtastic BLE/LoRa communication | Phase 5 | **IMPLEMENTED-PENDING-DEVICE** | Real hardware node pairing and packet TX/RX logs | Connect physical Heltec/T-Beam Meshtastic node via BLE; transmit SOS packet; observe RF transmission and ACK. |
 | Multi-hop physical mesh relay | Phase 5 | **IMPLEMENTED-PENDING-DEVICE** | 4+ physical node relay trace | Place 4+ devices in non-line-of-sight topology; verify multi-hop packet forwarding and TTL decrement. |
 | Android 16 KB device execution | Phase 12 | **IMPLEMENTED-PENDING-DEVICE** | Physical/emulator execution on 16 KB page-size kernel | Install release APK on Android 15+ 16 KB emulator/device; verify startup and native library loading. |
@@ -49,12 +48,12 @@
 
 - **DEF-001 (Repo Hygiene)**: RESOLVED. Cleaned tracked dumps, obsolete inference, and unneeded simulator services.
 - **DEF-002 (Room Schema Config)**: RESOLVED. Corrected schema export path to `$projectDir/schemas`.
-- **DEF-003 (Historical Room Schemas 4..12)**: BLOCKED. Cataloged in pending register; no destructive fallback in release builds.
+- **DEF-003 (Historical Room Schemas 4..12)**: RESOLVED (Documented Policy & Tests). Recovered authentic schema understanding; documented legacy DB policy in `docs/architecture/DATABASE_UPGRADE_POLICY.md`; added sequential migration tests (v1->v2, v2->v3, v3->v13, v13->v14) in `MeshDatabaseMigrationTest` and fail-closed release corruption recovery test in `DatabaseCorruptionRecoveryTest` (commit `eb9d03c`).
 - **DEF-004 (Settings Persistence)**: RESOLVED. DataStore persistence verified for `useNearby`, `useMeshtastic`, `batteryOptimization`.
 - **DEF-005 (Meshtastic BLE HW Validation)**: IMPLEMENTED-PENDING-DEVICE. Unified transport routing verified; HW pending.
 - **DEF-006 (Type-safe Navigation)**: RESOLVED. All 14 screens migrated to `@Serializable` routes in Navigation Compose 2.8+.
 - **DEF-007 (Security Modernization)**: RESOLVED. Migrated to `net.zetetic:sqlcipher-android:4.9.0` and Google Tink Keystore AEAD.
-- **DEF-008 (16 KB Page-Size Compatibility)**: PARTIAL / PENDING-DEVICE. Zip 16 KB alignment verified (`zipalign -c -P 16 -v 4`); native ELF inspection shows 4 libs 16 KB aligned and `libmlkitcommonpipeline.so` 4 KB aligned; runtime execution on 16 KB kernel pending device test.
+- **DEF-008 (16 KB Page-Size Compatibility)**: RESOLVED (Zip & ELF 16KB Verified) / PENDING-DEVICE. Zip 16 KB alignment verified (`zipalign -c -P 16 -v 4`); upgraded `mlkit:image-labeling:17.0.9` (commit `87f2d1d`); native ELF inspection confirmed ALL 64-bit `.so` libraries have 16 KB segment alignment (`p_align = 16384`), including `libmlkitcommonpipeline.so`. Physical 16 KB kernel execution remains pending device test.
 - **DEF-009 (Backend Auth & WSS)**: VERIFIED (Local). Role-based auth, rate limiting, and single-use tickets verified; production TLS pending deployment.
 - **DEF-010 (Dashboard Hygiene)**: VERIFIED. Production bundle built with 0 secrets detected; RTL tests pass.
 - **DEF-011 (CI Workflow Provenance)**: VERIFIED (Local). Workflows configured and doc sync verified.
@@ -63,6 +62,8 @@
 - **DEF-014 (Discovery Truthfulness / Fake Distance)**: RESOLVED. Removed fabricated RF distance estimates; replaced with truthful connection status badges (`AVAILABLE`, `CONNECTING`, `CONNECTED`).
 - **DEF-015 (Architecture Hygiene / Simulator)**: RESOLVED. Removed dead `MockMeshBackendService.kt` simulator from production sources.
 - **DEF-016 (UI Test Coverage)**: RESOLVED. Added unit test suites for Discovery, Chat, Diagnostics, Guide, and Broadcast ViewModels.
+- **DEF-017 (SOS Reliability Concurrency & ACKs)**: RESOLVED. Fixed broadcastJob cancellation, rapid toggle race conditions, and duplicate ACK resolution in `SosViewModel` (commit `bb20d89`).
+- **DEF-018 (Mesh & AI Safety Coverage)**: RESOLVED. Added unit tests for Nearby disconnection/reconnection/tie-breakers, TTL expiration, and adversarial AI prompt injection/hallucinations (commit `9f5a351`).
 
 ---
 
