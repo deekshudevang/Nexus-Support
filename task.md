@@ -226,18 +226,23 @@
 
 ---
 
-## 3. Production Readiness Overhaul (Phases 0 to 10 Run)
+## 3. Master Transformation Phase Execution (16-Phase Plan)
 Authoritative per-phase execution log is tracked in [`docs/RUN_CHECKPOINT.md`](file:///docs/RUN_CHECKPOINT.md).
 
-- **Phase 0 (Baseline):** **VERIFIED** (Commit: `661a935`)
-- **Phase 1 (Repo Hygiene):** **VERIFIED** (Commits: `944f137`, `cfc3189`)
-- **Phase 2 (Data Layer & Migrations):** **VERIFIED** (Commits: `cb54903`, `6d01027`)
-- **Phase 3 (Settings Persistence):** **VERIFIED** (Commits: `9e3db98`, `a06a187`)
-- **Phase 4 (Meshtastic / LoRa Transport):** **IMPLEMENTED-PENDING-DEVICE** (Commits: `b4ac384`, `9ef9742`, `262fd01`)
-- **Phase 5 (Navigation):** **VERIFIED** (Commit: `a805294`)
-- **Phase 6 (Security & Dependencies):** **VERIFIED** (Commit: `168f82e`)
-  - Migrated SQLCipher to `net.zetetic:sqlcipher-android:4.9.0` with `PRAGMA cipher_migrate;` hook.
-  - Replaced deprecated `androidx.security:security-crypto:1.1.0-alpha06` with Android KeyStore + Google Tink AEAD (`Aead` AES-256-GCM) with legacy passphrase migration.
-  - Verified 16 KB page alignment for all 64-bit `.so` native libraries (`zipalign -c -v 4 app-release-unsigned.apk`).
-  - Minified release build assembled (`assembleRelease`: `app-release-unsigned.apk`).
-  - All 433 unit tests passed (0 failures, 1 skipped).
+- **Phase 0: Repository Baseline:** **VERIFIED** (Commit: `95426ea`, 318 tests passing across Android, backend, and frontend; baseline defect register updated with DEF-013 through DEF-016).
+- **Phase 1: Hygiene and Architecture:** **IN PROGRESS** (Targeting removal of dead simulator `MockMeshBackendService.kt`, removal of dead mock telemetry in `ChatViewModel.kt`, and architectural boundaries).
+- **Phase 2: Android Experience:** **NOT-STARTED** (Screen inventory, elimination of fake distance `mockDistance` in `DiscoveryScreen.kt`, accessibility, TalkBack readiness).
+- **Phase 3: Data Layer and Room:** **PARTIAL / BLOCKED ON DEF-003** (Room schema directory verified; migrations 1->2, 2->3, 1->3, 13->14 verified; historical schemas 4..12 absent / blocked).
+- **Phase 4: SOS and Emergency Reliability:** **NOT-STARTED** (Elimination of fake satellite status in `SosViewModel.kt`/`SosScreen.kt`, wiring real GPS fix, duplicate suppression, offline durable queue tests).
+- **Phase 5: Mesh Networking and Transport:** **IMPLEMENTED-PENDING-DEVICE** (Official Meshtastic UUIDs verified; `MeshRouter` routing verified; physical RF validation pending device).
+- **Phase 6: Fully Offline AI:** **VERIFIED (BASELINE PRESERVED)** (Gemma 3 1B INT4 baseline preserved; PLE `.litertlm` migration gate fail-closed).
+- **Phase 7: Backend and API (`cloud/backend`):** **PASSING-CI / TLS UNEXECUTED** (FastAPI role-based auth, ticketed WebSockets, WAL SQLite, 28/28 tests passing).
+- **Phase 8: Web Dashboard (`cloud/frontend`):** **PASSING-CI** (Vite 5 / 8, React Vitest 6/6 tests passing, zero bundle secrets, accessible map states).
+- **Phase 9: Security and Privacy:** **VERIFIED** (SQLCipher 4.9.0, Google Tink AEAD, default-off diagnostic reporting, zero plain secrets).
+- **Phase 10: Performance and Resilience:** **NOT-STARTED** (Measurement of startup, memory, reconnection queues, Doze/battery semantics).
+- **Phase 11: Testing and CI:** **IMPLEMENTED-UNEXECUTED** (Full-stack CI workflow aligned, triggers synchronized; remote execution is owner action when ALLOW_PUSH=false).
+- **Phase 12: Android Release Compatibility:** **PARTIALLY VERIFIED** (Minified release build `assembleRelease` assembled; 16 KB ELF PT_LOAD segment alignment tooling verification pending).
+- **Phase 13: Documentation and Operations:** **IN PROGRESS** (Continuous incremental synchronization of README, architecture, defect register, checkpoint).
+- **Phase 14: End-to-End Regression:** **NOT-STARTED** (Systematic end-to-end journey tests covering online, offline, degraded states).
+- **Phase 15: Release Candidate:** **NOT-STARTED** (Release build verification, frozen commit, final readiness report).
+

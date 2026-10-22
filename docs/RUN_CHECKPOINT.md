@@ -2,30 +2,63 @@
 
 **Scope of this checkpoint:** `release/production-readiness`. This checkpoint must not be mixed with physical-device/model evidence from another branch unless the evidence is independently reproduced on the exact release candidate.
 
-- **Baseline tag:** `pre-production-baseline` was recorded at `661a935` by the local audit.
-- **Branch:** `release/production-readiness`.
-- **Latest remotely observed CI-tested SHA before this documentation update:** `86ef3e23938d35e7c5210792ffcab58734148727`.
-- **Full-stack CI:** [Run 39304382472](https://github.com/deekshudevang/Nexus-Support/actions/runs/39304382472) completed with conclusion `success` on 2026-10-19 for SHA `86ef3e23938d35e7c5210792ffcab58734148727`. All six configured jobs succeeded: Android build/lint, Android unit/migration tests, dependency scan, frontend tests/build, backend pytest and structural doc sync.
-- **Counting caveat:** CI success proves the configured tasks passed, not a total of 310 tests with zero skips. Earlier local report records a skipped Room migration test and lacks a reproducible aggregate report on this SHA. Do not claim a cross-stack grand total until JUnit XML from the same SHA has been aggregated and retained.
-- **CodeQL:** At least one CodeQL run for the earlier SHA was reported successful. Recheck run result and exact SHA before using it as evidence for a later commit.
+## Setup & Authorization State
+- **Pre-existing user changes:** None (working tree clean at run initialization).
+- **Branch / tag state:** Tag `pre-production-baseline` exists on `661a935`. Working branch `release/production-readiness` resumed, fast-forward synchronized to `origin/release/production-readiness` (HEAD: `95426ea`).
+- **Authorization flags in effect:**
+  - `ALLOW_LOCAL_COMMITS = true` (conventional-commit commits on the working branch)
+  - `ALLOW_FETCH = true` (read-only git fetch / dependency downloads)
+  - `ALLOW_PUSH = false` (push not authorized; remote CI execution remains an owner action)
+  - `ALLOW_DEPLOY_PUBLISH = false` (no deploys, store uploads, or public releases)
 
 ## Pending verification register
 
-| Item | Phase | Status | Required evidence / exact next action |
-|---|---|---|---|
-| Historical Room migrations and schema versions 4–12 | Phase 2 | **BLOCKED** | Recover authentic historical schemas or formally define supported legacy versions and safe upgrade behavior. Do not fabricate schema exports. |
-| Physical Meshtastic BLE + LoRa packet TX/RX | Phase 4 | **IMPLEMENTED-PENDING-DEVICE** | Pair supported Meshtastic node; verify GATT service/characteristics, writes, notifications, parsed packets and RF receive/acknowledgement; attach dated sanitized logs. |
-| Physical multi-hop relay over 4+ devices | Phase 4 | **IMPLEMENTED-PENDING-DEVICE** | Run topology beyond direct range on physical devices; simulation is not RF validation. |
-| Android 16 KB page compatibility | Phase 6 | **NOT VERIFIED** | Run `zipalign -c -P 16 -v 4 <apk>`, inspect all native ELF PT_LOAD segments with current Android tooling, record artifact SHA-256, then execute on 16 KB page-size emulator/device where possible. The historical `zipalign -c -v 4` result alone does not prove this requirement. |
-| Production HTTPS/WSS TLS | Phase 7 | **IMPLEMENTED-UNEXECUTED** | Deploy with real domain/certificate and verify strict HTTPS/WSS handshake, origin policy, auth, ticket expiry and reconnect. |
-| GitHub Actions | Phase 9 | **PASSING-CI (SHA-SCOPED)** | [Run 39300831075](https://github.com/deekshudevang/Nexus-Support/actions/runs/39300831075), SHA `aaec744ead6872dcd2686759f6d8dffbe708f707`, all six CI jobs succeeded. Recheck after any new commit. |
-| Test count aggregation | Phases 0–10 | **PARTIALLY VERIFIED** | Keep Android/backend/frontend counts separate until XML reports for the same SHA are aggregated. Include skipped/ignored tests accurately. |
-| TalkBack screen-reader behavior | Phase 10 | **IMPLEMENTED-PENDING-DEVICE** | Navigate Home, SOS, Chat, Map and Settings with TalkBack; record device/app version and results. |
-| Release artifact/signing | Phase 10 | **LOCAL REPORT ONLY** | Build artifact from the exact commit in CI, attach checksum, document signed/unsigned status; do not treat an unsigned APK/AAB as a distributable release. |
+| Item | Phase | Status | Evidence needed | Exact steps | Date logged | Evidence received (source, date, verbatim) |
+|---|---|---|---|---|---|---|
+| Historical Room migrations (v4–12 schemas) | Phase 3 | **BLOCKED** | Authentic schema JSONs v4–12 or formal owner decision on legacy version deprecation and safe upgrade policy | Recover authentic schemas from historical repository branches or archives; execute `MigrationTestHelper` from v1 to v14. | 2026-10-19 | None (schemas 4..12 are absent from all repository commits and backups) |
+| Physical Meshtastic BLE + LoRa packet TX/RX | Phase 5 | **IMPLEMENTED-PENDING-DEVICE** | Real radio hardware communication evidence | Pair supported Meshtastic hardware node over BLE; verify GATT characteristic write/notify, packet send, receive, and RF ACK; capture dated sanitized logcat. | 2026-10-19 | None |
+| Physical multi-hop relay over 4+ devices | Phase 5 | **IMPLEMENTED-PENDING-DEVICE** | Physical RF mesh relay logs across 4+ nodes beyond direct range | Deploy 4+ physical hardware nodes in non-line-of-sight topology; execute SOS transmission; verify intermediate hop forwarding and packet delivery. | 2026-10-19 | None |
+| Android 16 KB page-size compatibility | Phase 12 | **NOT VERIFIED** | Validated APK ZIP 16 KB alignment and native `.so` ELF PT_LOAD segment alignment | Run `zipalign -c -P 16 -v 4 <apk>`; inspect all bundled native `.so` libraries using Android ELF inspection tooling (`readelf -l` or APK Analyzer); run on 16 KB page-size Android 15+ emulator/device. | 2026-10-19 | Previous run executed `zipalign -c -v 4` (4-byte alignment only; does not prove 16 KB ELF load segment alignment) |
+| Production HTTPS/WSS TLS deployment | Phase 7 | **IMPLEMENTED-UNEXECUTED** | Real production TLS certificate handshake and secure WebSocket connection evidence | Deploy backend behind TLS termination reverse proxy (Nginx/Caddy/Cloudflare); connect frontend via `wss://`; verify certificate validity, Origin header enforcement, and ticket authentication. | 2026-10-19 | None |
+| TalkBack accessibility navigation | Phase 2 / Phase 14 | **IMPLEMENTED-PENDING-DEVICE** | Manual TalkBack screen-reader audit across all primary flows | Enable Android TalkBack on physical device; navigate Home, SOS, Chat, Discovery, Map, Guides, and Settings; verify content descriptions, touch targets >= 48dp, and announcement clarity. | 2026-10-19 | None |
+| Release artifact signing & distribution | Phase 12 / Phase 15 | **OWNER-ACTION** | Owner signing keystore and release publication | Provide release signing credentials via secure CI secrets (`SIGNING_KEYSTORE_BASE64`, `KEY_ALIAS`, `KEY_PASSWORD`); execute `release.yml` workflow; verify artifact checksums. | 2026-10-19 | Local build assembled unsigned release artifact `app-release-unsigned.apk` |
+| Remote CI Pipeline Execution on latest SHA | Phase 11 | **OWNER-ACTION** | GitHub Actions execution on latest candidate commit | Push candidate commit to `origin/release/production-readiness` (when `ALLOW_PUSH=true`); verify all CI workflow jobs pass green. | 2026-10-22 | CI run [39304382472](https://github.com/deekshudevang/Nexus-Support/actions/runs/39304382472) passed on prior SHA `86ef3e23938d35e7c5210792ffcab58734148727` |
 
-## Release decision
+---
 
-**Not yet defensible as fully production-ready.** Automated CI passed on the SHA above, but historical migrations, physical Meshtastic RF and multi-hop behavior, 16 KB compatibility, production TLS, and accessibility remain unverified/blocked. Re-evaluate this decision only with evidence tied to the exact candidate SHA.
-
-## Phase status
-Do not overwrite prior phase execution logs without retaining provenance. Use the frozen [acceptance criteria](ACCEPTANCE_CRITERIA.md) as the release denominator and update statuses only when linked evidence supports the claim.
+## Phase 0: Repository Baseline | Status: VERIFIED
+- **Claims verified:**
+  - Appendix A Claim 1 (`temp_head.kt`, `LlmInferenceManager.kt`, `data/` dump): WRONG / RESOLVED (cleaned in prior commit `944f137`; `.agent/`, `.agents/`, `.gsd/` are tracked workspace configs; `.qodo/` is gitignored).
+  - Appendix A Claim 2 (Settings toggles held in ephemeral UI state): WRONG / RESOLVED (all toggles collected from `SettingsRepository` via DataStore in `SettingsViewModel.kt`).
+  - Appendix A Claim 3 (`MeshtasticTransport` bound in DI, UUIDs): PARTIAL (UUIDs match official Meshtastic specifications bit-for-bit: Service `6ba1b218-15a8-461f-9fa8-5dcae273eafd`, FromRadio `2c55e69e-4993-11ed-b878-0242ac120002`, ToRadio `f75c76d2-129e-4dad-a1dd-7866124401e7`, FromNum `ed9da18c-a800-4f66-a670-aa7547e34453`; `MeshRouter` routes packets via `TransportType.MESHTASTIC` honoring settings toggles; physical verification remains `IMPLEMENTED-PENDING-DEVICE`).
+  - Appendix A Claim 4 (Schema dir `"/schemas"`, `13.json` in backup, `migrate5To14` ignored): PARTIAL (schema directory fixed to `$projectDir/schemas`, but historical schemas 4..12 are absent, so full Room migration path remains `BLOCKED`).
+  - Appendix A Claim 5 (String-based navigation routes with `URLEncoder`): WRONG / RESOLVED (migrated to `@Serializable` type-safe routes in commit `a805294`).
+  - Appendix A Claim 6 (SQLCipher 4.5.4, `security-crypto` 1.1.0-alpha06): PARTIAL (SQLCipher migrated to maintained `net.zetetic:sqlcipher-android:4.9.0`, `security-crypto` replaced with Google Tink AEAD in commit `168f82e`; Kotlin is 2.0.21 / KSP 2.0.21-1.0.27).
+  - Appendix A Claim 7 (Backend `allow_origins=["*"]`, missing WAL, missing node_status endpoints): WRONG / RESOLVED (fixed in commits `609986d`, `1131e66`, `f777a23`).
+  - Appendix A Claim 8 (Frontend hardcodes localhost, Vite 4): WRONG / RESOLVED (Vite 5.4.21 / 8.3.4, environment variables used in `api.js`).
+  - Appendix A Claim 9 (CodeQL triggers on master/main only, JDK 17): WRONG / RESOLVED (triggers include `feature/**`, `fix/**`, `release/**`, JDK 21 in commit `8fbcbea`).
+- **Candidate deletions:**
+  - `core/data/src/main/java/com/meshlink/app/data/remote/MockMeshBackendService.kt` (identified dead simulator code in production source set).
+  - Dead mock telemetry fields in `ChatViewModel.kt` (`snr`, `signalStrength`, `modulation`, `dutyCycleAirtime`).
+  - Fake distance generator in `DiscoveryScreen.kt` (`mockDistance`, `distanceBadgeLabel`).
+  - Fake satellite status and uplink in `SosViewModel.kt` and `SosScreen.kt`.
+- **Commits:** Baseline at `95426ea`.
+- **Commands run:**
+  - `py -3 -m pytest cloud/backend` (28 passed in 1.55s, 0 failures)
+  - `npm test -- --run` in `cloud/frontend` (6 passed in 201ms, 0 failures)
+  - `npm run build` in `cloud/frontend` (successful production bundle, 0 secrets detected)
+  - `.\gradlew.bat testDebugUnitTest :core:domain:test --continue` (284 passed, 0 failures, 0 skipped)
+  - `.\gradlew.bat lintDebug --continue` (0 errors across `app`, `core/crypto`, `core/data`, `core/mesh`)
+- **Results:** 318 total automated unit/integration tests passing (284 Android + 28 FastAPI + 6 React). 0 lint errors.
+- **Defects identified:**
+  - `DEF-003` (High / Blocked): Historical Room schemas 4..12 missing.
+  - `DEF-005` (High / Pending-Device): Physical Meshtastic BLE/LoRa verification pending.
+  - `DEF-008` (High / Not-Verified): Android 16 KB native ELF alignment verification pending.
+  - `DEF-009` (Critical / Passing-CI, TLS Unexecuted): Production TLS deployment unexecuted.
+  - `DEF-013` (P1 / High): Fabricated satellite lock and fake telemetry in SOS and Chat ViewModels.
+  - `DEF-014` (P1 / High): Fabricated RF distance in `DiscoveryScreen.kt`.
+  - `DEF-015` (P2 / Medium): Dead `MockMeshBackendService.kt` in `core/data/src/main/`.
+  - `DEF-016` (P2 / Medium): Missing unit test coverage for secondary UI ViewModels.
+- **Blockers / decisions needed:** Historical schemas 4..12 are absent from all git branches; owner decision required on legacy database deprecation vs recovery.
+- **Not proven by this phase:** Physical hardware mesh communication, RF distance, satellite uplink (hardware absent), 16 KB runtime behavior, TalkBack quality, production TLS.
+- **Device/CI verification still required:** Physical BLE/LoRa pairing, multi-hop mesh, 16 KB device execution, TalkBack audit, production WSS deployment.

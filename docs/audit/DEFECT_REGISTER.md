@@ -20,6 +20,10 @@ This register documents technical debt, security and reliability defects, their 
 | **DEF-010** | High | Dashboard | Dashboard configuration, authentication UX and build hygiene | **PASSING-CI** | Frontend tests/build pass in CI run [39304382472](https://github.com/deekshudevang/Nexus-Support/actions/runs/39304382472); repeat bundle secret scan for release artifact |
 | **DEF-011** | High | CI / CD | Full-stack automated pipeline | **PASSING-CI** | CI run [39300831075](https://github.com/deekshudevang/Nexus-Support/actions/runs/39300831075) completed successfully on SHA `86ef3e23938d35e7c5210792ffcab58734148727`; update this evidence per candidate SHA |
 | **DEF-012** | Medium | Quality / Privacy | Privacy-gated diagnostic reporting | **PASSING-CI / MANUAL PRIVACY REVIEW PENDING** | Default-off/PII-redaction implementation is reported; verify opt-in behavior and redaction in release-candidate review |
+| **DEF-013** | Critical / P1 | Safety / Truthfulness | Fabricated satellite lock and fake telemetry in SOS and Chat ViewModels | **CONFIRMED DEFECT** | `SosViewModel` and `SosScreen` claim "3 SATS [LOCK 3D]", `satelliteSnr = 98`, `nextOrbitalWindowSeconds = 8`, and interactive fake satellite toggle; `ChatViewModel` contains dead fake telemetry |
+| **DEF-014** | High / P1 | UX / Truthfulness | Fabricated RF distance in DiscoveryScreen | **CONFIRMED DEFECT** | `DiscoveryScreen.kt` synthesizes pseudo-random distances (42M, 110M, etc.) and tags (NEAR, FAR) from endpointId hash without actual RF measurement |
+| **DEF-015** | Medium / P2 | Architecture / Hygiene | Dead simulator service in production source set | **CONFIRMED DEFECT** | `MockMeshBackendService` resides in `core/data/src/main/` violating truthfulness invariant (fixtures/simulators only in test sources) |
+| **DEF-016** | Medium / P2 | QA / Test Coverage | Missing unit tests for secondary UI ViewModels | **CONFIRMED DEFECT** | `DiscoveryViewModel`, `ChatViewModel`, `EmergencyGuideViewModel`, `DiagnosticsViewModel`, `BroadcastViewModel` lack unit test coverage |
 
 ---
 
