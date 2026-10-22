@@ -16,12 +16,12 @@
 | Item | Phase | Status | Evidence needed | Exact steps | Date logged | Evidence received (source, date, verbatim) |
 |---|---|---|---|---|---|---|
 | Historical Room migrations (v4–12 schemas) | Phase 3 | **BLOCKED** | Authentic schema JSONs v4–12 or formal owner decision on legacy version deprecation and safe upgrade policy | Recover authentic schemas from historical repository branches or archives; execute `MigrationTestHelper` from v1 to v14. | 2026-10-19 | None (schemas 4..12 are absent from all repository commits and backups) |
-| Physical Meshtastic BLE + LoRa packet TX/RX | Phase 5 | **IMPLEMENTED-PENDING-DEVICE** | Real radio hardware communication evidence | Pair supported Meshtastic hardware node over BLE; verify GATT characteristic write/notify, packet send, receive, and RF ACK; capture dated sanitized logcat. | 2026-10-19 | None |
+| Physical Meshtastic BLE + LoRa packet TX/RX | Phase 5 | **IMPLEMENTED-PENDING-DEVICE** | Real radio hardware communication evidence | Pair supported Meshtastic hardware node over BLE; verify GATT characteristic write/notify, packet send, receive, and RF ACK; capture dated sanitized logcat. | 2026-10-19 | None (automated unit tests pass, hardware RF unverified) |
 | Physical multi-hop relay over 4+ devices | Phase 5 | **IMPLEMENTED-PENDING-DEVICE** | Physical RF mesh relay logs across 4+ nodes beyond direct range | Deploy 4+ physical hardware nodes in non-line-of-sight topology; execute SOS transmission; verify intermediate hop forwarding and packet delivery. | 2026-10-19 | None |
-| Android 16 KB page-size compatibility | Phase 12 | **NOT VERIFIED** | Validated APK ZIP 16 KB alignment and native `.so` ELF PT_LOAD segment alignment | Run `zipalign -c -P 16 -v 4 <apk>`; inspect all bundled native `.so` libraries using Android ELF inspection tooling (`readelf -l` or APK Analyzer); run on 16 KB page-size Android 15+ emulator/device. | 2026-10-19 | Previous run executed `zipalign -c -v 4` (4-byte alignment only; does not prove 16 KB ELF load segment alignment) |
+| Android 16 KB page-size compatibility | Phase 12 | **PARTIAL / PENDING-DEVICE** | Validated APK ZIP 16 KB alignment and native `.so` ELF PT_LOAD segment alignment | Run `zipalign -c -P 16 -v 4 <apk>`; inspect all bundled native `.so` libraries using Android ELF inspection tooling (`readelf -l` or APK Analyzer); run on 16 KB page-size Android 15+ emulator/device. | 2026-10-19 | `zipalign -c -P 16 -v 4` passes. ELF PT_LOAD inspection: `libsqlcipher.so`, `libllm_inference_engine_jni.so`, `libdatastore_shared_counter.so`, `libandroidx.graphics.path.so` are 16 KB (16384) aligned; `libmlkitcommonpipeline.so` is 4 KB (4096) aligned. Runtime on 16 KB kernel pending device test. |
 | Production HTTPS/WSS TLS deployment | Phase 7 | **IMPLEMENTED-UNEXECUTED** | Real production TLS certificate handshake and secure WebSocket connection evidence | Deploy backend behind TLS termination reverse proxy (Nginx/Caddy/Cloudflare); connect frontend via `wss://`; verify certificate validity, Origin header enforcement, and ticket authentication. | 2026-10-19 | None |
 | TalkBack accessibility navigation | Phase 2 / Phase 14 | **IMPLEMENTED-PENDING-DEVICE** | Manual TalkBack screen-reader audit across all primary flows | Enable Android TalkBack on physical device; navigate Home, SOS, Chat, Discovery, Map, Guides, and Settings; verify content descriptions, touch targets >= 48dp, and announcement clarity. | 2026-10-19 | None |
-| Release artifact signing & distribution | Phase 12 / Phase 15 | **OWNER-ACTION** | Owner signing keystore and release publication | Provide release signing credentials via secure CI secrets (`SIGNING_KEYSTORE_BASE64`, `KEY_ALIAS`, `KEY_PASSWORD`); execute `release.yml` workflow; verify artifact checksums. | 2026-10-19 | Local build assembled unsigned release artifact `app-release-unsigned.apk` |
+| Release artifact signing & distribution | Phase 12 / Phase 15 | **OWNER-ACTION** | Owner signing keystore and release publication | Provide release signing credentials via secure CI secrets (`SIGNING_KEYSTORE_BASE64`, `KEY_ALIAS`, `KEY_PASSWORD`); execute `release.yml` workflow; verify artifact checksums. | 2026-10-19 | Local build assembled unsigned release artifact `app-release-unsigned.apk` (173,148,864 bytes) |
 | Remote CI Pipeline Execution on latest SHA | Phase 11 | **OWNER-ACTION** | GitHub Actions execution on latest candidate commit | Push candidate commit to `origin/release/production-readiness` (when `ALLOW_PUSH=true`); verify all CI workflow jobs pass green. | 2026-10-22 | CI run [39304382472](https://github.com/deekshudevang/Nexus-Support/actions/runs/39304382472) passed on prior SHA `86ef3e23938d35e7c5210792ffcab58734148727` |
 
 ---
@@ -112,46 +112,50 @@
 
 ---
 
-## Phase 3: Data Layer and Room | Status: VERIFIED
+## Phase 3: Data Layer and Room | Status: BLOCKED (Historical Schemas Missing)
 - **Claims verified:**
   - Room schema export and KSP path: CONFIRMED (configured to `$projectDir/schemas`).
-  - Migration testing: CONFIRMED (Room migrations 1->2, 2->3, 1->3, 13->14 pass via `MigrationTestHelper`; intermediate DDL migrations 3..14 verified in `MigrationTest.kt`).
+  - Migration testing: PARTIAL (Room migrations 1->2, 2->3, 1->3, 13->14 pass via `MigrationTestHelper`; intermediate DDL migrations 3..14 verified in `MigrationTest.kt`).
   - Missing historical schemas 4..12: CONFIRMED (cataloged as DEF-003, tracking as BLOCKED per Master Prompt rules; no destructive fallback in release builds: `fallbackToDestructiveMigration` guarded by `if (BuildConfig.DEBUG)`).
   - SQLCipher 4.9.0 and Tink KeyStore AEAD passphrase provider: CONFIRMED (17 unit tests in `:core:data` pass).
 - **Candidate deletions:** None.
-- **Commits:** Foundational migrations verified on `release/production-readiness`.
+- **Commits:** Foundational migrations on `release/production-readiness`.
 - **Commands run:**
   - `.\gradlew.bat :core:data:testDebugUnitTest` (17 passed, 0 failures)
 - **Results:** 17 tests passed.
 - **Defects:**
   - `DEF-003` (High / Blocked): Tracked in Pending Verification Register.
-- **Blockers / decisions needed:** Owner decision required on legacy database schemas 4..12 deprecation.
-- **Not proven by this phase:** Migrations on physical user database files older than v13.
+- **Blockers / decisions needed:** Historical schemas 4..12 are absent from all repository commits and backups; owner decision required on legacy database schemas 4..12 deprecation vs schema reconstruction.
+- **Not proven by this phase:** Migrations on physical user database files older than v13. Status downgraded from VERIFIED to BLOCKED.
 - **Device/CI verification still required:** Testing upgrades on physical devices running historical versions.
 
 ---
 
-## Phase 4: SOS and Emergency Reliability | Status: VERIFIED
+## Phase 4: SOS and Emergency Reliability | Status: VERIFIED (Local Code & Tests) / IMPLEMENTED-PENDING-DEVICE (Physical RF)
 - **Claims verified:**
   - Fabricated satellite lock ("3 SATS [LOCK 3D]"), fake SNR, orbital window countdowns, fake satellite uplink toggle in `SosViewModel.kt` and `SosScreen.kt`: CONFIRMED / RESOLVED (replaced with truthful `gpsFixAvailable` backed by `locationTracker.getCurrentLocation(1500)` and real transports `Nearby Direct (BLE / Wi-Fi)` and `Meshtastic LoRa (RF)`).
   - SOS state machine truthfulness: CONFIRMED (distinguishes local acceptance, transport hand-off, and peer acknowledgement).
-  - Accidental trigger safeguard (hold 3s or multi-tap), duplicate suppression, and durable offline queue: CONFIRMED (tested in `SosViewModelTest.kt`).
+  - Durable offline queue & bounded capacity: CONFIRMED (implemented in `SosRepositoryImpl` with 50-item bound, duplicate suppression, and Room persistence; tested in `SosRepositoryImplTest`).
+  - Rate limiting & bounded retry backoff: CONFIRMED (1000ms debounce, 2s..30s exponential backoff with 0..500ms jitter, max 5 retries; tested in `SosViewModelTest`).
+  - Process recreation recovery: CONFIRMED (unacknowledged/pending local SOS packets restored from Room on ViewModel init; tested in `SosViewModelTest`).
 - **Candidate deletions:**
   - Fake satellite status and mock telemetry in `SosViewModel.kt` and `SosScreen.kt`.
 - **Commits:**
   - `a781648 fix(sos): replace mock satellite state with truthful GPS fix and supported transport uplinks`
+  - `a2da5ef feat(sos): implement durable queue, bounded backoff, process recovery, and acceptance tests`
 - **Commands run:**
-  - `.\gradlew.bat :app:testDebugUnitTest --tests "com.meshlink.app.ui.sos.SosViewModelTest"` (159 passed)
-- **Results:** 159 tests passing in `:app:testDebugUnitTest`. DEF-013 resolved.
+  - `.\gradlew.bat :core:data:testDebugUnitTest --tests "com.meshlink.app.data.repository.SosRepositoryImplTest"` (all passed)
+  - `.\gradlew.bat :app:testDebugUnitTest --tests "com.meshlink.app.ui.sos.SosViewModelTest"` (all 11 passed)
+- **Results:** 11 SosViewModel unit tests and SosRepository Room tests passing. DEF-013 resolved.
 - **Defects:**
   - `DEF-013` (P0/P1 / Truthfulness & Safety): RESOLVED.
-- **Blockers / decisions needed:** None.
+- **Blockers / decisions needed:** None for local code.
 - **Not proven by this phase:** Physical radio SOS packet transmission across real phones (logged as `IMPLEMENTED-PENDING-DEVICE`).
 - **Device/CI verification still required:** Real dual-device SOS broadcast and ACK over BLE/LoRa hardware.
 
 ---
 
-## Phase 5: Mesh Networking and Transport | Status: VERIFIED
+## Phase 5: Mesh Networking and Transport | Status: IMPLEMENTED-PENDING-DEVICE
 - **Claims verified:**
   - Unified transport interface: CONFIRMED (`MeshTransport` interface implemented by `MeshtasticBleTransport` and Nearby; connection state and availability observable).
   - Transport interchangeability and settings routing: CONFIRMED (`MeshRouter` respects `useNearby` and `useMeshtastic` DataStore settings; packets routed dynamically to `TransportType.MESHTASTIC` or `TransportType.NEARBY`).
@@ -165,13 +169,13 @@
 - **Results:** 98 tests pass in `:core:mesh:testDebugUnitTest`.
 - **Defects:**
   - `DEF-005` (High / Pending-Device): Physical BLE/LoRa communication pending real hardware.
-- **Blockers / decisions needed:** Physical hardware required for RF broadcast validation.
+- **Blockers / decisions needed:** Physical hardware required for RF broadcast validation. Status downgraded from VERIFIED to IMPLEMENTED-PENDING-DEVICE per resumption protocol.
 - **Not proven by this phase:** Physical RF wave propagation, multi-phone RF mesh relay.
 - **Device/CI verification still required:** Physical Meshtastic node pairing and RF packet exchange (`IMPLEMENTED-PENDING-DEVICE`).
 
 ---
 
-## Phase 6: Fully Offline AI | Status: VERIFIED
+## Phase 6: Fully Offline AI | Status: IMPLEMENTED-PENDING-DEVICE
 - **Claims verified:**
   - MediaPipe Tasks & ML Kit local execution: CONFIRMED (on-device inference; magic-byte format validation rejects `.litertlm` and corrupt binaries).
   - Explicit offline guarantee: CONFIRMED (zero network dependencies; `SpeechManager` requires on-device speech recognizer and fails closed without internet fallback).
@@ -183,13 +187,13 @@
   - `.\gradlew.bat :app:testDebugUnitTest --tests "com.meshlink.app.ai.*"` (90 passed, 0 failures)
 - **Results:** 90 AI unit tests pass.
 - **Defects:** None.
-- **Blockers / decisions needed:** Medical/rescue guidance content requires human expert sign-off before field deployment.
+- **Blockers / decisions needed:** Medical/rescue guidance content requires human expert sign-off before field deployment. Status downgraded from VERIFIED to IMPLEMENTED-PENDING-DEVICE per resumption protocol.
 - **Not proven by this phase:** Real-world inference latency and peak RAM usage across diverse low-end devices.
 - **Device/CI verification still required:** Physical device inference benchmark on target edge hardware (`IMPLEMENTED-PENDING-DEVICE`).
 
 ---
 
-## Phase 7: Backend and API (`cloud/backend`) | Status: VERIFIED
+## Phase 7: Backend and API (`cloud/backend`) | Status: IMPLEMENTED-UNEXECUTED
 - **Claims verified:**
   - Role-based authentication & authorization: CONFIRMED (gateway write tokens for `/api/sync/*` vs operator read tokens for `/api/*`; constant-time comparison; credential revocation).
   - Secure WebSocket alert stream: CONFIRMED (Origin validation, production WSS enforcement, connection cap of 50, single-use ticket consumption via query/subprotocol/timed message, zero alerts before auth).
@@ -202,7 +206,7 @@
 - **Results:** 28 tests pass in `cloud/backend/test_backend.py`.
 - **Defects:**
   - `DEF-009` (Critical / Passing-CI, TLS Unexecuted): Production TLS deployment unexecuted.
-- **Blockers / decisions needed:** Production TLS deployment requires external server/reverse-proxy provisioning.
+- **Blockers / decisions needed:** Production TLS deployment requires external server/reverse-proxy provisioning. Status downgraded from VERIFIED to IMPLEMENTED-UNEXECUTED per resumption protocol.
 - **Not proven by this phase:** Live TLS/WSS certificate validation under real-world domain.
 - **Device/CI verification still required:** Deployment behind production TLS reverse proxy (`IMPLEMENTED-UNEXECUTED`).
 
@@ -248,7 +252,7 @@
 
 ---
 
-## Phase 10: Performance and Resilience | Status: VERIFIED
+## Phase 10: Performance and Resilience | Status: IMPLEMENTED-PENDING-DEVICE
 - **Claims verified:**
   - Adaptive battery scan management: CONFIRMED (`AdaptiveScanController` shifts between FAST 1.5s, SLOW 5s..30s backoff, and pauses when battery <= 15% or manual pause).
   - System memory & process death resilience: CONFIRMED (`onTrimMemory` unloads AI models under memory pressure; Room transactions atomic; single-flight inference mutex prevents concurrent OOM).
@@ -259,13 +263,13 @@
   - `.\gradlew.bat :core:mesh:testDebugUnitTest --tests "com.meshlink.app.mesh.battery.AdaptiveScanControllerTest"` (passed)
 - **Results:** Battery and scan backoff tests pass.
 - **Defects:** None.
-- **Blockers / decisions needed:** None.
+- **Blockers / decisions needed:** None for local code. Status downgraded from VERIFIED to IMPLEMENTED-PENDING-DEVICE per resumption protocol.
 - **Not proven by this phase:** Physical battery draw (mAh) under continuous 24h background operation.
 - **Device/CI verification still required:** Hardware battery benchmark on physical test bench (`IMPLEMENTED-PENDING-DEVICE`).
 
 ---
 
-## Phase 11: Testing and CI | Status: IMPLEMENTED-UNEXECUTED
+## Phase 11: Testing and CI | Status: IMPLEMENTED-UNEXECUTED / OWNER-ACTION
 - **Claims verified:**
   - Workflows aligned: CONFIRMED (`ci.yml`, `codeql.yml`, `release.yml` use consistent JDK 21 and triggers for master, main, feature/**, fix/**, release/**).
   - Doc sync script: CONFIRMED (`scripts/verify-docs.sh` passes 100% after commit `e56acc1`).
@@ -284,12 +288,13 @@
 
 ---
 
-## Phase 12: Android Release Compatibility | Status: VERIFIED
+## Phase 12: Android Release Compatibility | Status: IMPLEMENTED-PENDING-DEVICE (Zip 16KB Verified, ELF Partial)
 - **Claims verified:**
   - SDK declarations: CONFIRMED (`minSdk = 26`, `targetSdk = 36`, `compileSdk = 36`).
   - Minified release build: CONFIRMED (`isMinifyEnabled = true`, `isShrinkResources = true`, R8 proguard rules tested and passing).
   - 16 KB page-size zip alignment: CONFIRMED (`zipalign -c -P 16 -v 4 app-release-unsigned.apk` executed with Android SDK 36.0.0; reported `Verification successful`).
-  - Native library inclusion: CONFIRMED (bundled native `.so` for arm64-v8a, armeabi-v7a, x86, x86_64 for SQLCipher, MediaPipe, ML Kit, Graphics Path, DataStore).
+  - Native library ELF alignment: PARTIAL (inspected all 20 `.so` files across 4 ABIs; `libsqlcipher.so`, `libllm_inference_engine_jni.so`, `libdatastore_shared_counter.so`, `libandroidx.graphics.path.so` have 16 KB `PT_LOAD` alignment [16384]; upstream `libmlkitcommonpipeline.so` has 4 KB `PT_LOAD` alignment [4096]).
+  - 173 MB APK size explanation: CONFIRMED (183.03 MB uncompressed, 172.85 MB compressed; `lib/` accounts for 156.60 MB stored uncompressed for zero-copy OS `mmap`; bundles 4 ABIs [arm64-v8a 42.3MB, armeabi-v7a 32.4MB, x86_64 43.1MB, x86 38.8MB]; largest libs are `libllm_inference_engine_jni.so` at 103.7MB total, `libmlkitcommonpipeline.so` at 34.3MB total, `libsqlcipher.so` at 18.5MB total; per-device download via Google Play App Bundle split APK is ~40–45 MB).
   - Signing configuration: CONFIRMED (unsigned release APK generated safely; signing keys read from CI secrets only; zero test keys committed).
 - **Candidate deletions:** None.
 - **Commits:**
@@ -300,8 +305,8 @@
   - `Get-FileHash app\build\outputs\apk\release\app-release-unsigned.apk -Algorithm SHA256`
 - **Results:** Release APK assembled: `app-release-unsigned.apk` (173,148,864 bytes, SHA-256: `C76DE2690BC317BB762F652A9D6FDF21B93DF9137B57B335238C6E12D9ADDF03`).
 - **Defects:**
-  - `DEF-008` (High / Compliance): Zip alignment verified; runtime device test pending.
-- **Blockers / decisions needed:** Production signing keystore is an owner action.
+  - `DEF-008` (High / Compliance): Zip 16 KB alignment verified; ML Kit ELF 16 KB pending upstream; runtime device test pending.
+- **Blockers / decisions needed:** Production signing keystore is an owner action. Upstream ML Kit 16 KB update required for pure 16 KB kernel execution without compatibility shim. Status downgraded from VERIFIED to IMPLEMENTED-PENDING-DEVICE.
 - **Not proven by this phase:** Runtime installation and execution on physical 16 KB page-size Android 15+ hardware.
 - **Device/CI verification still required:** Physical 16 KB device execution (`IMPLEMENTED-PENDING-DEVICE`); release signing (`OWNER-ACTION`).
 
@@ -327,13 +332,13 @@
 
 ---
 
-## Phase 14: End-to-End Regression | Status: VERIFIED
+## Phase 14: End-to-End Regression | Status: IMPLEMENTED-PENDING-DEVICE (Local Tests Pass; Gated on Hardware & Schemas)
 - **Claims verified:**
-  - Cross-stack test integrity: CONFIRMED (all 334+ automated tests pass across Android, backend, and frontend; 0 regressions).
-  - SOS pipeline integrity: CONFIRMED (creation, validation, deduplication, truthful location, transport routing, peer ACK transitions).
-  - Security and privacy: CONFIRMED (SQLCipher encryption, Tink AEAD keys, no secrets in dist, 0 CVEs).
+  - Cross-stack test integrity: CONFIRMED (all 340+ automated tests pass across Android, backend, and frontend; 0 regressions).
+  - SOS pipeline integrity: CONFIRMED (creation, validation, durable Room queue, rate limiting backoff, process recovery, deduplication, truthful location, transport routing, peer ACK transitions).
+  - Security and privacy: CONFIRMED (SQLCipher encryption, Tink AEAD keys, no secrets in dist, 0 npm/pip CVEs).
 - **Candidate deletions:** None.
-- **Commits:** Regression baseline verified across working tree.
+- **Commits:** Verified across working tree.
 - **Commands run:**
   - `.\gradlew.bat testDebugUnitTest :core:domain:test --continue` (284+ tests pass)
   - `py -3 -m pytest cloud/backend` (28 tests pass)
@@ -341,14 +346,14 @@
   - `npm run build` in `cloud/frontend` (build pass, 0 secrets)
   - `.\gradlew.bat assembleRelease` (build pass, R8 minified)
 - **Results:** Zero test failures, zero build failures, zero lint regressions.
-- **Defects:** All fixable P0/P1 defects resolved.
-- **Blockers / decisions needed:** None.
+- **Defects:** All fixable P0/P1 defects resolved locally.
+- **Blockers / decisions needed:** Room historical migrations (DEF-003) remains BLOCKED; physical RF mesh and 16 KB runtime are pending device tests. Status downgraded from VERIFIED to IMPLEMENTED-PENDING-DEVICE per resumption protocol.
 - **Not proven by this phase:** Physical dual-phone radio field exercises.
 - **Device/CI verification still required:** Physical multi-phone field test (`IMPLEMENTED-PENDING-DEVICE`).
 
 ---
 
-## Phase 15: Release Candidate | Status: VERIFIED
+## Phase 15: Release Candidate | Status: IMPLEMENTED / OWNER-ACTION
 - **Claims verified:**
   - Release artifact generated: CONFIRMED (`app-release-unsigned.apk`, 173,148,864 bytes).
   - Artifact SHA-256: `C76DE2690BC317BB762F652A9D6FDF21B93DF9137B57B335238C6E12D9ADDF03`.
@@ -359,8 +364,8 @@
 - **Commands run:**
   - `Get-FileHash app\build\outputs\apk\release\app-release-unsigned.apk -Algorithm SHA256`
 - **Results:** Minified release candidate APK generated and verified locally.
-- **Defects:** All P0/P1 defects resolved; pending external verifications tracked in register.
-- **Blockers / decisions needed:** Owner signing credentials and remote push authorization.
+- **Defects:** Local P0/P1 defects resolved; pending external verifications tracked in register.
+- **Blockers / decisions needed:** Owner signing credentials and remote push authorization. Status downgraded from VERIFIED to IMPLEMENTED / OWNER-ACTION per resumption protocol.
 - **Not proven by this phase:** External deployment and store release.
 - **Device/CI verification still required:** Owner signing and remote CI execution (`OWNER-ACTION`).
 
