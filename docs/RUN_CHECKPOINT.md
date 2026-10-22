@@ -62,3 +62,29 @@
 - **Blockers / decisions needed:** Historical schemas 4..12 are absent from all git branches; owner decision required on legacy database deprecation vs recovery.
 - **Not proven by this phase:** Physical hardware mesh communication, RF distance, satellite uplink (hardware absent), 16 KB runtime behavior, TalkBack quality, production TLS.
 - **Device/CI verification still required:** Physical BLE/LoRa pairing, multi-hop mesh, 16 KB device execution, TalkBack audit, production WSS deployment.
+
+---
+
+## Phase 1: Hygiene and Architecture | Status: VERIFIED
+- **Claims verified:**
+  - Dead simulator code in production source set: CONFIRMED / RESOLVED (`MockMeshBackendService.kt` was an unreferenced class in `core/data/src/main/` returning simulated delay; deleted per deletion rule; architectural boundaries between domain, data, and presentation verified).
+  - Dead mock telemetry in ChatViewModel: CONFIRMED / RESOLVED (`snr`, `signalStrength`, `protocol`, `modulation`, `dutyCycleAirtime` were hardcoded strings unreferenced in UI; removed while preserving legitimate `battery` monitoring).
+  - Project naming alignment: CONFIRMED (`Nexus Support` in `strings.xml`, `README.md`, and dashboard `index.html`; internal technical package `com.meshlink.app` preserved to prevent data/permission breakage).
+- **Candidate deletions:**
+  - `core/data/src/main/java/com/meshlink/app/data/remote/MockMeshBackendService.kt` (executed: deleted in commit `897297e`).
+  - Unused mock telemetry in `ChatViewModel.kt` (executed: cleaned in commit `29e6006`).
+- **Commits:**
+  - `897297e chore(hygiene): remove unused MockMeshBackendService simulator from production source set`
+  - `86ce4a9 docs(architecture): update component list to reflect MeshBackendService interface`
+  - `29e6006 refactor(chat): remove unused mock telemetry properties in ChatViewModel`
+- **Commands run:**
+  - `.\gradlew.bat :core:data:testDebugUnitTest` (BUILD SUCCESSFUL in 29s)
+  - `.\gradlew.bat :app:compileDebugKotlin` (BUILD SUCCESSFUL in 26s)
+  - `.\gradlew.bat testDebugUnitTest :core:domain:test --continue` (BUILD SUCCESSFUL in 21s, 284 passed, 0 failures, 0 skipped)
+- **Results:** 284 Android unit tests pass (0 failures, 0 errors, 0 skipped). DEF-015 resolved.
+- **Defects:**
+  - `DEF-015` (P2 / Architecture / Hygiene): RESOLVED.
+- **Blockers / decisions needed:** None.
+- **Not proven by this phase:** None.
+- **Device/CI verification still required:** None.
+

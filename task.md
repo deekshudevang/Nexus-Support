@@ -230,8 +230,8 @@
 Authoritative per-phase execution log is tracked in [`docs/RUN_CHECKPOINT.md`](file:///docs/RUN_CHECKPOINT.md).
 
 - **Phase 0: Repository Baseline:** **VERIFIED** (Commit: `95426ea`, 318 tests passing across Android, backend, and frontend; baseline defect register updated with DEF-013 through DEF-016).
-- **Phase 1: Hygiene and Architecture:** **IN PROGRESS** (Targeting removal of dead simulator `MockMeshBackendService.kt`, removal of dead mock telemetry in `ChatViewModel.kt`, and architectural boundaries).
-- **Phase 2: Android Experience:** **NOT-STARTED** (Screen inventory, elimination of fake distance `mockDistance` in `DiscoveryScreen.kt`, accessibility, TalkBack readiness).
+- **Phase 1: Hygiene and Architecture:** **VERIFIED** (Commits: `897297e`, `86ce4a9`, `29e6006`; removed dead simulator `MockMeshBackendService.kt`, removed dead mock telemetry in `ChatViewModel.kt`, verified architectural boundaries).
+- **Phase 2: Android Experience:** **IN PROGRESS** (Screen inventory, elimination of fake distance `mockDistance` in `DiscoveryScreen.kt`, unit tests for ViewModels, TalkBack readiness).
 - **Phase 3: Data Layer and Room:** **PARTIAL / BLOCKED ON DEF-003** (Room schema directory verified; migrations 1->2, 2->3, 1->3, 13->14 verified; historical schemas 4..12 absent / blocked).
 - **Phase 4: SOS and Emergency Reliability:** **NOT-STARTED** (Elimination of fake satellite status in `SosViewModel.kt`/`SosScreen.kt`, wiring real GPS fix, duplicate suppression, offline durable queue tests).
 - **Phase 5: Mesh Networking and Transport:** **IMPLEMENTED-PENDING-DEVICE** (Official Meshtastic UUIDs verified; `MeshRouter` routing verified; physical RF validation pending device).
