@@ -22,6 +22,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -123,5 +124,65 @@ class SosViewModelTest {
         assertFalse(viewModel.isBroadcasting.value)
         verify(atLeast = 1) { sosBeaconAdvertiser.stopAdvertising() }
         verify(atLeast = 1) { aiCoordinator.onSosDeactivated() }
+    }
+
+    @Test
+    fun gpsFixAvailable_reflectsRealLocationAvailability() = testScope.runTest {
+        // Initially null in setUp -> gpsFixAvailable is false
+        testScheduler.advanceUntilIdle()
+        assertFalse(viewModel.gpsFixAvailable.value)
+
+        val mockLocation = mockk<android.location.Location> {
+            every { latitude } returns 37.7749
+            every { longitude } returns -122.4194
+        }
+        coEvery { locationTracker.getCurrentLocation(any()) } returns mockLocation
+
+        viewModel.refreshGpsStatus()
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.gpsFixAvailable.value)
+    }
+
+    @Test
+    fun setUplink_switchesBetweenSupportedTransports() {
+        assertEquals(SosViewModel.UplinkType.NEARBY_BLE, viewModel.activeUplink.value)
+
+        viewModel.setUplink(SosViewModel.UplinkType.LORA_RF)
+        assertEquals(SosViewModel.UplinkType.LORA_RF, viewModel.activeUplink.value)
+
+        viewModel.setUplink(SosViewModel.UplinkType.NEARBY_BLE)
+        assertEquals(SosViewModel.UplinkType.NEARBY_BLE, viewModel.activeUplink.value)
+    }
+
+    @Test
+    fun peerAck_transitionsDeliveryStatusToPeerAcknowledged() = testScope.runTest {
+        viewModel.toggleSos()
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(SosViewModel.SosDeliveryState.TRANSMITTING, viewModel.deliveryStatus.value)
+
+        // Capture sent SOS message id from repository
+        var sentUuid: String? = null
+        verify {
+            nearbyRepository.sendSos(match { json ->
+                val data = com.meshlink.app.domain.model.SosPacketData.fromJson(json)
+                sentUuid = data?.uuid
+                true
+            })
+        }
+
+        // Emit ACK with the active UUID
+        val ackPacket = MeshPacket(
+            senderId = "responder-node",
+            receiverId = "test-device-id",
+            content = sentUuid!!,
+            timestamp = System.currentTimeMillis(),
+            type = MeshPacket.PacketType.ACK
+        )
+        incomingPacketsFlow.emit(ackPacket)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(SosViewModel.SosDeliveryState.PEER_ACKNOWLEDGED, viewModel.deliveryStatus.value)
     }
 }

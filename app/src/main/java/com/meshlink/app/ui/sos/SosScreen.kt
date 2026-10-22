@@ -44,12 +44,11 @@ fun SosScreen(
 ) {
     val isBroadcasting by viewModel.isBroadcasting.collectAsState()
     val deliveryStatus by viewModel.deliveryStatus.collectAsState()
-    val satelliteLock by viewModel.satelliteLockStatus.collectAsState()
+    val gpsFixAvailable by viewModel.gpsFixAvailable.collectAsState()
     val activeUplink by viewModel.activeUplink.collectAsState()
     val incidentType by viewModel.incidentType.collectAsState()
     val includeGps by viewModel.includeGps.collectAsState()
     val includeMedical by viewModel.includeMedical.collectAsState()
-    val nextOrb by viewModel.nextOrbitalWindowSeconds.collectAsState()
 
     val bg = MaterialTheme.colorScheme.background
     val primary = MaterialTheme.colorScheme.primary
@@ -129,7 +128,7 @@ fun SosScreen(
             Icon(Icons.Default.GpsFixed, contentDescription = "GPS Status", tint = primary, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = if (satelliteLock.contains("LOCK")) "GPS Signal: Strong" else "GPS Signal: Searching...",
+                text = if (gpsFixAvailable) "GPS Fix: Acquired" else "GPS Signal: Searching...",
                 color = primary,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold
@@ -159,33 +158,23 @@ fun SosScreen(
         Spacer(modifier = Modifier.height(12.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
             SelectionPill(
-                text = "Local Mesh",
+                text = "Nearby Direct (BLE/Wi-Fi)",
+                selected = activeUplink == SosViewModel.UplinkType.NEARBY_BLE,
+                onClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.setUplink(SosViewModel.UplinkType.NEARBY_BLE) 
+                },
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            SelectionPill(
+                text = "LoRa RF (Meshtastic)",
                 selected = activeUplink == SosViewModel.UplinkType.LORA_RF,
                 onClick = { 
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.setUplink(SosViewModel.UplinkType.LORA_RF) 
                 },
                 modifier = Modifier.weight(1f)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            SelectionPill(
-                text = "Satellite",
-                selected = activeUplink == SosViewModel.UplinkType.SATELLITE,
-                onClick = { 
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    viewModel.setUplink(SosViewModel.UplinkType.SATELLITE) 
-                },
-                modifier = Modifier.weight(1f)
-            )
-        }
-        
-        AnimatedVisibility(visible = activeUplink == SosViewModel.UplinkType.SATELLITE) {
-            Text(
-                text = "Satellite available in ${nextOrb}s",
-                color = primary,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
-                textAlign = androidx.compose.ui.text.style.TextAlign.End
             )
         }
         

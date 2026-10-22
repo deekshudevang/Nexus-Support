@@ -33,15 +33,12 @@ class SosViewModel @Inject constructor(
     private val _isBroadcasting = MutableStateFlow(false)
     val isBroadcasting: StateFlow<Boolean> = _isBroadcasting
 
-    // New mock state for the Tactical SOS Screen
-    private val _satelliteLockStatus = MutableStateFlow("3 SATS [LOCK 3D]")
-    val satelliteLockStatus: StateFlow<String> = _satelliteLockStatus
+    // Truthful GPS fix detection
+    private val _gpsFixAvailable = MutableStateFlow(false)
+    val gpsFixAvailable: StateFlow<Boolean> = _gpsFixAvailable
 
-    private val _satelliteSnr = MutableStateFlow(98)
-    val satelliteSnr: StateFlow<Int> = _satelliteSnr
-
-    enum class UplinkType { LORA_RF, SATELLITE }
-    private val _activeUplink = MutableStateFlow(UplinkType.LORA_RF)
+    enum class UplinkType { NEARBY_BLE, LORA_RF }
+    private val _activeUplink = MutableStateFlow(UplinkType.NEARBY_BLE)
     val activeUplink: StateFlow<UplinkType> = _activeUplink
 
     enum class IncidentType { MED_EVAC, LOST, GEAR, SECURITY, NONE }
@@ -53,9 +50,6 @@ class SosViewModel @Inject constructor(
 
     private val _includeMedical = MutableStateFlow(false)
     val includeMedical: StateFlow<Boolean> = _includeMedical
-
-    private val _nextOrbitalWindowSeconds = MutableStateFlow(8)
-    val nextOrbitalWindowSeconds: StateFlow<Int> = _nextOrbitalWindowSeconds
 
     enum class SosDeliveryState {
         IDLE,
@@ -85,6 +79,16 @@ class SosViewModel @Inject constructor(
                     }
                 }
             }
+        }
+        refreshGpsStatus()
+    }
+
+    fun refreshGpsStatus() {
+        viewModelScope.launch {
+            val location = locationTracker.getCurrentLocation(timeoutMs = 1500)
+            _gpsFixAvailable.value = (location != null &&
+                !location.latitude.isNaN() && !location.longitude.isNaN() &&
+                (location.latitude != 0.0 || location.longitude != 0.0))
         }
     }
 
