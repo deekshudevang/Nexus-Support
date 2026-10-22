@@ -320,4 +320,132 @@ class SosViewModelTest {
         viewModel.setUplink(SosViewModel.UplinkType.NEARBY_BLE)
         assertEquals(SosViewModel.UplinkType.NEARBY_BLE, viewModel.activeUplink.value)
     }
+
+    // --- Priority C: SOS Concurrency & Reliability Regressions ---
+    @Test
+    fun test_sos_cancellation_during_gps_lookup_prevents_enqueue_and_retry() = testScope.runTest {
+        // Simulate GPS lookup that suspends
+        coEvery { locationTracker.getCurrentLocation(any()) } coAnswers {
+            kotlinx.coroutines.delay(5000)
+            null
+        }
+
+        // 1. User activates SOS
+        viewModel.toggleSos()
+        testScheduler.runCurrent()
+        assertTrue(viewModel.isBroadcasting.value)
+
+        // Wait past wall-clock debounce threshold (1000ms)
+        Thread.sleep(1050)
+
+        // 2. User cancels SOS before GPS returns
+        viewModel.toggleSos()
+        testScheduler.runCurrent()
+        assertFalse(viewModel.isBroadcasting.value)
+        assertEquals(SosViewModel.SosDeliveryState.IDLE, viewModel.deliveryStatus.value)
+
+        // Advance time past the GPS timeout
+        advanceTimeBy(10_000)
+        testScheduler.advanceUntilIdle()
+
+        // Ensure no SOS was ever persisted or sent
+        coVerify(exactly = 0) { sosRepository.enqueueSos(any()) }
+        verify(exactly = 0) { nearbyRepository.sendSos(any()) }
+    }
+
+    @Test
+    fun test_sos_duplicate_ack_ignored_once_peer_acknowledged() = testScope.runTest {
+        viewModel.toggleSos()
+        testScheduler.runCurrent()
+
+        var enqueuedUuid: String? = null
+        coVerify(atLeast = 1) {
+            sosRepository.enqueueSos(match {
+                enqueuedUuid = it.uuid
+                true
+            })
+        }
+
+        val ackPacket = MeshPacket(
+            senderId = "peer-node-1",
+            receiverId = "test-device-id",
+            content = enqueuedUuid!!,
+            timestamp = System.currentTimeMillis(),
+            type = MeshPacket.PacketType.ACK
+        )
+
+        // First ACK
+        incomingPacketsFlow.emit(ackPacket)
+        testScheduler.runCurrent()
+        assertEquals(SosViewModel.SosDeliveryState.PEER_ACKNOWLEDGED, viewModel.deliveryStatus.value)
+        coVerify(exactly = 1) { sosRepository.acknowledgeSos(enqueuedUuid!!) }
+
+        // Second duplicate ACK (relayed via another peer)
+        incomingPacketsFlow.emit(ackPacket)
+        testScheduler.runCurrent()
+        assertEquals(SosViewModel.SosDeliveryState.PEER_ACKNOWLEDGED, viewModel.deliveryStatus.value)
+        // verify still exactly 1 call
+        coVerify(exactly = 1) { sosRepository.acknowledgeSos(enqueuedUuid!!) }
+    }
+
+    @Test
+    fun test_sos_mismatched_ack_does_not_acknowledge() = testScope.runTest {
+        viewModel.toggleSos()
+        testScheduler.runCurrent()
+
+        assertEquals(SosViewModel.SosDeliveryState.TRANSMITTING, viewModel.deliveryStatus.value)
+
+        val mismatchedAck = MeshPacket(
+            senderId = "peer-node-1",
+            receiverId = "test-device-id",
+            content = "mismatched-uuid-9999",
+            timestamp = System.currentTimeMillis(),
+            type = MeshPacket.PacketType.ACK
+        )
+
+        incomingPacketsFlow.emit(mismatchedAck)
+        testScheduler.runCurrent()
+
+        // State remains transmitting
+        assertEquals(SosViewModel.SosDeliveryState.TRANSMITTING, viewModel.deliveryStatus.value)
+        coVerify(exactly = 0) { sosRepository.acknowledgeSos(any()) }
+    }
+
+    @Test
+    fun test_sos_stale_ack_after_cancellation_ignored() = testScope.runTest {
+        viewModel.toggleSos()
+        testScheduler.runCurrent()
+
+        var enqueuedUuid: String? = null
+        coVerify(atLeast = 1) {
+            sosRepository.enqueueSos(match {
+                enqueuedUuid = it.uuid
+                true
+            })
+        }
+
+        // Cancel SOS after wall-clock debounce period
+        Thread.sleep(1050)
+        viewModel.toggleSos()
+        testScheduler.runCurrent()
+
+        assertFalse(viewModel.isBroadcasting.value)
+        assertEquals(SosViewModel.SosDeliveryState.IDLE, viewModel.deliveryStatus.value)
+
+        // Stale ACK arrives for the cancelled UUID
+        val staleAck = MeshPacket(
+            senderId = "peer-node-1",
+            receiverId = "test-device-id",
+            content = enqueuedUuid!!,
+            timestamp = System.currentTimeMillis(),
+            type = MeshPacket.PacketType.ACK
+        )
+
+        incomingPacketsFlow.emit(staleAck)
+        testScheduler.runCurrent()
+
+        // Must remain IDLE, not transition to PEER_ACKNOWLEDGED
+        assertEquals(SosViewModel.SosDeliveryState.IDLE, viewModel.deliveryStatus.value)
+        coVerify(exactly = 0) { sosRepository.acknowledgeSos(any()) }
+    }
 }

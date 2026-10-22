@@ -70,6 +70,7 @@ class SosViewModel @Inject constructor(
     val deliveryStatus: StateFlow<SosDeliveryState> = _deliveryStatus
 
     @Volatile private var activeSosMessageId: String? = null
+    private var broadcastJob: Job? = null
     private var retryJob: Job? = null
     @Volatile private var lastToggleTimestampMs: Long = 0L
 
@@ -88,6 +89,10 @@ class SosViewModel @Inject constructor(
                 } else if (packet.type == MeshPacket.PacketType.ACK) {
                     val activeId = activeSosMessageId
                     if (activeId != null && packet.content == activeId) {
+                        if (_deliveryStatus.value == SosDeliveryState.PEER_ACKNOWLEDGED) {
+                            Timber.d("SosViewModel: Duplicate peer ACK received for already-acknowledged SOS $activeId; ignoring")
+                            return@collect
+                        }
                         Timber.i("SosViewModel: Received peer ACK for active SOS beacon $activeId")
                         _deliveryStatus.value = SosDeliveryState.PEER_ACKNOWLEDGED
                         retryJob?.cancel()
@@ -152,6 +157,8 @@ class SosViewModel @Inject constructor(
         _isBroadcasting.value = false
         _deliveryStatus.value = SosDeliveryState.IDLE
         activeSosMessageId = null
+        broadcastJob?.cancel()
+        broadcastJob = null
         retryJob?.cancel()
         retryJob = null
 
@@ -182,7 +189,8 @@ class SosViewModel @Inject constructor(
     }
 
     private fun broadcastSos() {
-        viewModelScope.launch {
+        broadcastJob?.cancel()
+        broadcastJob = viewModelScope.launch {
             val incidentStr = if (_incidentType.value != IncidentType.NONE) "[${_incidentType.value.name}] " else ""
             var message = "SOS! ${incidentStr}I need help!"
 
@@ -234,6 +242,11 @@ class SosViewModel @Inject constructor(
                 IncidentType.NONE -> SosPacketData.EmergencyType.OTHER
             }
 
+            if (!_isBroadcasting.value) {
+                Timber.w("SosViewModel: SOS broadcasting was cancelled while preparing packet; aborting enqueue")
+                return@launch
+            }
+
             val packetData = SosPacketData(
                 senderId = myDeviceId,
                 emergencyType = eType,
@@ -250,6 +263,11 @@ class SosViewModel @Inject constructor(
             val enqueued = sosRepository.enqueueSos(packetData)
             if (!enqueued) {
                 Timber.w("SosViewModel: SOS with uuid ${packetData.uuid} already enqueued; skipping duplicate")
+                return@launch
+            }
+
+            if (!_isBroadcasting.value) {
+                Timber.w("SosViewModel: SOS broadcasting was cancelled while enqueuing; aborting retry loop")
                 return@launch
             }
 
