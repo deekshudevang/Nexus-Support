@@ -50,3 +50,38 @@ fun KnownDevice.toEntity(): KnownDeviceEntity = KnownDeviceEntity(
     lastLongitude = lastLongitude,
     isVerified = isVerified
 )
+
+fun com.meshlink.app.data.local.entity.SosPacketEntity.toDomain(): com.meshlink.app.domain.model.SosPacketData =
+    com.meshlink.app.domain.model.SosPacketData(
+        uuid = uuid,
+        senderId = senderId,
+        senderName = senderName,
+        emergencyType = try {
+            com.meshlink.app.domain.model.SosPacketData.EmergencyType.valueOf(emergencyType.uppercase())
+        } catch (_: Exception) {
+            com.meshlink.app.domain.model.SosPacketData.EmergencyType.OTHER
+        },
+        severity = severity,
+        latitude = if (latitude == 0.0 && longitude == 0.0) null else latitude,
+        longitude = if (latitude == 0.0 && longitude == 0.0) null else longitude,
+        message = message,
+        timestamp = timestamp,
+        hopCount = hopCount,
+        status = com.meshlink.app.domain.model.SosPacketData.SosStatus.fromString(status)
+    )
+
+fun com.meshlink.app.domain.model.SosPacketData.toEntity(): com.meshlink.app.data.local.entity.SosPacketEntity =
+    com.meshlink.app.data.local.entity.SosPacketEntity(
+        uuid = uuid,
+        senderId = senderId,
+        senderName = senderName,
+        emergencyType = emergencyType.name,
+        severity = severity,
+        latitude = latitude ?: 0.0,
+        longitude = longitude ?: 0.0,
+        message = message,
+        timestamp = timestamp,
+        hopCount = hopCount,
+        status = status.name
+    )
+

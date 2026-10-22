@@ -32,6 +32,24 @@ interface SosPacketDao {
     @Query("DELETE FROM sos_packets WHERE timestamp < :cutoffTimestamp")
     suspend fun deleteOlderThan(cutoffTimestamp: Long)
 
+    @Query("SELECT * FROM sos_packets WHERE uuid = :uuid LIMIT 1")
+    suspend fun getByUuid(uuid: String): SosPacketEntity?
+
+    @Query("SELECT * FROM sos_packets WHERE senderId = :senderId AND (status = 'PENDING' OR status = 'SENT') ORDER BY timestamp DESC LIMIT 1")
+    suspend fun getActiveLocal(senderId: String): SosPacketEntity?
+
+    @Query("SELECT * FROM sos_packets WHERE senderId = :senderId AND (status = 'PENDING' OR status = 'SENT') ORDER BY timestamp DESC LIMIT 1")
+    fun getActiveLocalFlow(senderId: String): Flow<SosPacketEntity?>
+
+    @Query("DELETE FROM sos_packets WHERE uuid = :uuid")
+    suspend fun deleteByUuid(uuid: String)
+
+    @Query("SELECT COUNT(*) FROM sos_packets")
+    suspend fun getTotalCount(): Int
+
+    @Query("DELETE FROM sos_packets WHERE uuid IN (SELECT uuid FROM sos_packets ORDER BY timestamp ASC LIMIT :count)")
+    suspend fun deleteOldest(count: Int)
+
     @Query("SELECT COUNT(*) FROM sos_packets WHERE status = 'PENDING' OR status = 'RELAYED'")
     fun getActiveCount(): Flow<Int>
 }

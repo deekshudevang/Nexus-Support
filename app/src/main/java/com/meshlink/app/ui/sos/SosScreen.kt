@@ -106,10 +106,20 @@ fun SosScreen(
                     Text(
                         text = when (deliveryStatus) {
                             SosViewModel.SosDeliveryState.PEER_ACKNOWLEDGED -> "DELIVERY CONFIRMED: PEER ACK RECEIVED"
+                            SosViewModel.SosDeliveryState.DELIVERED -> "RELAYED TO MESH PEER"
                             SosViewModel.SosDeliveryState.TRANSMITTING -> "BROADCASTING BEACON (AWAITING PEER ACK)"
+                            SosViewModel.SosDeliveryState.PENDING -> "ENQUEUED: PENDING DISPATCH"
+                            SosViewModel.SosDeliveryState.FAILED -> "TRANSMISSION FAILED (ALL RETRIES EXHAUSTED)"
+                            SosViewModel.SosDeliveryState.EXPIRED -> "SIGNAL EXPIRED"
                             SosViewModel.SosDeliveryState.IDLE -> ""
                         },
-                        color = if (deliveryStatus == SosViewModel.SosDeliveryState.PEER_ACKNOWLEDGED) Color(0xFF4CAF50) else errorColor.copy(alpha = 0.85f),
+                        color = when (deliveryStatus) {
+                            SosViewModel.SosDeliveryState.PEER_ACKNOWLEDGED,
+                            SosViewModel.SosDeliveryState.DELIVERED -> Color(0xFF4CAF50)
+                            SosViewModel.SosDeliveryState.FAILED,
+                            SosViewModel.SosDeliveryState.EXPIRED -> errorColor
+                            else -> errorColor.copy(alpha = 0.85f)
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp

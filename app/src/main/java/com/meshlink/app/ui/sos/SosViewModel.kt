@@ -1,21 +1,25 @@
 package com.meshlink.app.ui.sos
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.meshlink.app.domain.model.MeshPacket
+import com.meshlink.app.domain.model.SosPacketData
 import com.meshlink.app.domain.repository.NearbyRepository
+import com.meshlink.app.domain.repository.SosRepository
 import com.meshlink.app.location.LocationTracker
 import com.meshlink.app.mesh.routing.MeshRouter
+import com.meshlink.app.mesh.transport.SosBeaconAdvertiser
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.util.Random
 import javax.inject.Inject
-import android.content.Context
-import com.meshlink.app.domain.model.SosPacketData
-import com.meshlink.app.mesh.transport.SosBeaconAdvertiser
-import com.meshlink.app.mesh.transport.SosBeaconCodec
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Named
 
 @HiltViewModel
@@ -25,6 +29,7 @@ class SosViewModel @Inject constructor(
     private val locationTracker: LocationTracker,
     private val meshRouter: MeshRouter,
     private val nearbyRepository: NearbyRepository,
+    private val sosRepository: SosRepository,
     private val sosBeaconAdvertiser: SosBeaconAdvertiser,
     private val sosNonceGenerator: com.meshlink.app.mesh.transport.SosNonceGenerator,
     private val aiCoordinator: com.meshlink.app.ai.domain.OfflineAiCoordinator
@@ -53,33 +58,62 @@ class SosViewModel @Inject constructor(
 
     enum class SosDeliveryState {
         IDLE,
+        PENDING,
         TRANSMITTING,
-        PEER_ACKNOWLEDGED
+        DELIVERED,
+        PEER_ACKNOWLEDGED,
+        FAILED,
+        EXPIRED
     }
 
     private val _deliveryStatus = MutableStateFlow(SosDeliveryState.IDLE)
     val deliveryStatus: StateFlow<SosDeliveryState> = _deliveryStatus
 
     @Volatile private var activeSosMessageId: String? = null
+    private var retryJob: Job? = null
+    @Volatile private var lastToggleTimestampMs: Long = 0L
+
+    private val random = Random()
 
     init {
+        // Collect incoming packets for SOS notification and peer ACKs
         viewModelScope.launch {
             nearbyRepository.incomingPackets.collect { packet ->
-                if (packet.type == com.meshlink.app.domain.model.MeshPacket.PacketType.SOS) {
+                if (packet.type == MeshPacket.PacketType.SOS) {
                     try {
                         aiCoordinator.onSosActivated()
                     } catch (t: Throwable) {
                         Timber.w(t, "Failed to notify aiCoordinator of incoming SOS; continuing SOS processing")
                     }
-                } else if (packet.type == com.meshlink.app.domain.model.MeshPacket.PacketType.ACK) {
+                } else if (packet.type == MeshPacket.PacketType.ACK) {
                     val activeId = activeSosMessageId
                     if (activeId != null && packet.content == activeId) {
                         Timber.i("SosViewModel: Received peer ACK for active SOS beacon $activeId")
                         _deliveryStatus.value = SosDeliveryState.PEER_ACKNOWLEDGED
+                        retryJob?.cancel()
+                        retryJob = null
+                        sosRepository.acknowledgeSos(activeId)
                     }
                 }
             }
         }
+
+        // Process recreation / app restart recovery: check durable storage for unacknowledged active SOS
+        viewModelScope.launch {
+            try {
+                val active = sosRepository.getActiveLocalSos()
+                if (active != null && (active.status == SosPacketData.SosStatus.PENDING || active.status == SosPacketData.SosStatus.SENT)) {
+                    Timber.i("SosViewModel: Recovered active unacknowledged SOS from durable storage: uuid=${active.uuid}")
+                    activeSosMessageId = active.uuid
+                    _isBroadcasting.value = true
+                    _deliveryStatus.value = if (active.status == SosPacketData.SosStatus.SENT) SosDeliveryState.TRANSMITTING else SosDeliveryState.PENDING
+                    startRetryLoop(active)
+                }
+            } catch (t: Throwable) {
+                Timber.w(t, "SosViewModel: failed to query durable storage for process recovery")
+            }
+        }
+
         refreshGpsStatus()
     }
 
@@ -98,27 +132,53 @@ class SosViewModel @Inject constructor(
     fun toggleMedical() { _includeMedical.value = !_includeMedical.value }
 
     fun toggleSos() {
-        if (_isBroadcasting.value) {
-            _isBroadcasting.value = false
-            _deliveryStatus.value = SosDeliveryState.IDLE
-            activeSosMessageId = null
-            nearbyRepository.cancelSos()
-            sosBeaconAdvertiser.stopAdvertising()
-            try {
-                aiCoordinator.onSosDeactivated()
-            } catch (t: Throwable) {
-                Timber.w(t, "Failed to notify aiCoordinator of SOS deactivation")
-            }
-        } else {
-            _isBroadcasting.value = true
-            _deliveryStatus.value = SosDeliveryState.TRANSMITTING
-            try {
-                aiCoordinator.onSosActivated()
-            } catch (t: Throwable) {
-                Timber.w(t, "Failed to notify aiCoordinator of SOS activation; continuing SOS broadcast")
-            }
-            broadcastSos()
+        val now = System.currentTimeMillis()
+        // Rate-limiting safeguard: debounce rapid clicks within 1000ms
+        if (now - lastToggleTimestampMs < 1000L) {
+            Timber.w("SosViewModel: Rapid toggle debounced; ignoring duplicate request")
+            return
         }
+        lastToggleTimestampMs = now
+
+        if (_isBroadcasting.value) {
+            cancelSos()
+        } else {
+            activateSos()
+        }
+    }
+
+    private fun cancelSos() {
+        val currentId = activeSosMessageId
+        _isBroadcasting.value = false
+        _deliveryStatus.value = SosDeliveryState.IDLE
+        activeSosMessageId = null
+        retryJob?.cancel()
+        retryJob = null
+
+        nearbyRepository.cancelSos()
+        sosBeaconAdvertiser.stopAdvertising()
+        if (currentId != null) {
+            viewModelScope.launch {
+                sosRepository.cancelSos(currentId)
+            }
+        }
+
+        try {
+            aiCoordinator.onSosDeactivated()
+        } catch (t: Throwable) {
+            Timber.w(t, "Failed to notify aiCoordinator of SOS deactivation")
+        }
+    }
+
+    private fun activateSos() {
+        _isBroadcasting.value = true
+        _deliveryStatus.value = SosDeliveryState.PENDING
+        try {
+            aiCoordinator.onSosActivated()
+        } catch (t: Throwable) {
+            Timber.w(t, "Failed to notify aiCoordinator of SOS activation; continuing SOS broadcast")
+        }
+        broadcastSos()
     }
 
     private fun broadcastSos() {
@@ -155,12 +215,12 @@ class SosViewModel @Inject constructor(
                 val bg = prefs.getString("blood_group", "")
                 val allergies = prefs.getString("allergies", "")
                 val meds = prefs.getString("medications", "")
-                
+
                 val builder = java.lang.StringBuilder("\nMedical Info:\n")
                 if (!bg.isNullOrBlank()) builder.append("Blood: $bg\n")
                 if (!allergies.isNullOrBlank()) builder.append("Allergies: $allergies\n")
                 if (!meds.isNullOrBlank()) builder.append("Meds: $meds\n")
-                
+
                 if (builder.toString() != "\nMedical Info:\n") {
                     message += builder.toString()
                 }
@@ -180,13 +240,67 @@ class SosViewModel @Inject constructor(
                 severity = 5,
                 latitude = lat,
                 longitude = lon,
-                message = message.trim()
+                message = message.trim(),
+                status = SosPacketData.SosStatus.PENDING
             )
 
             activeSosMessageId = packetData.uuid
 
-            // Send via Nearby Mesh (nearbyRepository.sendSos also starts authoritative BLE beacon advertising)
-            nearbyRepository.sendSos(packetData.toJson())
+            // Persist to durable queue with duplicate suppression
+            val enqueued = sosRepository.enqueueSos(packetData)
+            if (!enqueued) {
+                Timber.w("SosViewModel: SOS with uuid ${packetData.uuid} already enqueued; skipping duplicate")
+                return@launch
+            }
+
+            startRetryLoop(packetData)
         }
+    }
+
+    private fun startRetryLoop(packetData: SosPacketData) {
+        retryJob?.cancel()
+        retryJob = viewModelScope.launch {
+            var attempt = 0
+            var delayMs = INITIAL_BACKOFF_MS
+
+            while (_isBroadcasting.value && attempt < MAX_RETRY_ATTEMPTS) {
+                attempt++
+                try {
+                    _deliveryStatus.value = SosDeliveryState.TRANSMITTING
+                    sosRepository.updateSosStatus(packetData.uuid, SosPacketData.SosStatus.SENT)
+
+                    // Send via Nearby Mesh and BLE beacon advertising
+                    nearbyRepository.sendSos(packetData.toJson())
+                    Timber.d("SosViewModel: broadcast attempt $attempt succeeded for ${packetData.uuid}")
+                } catch (t: Throwable) {
+                    Timber.e(t, "SosViewModel: broadcast attempt $attempt failed for ${packetData.uuid}")
+                }
+
+                // If ACK already arrived, exit immediately
+                if (_deliveryStatus.value == SosDeliveryState.PEER_ACKNOWLEDGED) {
+                    break
+                }
+
+                // Bounded exponential backoff with jitter
+                val jitter = random.nextInt(500)
+                val totalDelay = (delayMs + jitter).coerceAtMost(MAX_BACKOFF_MS)
+                delay(totalDelay)
+                delayMs = (delayMs * BACKOFF_MULTIPLIER).toLong().coerceAtMost(MAX_BACKOFF_MS)
+            }
+
+            // If retry exhausted and still transmitting without ACK
+            if (_isBroadcasting.value && _deliveryStatus.value == SosDeliveryState.TRANSMITTING && attempt >= MAX_RETRY_ATTEMPTS) {
+                Timber.w("SosViewModel: Max retry attempts ($MAX_RETRY_ATTEMPTS) exhausted for ${packetData.uuid}")
+                _deliveryStatus.value = SosDeliveryState.FAILED
+                sosRepository.updateSosStatus(packetData.uuid, SosPacketData.SosStatus.FAILED)
+            }
+        }
+    }
+
+    companion object {
+        const val INITIAL_BACKOFF_MS = 2000L
+        const val BACKOFF_MULTIPLIER = 2.0
+        const val MAX_BACKOFF_MS = 30000L
+        const val MAX_RETRY_ATTEMPTS = 5
     }
 }

@@ -27,7 +27,36 @@ data class SosPacketData(
     }
 
     enum class SosStatus {
-        PENDING, RELAYED, DELIVERED, RESPONDED
+        PENDING,
+        SENT,
+        DELIVERED,
+        ACKNOWLEDGED,
+        FAILED,
+        EXPIRED,
+        CANCELLED,
+        RELAYED,
+        RESPONDED;
+
+        companion object {
+            fun fromString(value: String?): SosStatus {
+                if (value.isNullOrBlank()) return PENDING
+                return when (value.uppercase().trim()) {
+                    "PENDING" -> PENDING
+                    "SENT", "TRANSMITTING" -> SENT
+                    "DELIVERED" -> DELIVERED
+                    "ACKNOWLEDGED", "RESPONDED", "PEER_ACKNOWLEDGED" -> ACKNOWLEDGED
+                    "FAILED" -> FAILED
+                    "EXPIRED" -> EXPIRED
+                    "CANCELLED", "CANCELED" -> CANCELLED
+                    "RELAYED" -> RELAYED
+                    else -> try {
+                        valueOf(value.uppercase().trim())
+                    } catch (_: Exception) {
+                        PENDING
+                    }
+                }
+            }
+        }
     }
 
     val hasValidLocation: Boolean
@@ -142,11 +171,7 @@ data class SosPacketData(
                     EmergencyType.OTHER
                 }
 
-                val status = try {
-                    SosStatus.valueOf(obj.get("status")?.asString?.uppercase() ?: "PENDING")
-                } catch (_: Exception) {
-                    SosStatus.PENDING
-                }
+                val status = SosStatus.fromString(obj.get("status")?.asString)
 
                 val beaconKey = if (obj.has("beaconKey") && !obj.get("beaconKey").isJsonNull) {
                     obj.get("beaconKey").asString

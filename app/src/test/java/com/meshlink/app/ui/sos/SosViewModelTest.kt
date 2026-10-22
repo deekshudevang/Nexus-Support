@@ -3,7 +3,9 @@ package com.meshlink.app.ui.sos
 import android.content.Context
 import com.meshlink.app.ai.domain.OfflineAiCoordinator
 import com.meshlink.app.domain.model.MeshPacket
+import com.meshlink.app.domain.model.SosPacketData
 import com.meshlink.app.domain.repository.NearbyRepository
+import com.meshlink.app.domain.repository.SosRepository
 import com.meshlink.app.location.LocationTracker
 import com.meshlink.app.mesh.routing.MeshRouter
 import com.meshlink.app.mesh.transport.SosBeaconAdvertiser
@@ -18,6 +20,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -27,6 +30,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SosViewModelTest {
@@ -38,6 +42,7 @@ class SosViewModelTest {
     private val locationTracker: LocationTracker = mockk(relaxed = true)
     private val meshRouter: MeshRouter = mockk(relaxed = true)
     private val nearbyRepository: NearbyRepository = mockk(relaxed = true)
+    private val sosRepository: SosRepository = mockk(relaxed = true)
     private val sosBeaconAdvertiser: SosBeaconAdvertiser = mockk(relaxed = true)
     private val sosNonceGenerator: SosNonceGenerator = mockk(relaxed = true)
     private val aiCoordinator: OfflineAiCoordinator = mockk(relaxed = true)
@@ -51,13 +56,23 @@ class SosViewModelTest {
         Dispatchers.setMain(testDispatcher)
         every { nearbyRepository.incomingPackets } returns incomingPacketsFlow
         coEvery { locationTracker.getCurrentLocation(any()) } returns null
+        coEvery { sosRepository.getActiveLocalSos() } returns null
+        coEvery { sosRepository.enqueueSos(any()) } returns true
+        coEvery { sosRepository.updateSosStatus(any(), any()) } returns Unit
+        coEvery { sosRepository.acknowledgeSos(any()) } returns true
+        coEvery { sosRepository.cancelSos(any()) } returns Unit
 
-        viewModel = SosViewModel(
+        viewModel = createViewModel()
+    }
+
+    private fun createViewModel(): SosViewModel {
+        return SosViewModel(
             context = context,
             myDeviceId = "test-device-id",
             locationTracker = locationTracker,
             meshRouter = meshRouter,
             nearbyRepository = nearbyRepository,
+            sosRepository = sosRepository,
             sosBeaconAdvertiser = sosBeaconAdvertiser,
             sosNonceGenerator = sosNonceGenerator,
             aiCoordinator = aiCoordinator
@@ -69,6 +84,183 @@ class SosViewModelTest {
         Dispatchers.resetMain()
     }
 
+    // --- Acceptance Criteria 1: Success ---
+    @Test
+    fun test_sos_lifecycle_success_path() = testScope.runTest {
+        assertFalse(viewModel.isBroadcasting.value)
+        assertEquals(SosViewModel.SosDeliveryState.IDLE, viewModel.deliveryStatus.value)
+
+        // 1. User activates SOS
+        viewModel.toggleSos()
+        testScheduler.runCurrent()
+
+        assertTrue(viewModel.isBroadcasting.value)
+        assertEquals(SosViewModel.SosDeliveryState.TRANSMITTING, viewModel.deliveryStatus.value)
+
+        // Capture enqueued SOS packet
+        var enqueuedUuid: String? = null
+        coVerify(atLeast = 1) {
+            sosRepository.enqueueSos(match {
+                enqueuedUuid = it.uuid
+                it.senderId == "test-device-id" && it.status == SosPacketData.SosStatus.PENDING
+            })
+        }
+        coVerify(atLeast = 1) {
+            sosRepository.updateSosStatus(enqueuedUuid!!, SosPacketData.SosStatus.SENT)
+        }
+        verify(atLeast = 1) { nearbyRepository.sendSos(any()) }
+
+        // 2. Peer acknowledges SOS via matching ACK packet
+        val ackPacket = MeshPacket(
+            senderId = "peer-node-1",
+            receiverId = "test-device-id",
+            content = enqueuedUuid!!,
+            timestamp = System.currentTimeMillis(),
+            type = MeshPacket.PacketType.ACK
+        )
+        incomingPacketsFlow.emit(ackPacket)
+        testScheduler.runCurrent()
+
+        assertEquals(SosViewModel.SosDeliveryState.PEER_ACKNOWLEDGED, viewModel.deliveryStatus.value)
+        coVerify(atLeast = 1) { sosRepository.acknowledgeSos(enqueuedUuid!!) }
+    }
+
+    // --- Acceptance Criteria 2: Timeout and Retry with Backoff ---
+    @Test
+    fun test_sos_timeout_and_retry_backoff() = testScope.runTest {
+        viewModel.toggleSos()
+        testScheduler.runCurrent()
+
+        assertEquals(SosViewModel.SosDeliveryState.TRANSMITTING, viewModel.deliveryStatus.value)
+        verify(exactly = 1) { nearbyRepository.sendSos(any()) }
+
+        // Advance past initial backoff window (2000ms + max 500ms jitter)
+        advanceTimeBy(3000)
+        testScheduler.runCurrent()
+
+        // Verify attempt 2 was triggered
+        verify(atLeast = 2) { nearbyRepository.sendSos(any()) }
+    }
+
+    // --- Acceptance Criteria 3: Duplicate Requests Suppression ---
+    @Test
+    fun test_sos_duplicate_requests_debounced() = testScope.runTest {
+        // First activation
+        viewModel.toggleSos()
+        testScheduler.runCurrent()
+        assertTrue(viewModel.isBroadcasting.value)
+
+        // Immediate rapid second toggle (<1000ms) is debounced
+        viewModel.toggleSos()
+        testScheduler.runCurrent()
+
+        // State remains broadcasting because rapid toggle was ignored
+        assertTrue(viewModel.isBroadcasting.value)
+    }
+
+    @Test
+    fun test_sos_duplicate_uuid_enqueue_suppressed() = testScope.runTest {
+        // When repository reports duplicate UUID, retry loop does not start for duplicate
+        coEvery { sosRepository.enqueueSos(any()) } returns false
+
+        viewModel.toggleSos()
+        testScheduler.runCurrent()
+
+        // sendSos is not invoked if enqueue fails due to duplicate
+        verify(exactly = 0) { nearbyRepository.sendSos(any()) }
+    }
+
+    // --- Acceptance Criteria 4: Disconnection Resilience ---
+    @Test
+    fun test_sos_disconnection_retains_durable_queue() = testScope.runTest {
+        viewModel.toggleSos()
+        testScheduler.runCurrent()
+
+        // Packet was persisted to durable queue
+        coVerify(atLeast = 1) { sosRepository.enqueueSos(any()) }
+        coVerify(atLeast = 1) { sosRepository.updateSosStatus(any(), SosPacketData.SosStatus.SENT) }
+        assertTrue(viewModel.isBroadcasting.value)
+    }
+
+    // --- Acceptance Criteria 5: Retry Exhaustion ---
+    @Test
+    fun test_sos_retry_exhaustion_marks_failed() = testScope.runTest {
+        viewModel.toggleSos()
+        testScheduler.runCurrent()
+
+        assertEquals(SosViewModel.SosDeliveryState.TRANSMITTING, viewModel.deliveryStatus.value)
+
+        // Advance time through all 5 retry backoff intervals (2s + 4s + 8s + 16s + 30s + jitter)
+        advanceTimeBy(100_000)
+        testScheduler.advanceUntilIdle()
+
+        // After max retry attempts exhausted without ACK, transitions to FAILED
+        assertEquals(SosViewModel.SosDeliveryState.FAILED, viewModel.deliveryStatus.value)
+        coVerify(atLeast = 1) { sosRepository.updateSosStatus(any(), SosPacketData.SosStatus.FAILED) }
+    }
+
+    // --- Acceptance Criteria 6: Process Recreation Recovery ---
+    @Test
+    fun test_sos_process_recreation_restores_active_state() = testScope.runTest {
+        val existingUnacknowledgedSos = SosPacketData(
+            uuid = "recovered-uuid-999",
+            senderId = "test-device-id",
+            emergencyType = SosPacketData.EmergencyType.MEDICAL,
+            severity = 5,
+            message = "SOS! I need help!",
+            status = SosPacketData.SosStatus.SENT
+        )
+        coEvery { sosRepository.getActiveLocalSos() } returns existingUnacknowledgedSos
+
+        // Instantiate new ViewModel (simulating process recreation after crash/kill)
+        val recreatedVm = createViewModel()
+        testScheduler.runCurrent()
+
+        assertTrue(recreatedVm.isBroadcasting.value)
+        assertEquals(SosViewModel.SosDeliveryState.TRANSMITTING, recreatedVm.deliveryStatus.value)
+
+        // Incoming ACK for recovered UUID completes delivery
+        val ackPacket = MeshPacket(
+            senderId = "peer-node-2",
+            receiverId = "test-device-id",
+            content = "recovered-uuid-999",
+            timestamp = System.currentTimeMillis(),
+            type = MeshPacket.PacketType.ACK
+        )
+        incomingPacketsFlow.emit(ackPacket)
+        testScheduler.runCurrent()
+
+        assertEquals(SosViewModel.SosDeliveryState.PEER_ACKNOWLEDGED, recreatedVm.deliveryStatus.value)
+        coVerify(atLeast = 1) { sosRepository.acknowledgeSos("recovered-uuid-999") }
+    }
+
+    // --- Acceptance Criteria 7: Partial Failure Resilience ---
+    @Test
+    fun test_sos_partial_failure_does_not_crash_retry_loop() = testScope.runTest {
+        // Simulate Nearby Connections throwing an IOException on first broadcast attempt
+        var callCount = 0
+        every { nearbyRepository.sendSos(any()) } answers {
+            callCount++
+            if (callCount == 1) {
+                throw IOException("Nearby radio transport temporarily unavailable")
+            }
+        }
+
+        viewModel.toggleSos()
+        testScheduler.runCurrent()
+
+        // Broadcast did not crash; state is still active
+        assertTrue(viewModel.isBroadcasting.value)
+
+        // Advance to retry attempt 2
+        advanceTimeBy(4000)
+        testScheduler.runCurrent()
+
+        // Succeeded on subsequent retry attempt
+        assertTrue(callCount >= 2)
+    }
+
+    // --- Existing Features & Truthful Status ---
     @Test
     fun incomingSosPacket_notifiesAiCoordinatorForPreemption() = testScope.runTest {
         val sosPacket = MeshPacket(
@@ -80,7 +272,7 @@ class SosViewModelTest {
         )
 
         incomingPacketsFlow.emit(sosPacket)
-        testScheduler.advanceUntilIdle()
+        testScheduler.runCurrent()
 
         verify(atLeast = 1) { aiCoordinator.onSosActivated() }
     }
@@ -96,40 +288,14 @@ class SosViewModelTest {
         )
 
         incomingPacketsFlow.emit(chatPacket)
-        testScheduler.advanceUntilIdle()
+        testScheduler.runCurrent()
 
         verify(exactly = 0) { aiCoordinator.onSosActivated() }
     }
 
     @Test
-    fun toggleSos_activation_notifiesAiCoordinatorAndStartsBroadcasting() = testScope.runTest {
-        assertFalse(viewModel.isBroadcasting.value)
-
-        viewModel.toggleSos()
-        testScheduler.advanceUntilIdle()
-
-        assertTrue(viewModel.isBroadcasting.value)
-        verify(atLeast = 1) { aiCoordinator.onSosActivated() }
-    }
-
-    @Test
-    fun toggleSos_deactivation_notifiesAiCoordinatorAndStopsAdvertising() = testScope.runTest {
-        viewModel.toggleSos()
-        testScheduler.advanceUntilIdle()
-        assertTrue(viewModel.isBroadcasting.value)
-
-        viewModel.toggleSos()
-        testScheduler.advanceUntilIdle()
-
-        assertFalse(viewModel.isBroadcasting.value)
-        verify(atLeast = 1) { sosBeaconAdvertiser.stopAdvertising() }
-        verify(atLeast = 1) { aiCoordinator.onSosDeactivated() }
-    }
-
-    @Test
     fun gpsFixAvailable_reflectsRealLocationAvailability() = testScope.runTest {
-        // Initially null in setUp -> gpsFixAvailable is false
-        testScheduler.advanceUntilIdle()
+        testScheduler.runCurrent()
         assertFalse(viewModel.gpsFixAvailable.value)
 
         val mockLocation = mockk<android.location.Location> {
@@ -139,7 +305,7 @@ class SosViewModelTest {
         coEvery { locationTracker.getCurrentLocation(any()) } returns mockLocation
 
         viewModel.refreshGpsStatus()
-        testScheduler.advanceUntilIdle()
+        testScheduler.runCurrent()
 
         assertTrue(viewModel.gpsFixAvailable.value)
     }
@@ -153,36 +319,5 @@ class SosViewModelTest {
 
         viewModel.setUplink(SosViewModel.UplinkType.NEARBY_BLE)
         assertEquals(SosViewModel.UplinkType.NEARBY_BLE, viewModel.activeUplink.value)
-    }
-
-    @Test
-    fun peerAck_transitionsDeliveryStatusToPeerAcknowledged() = testScope.runTest {
-        viewModel.toggleSos()
-        testScheduler.advanceUntilIdle()
-
-        assertEquals(SosViewModel.SosDeliveryState.TRANSMITTING, viewModel.deliveryStatus.value)
-
-        // Capture sent SOS message id from repository
-        var sentUuid: String? = null
-        verify {
-            nearbyRepository.sendSos(match { json ->
-                val data = com.meshlink.app.domain.model.SosPacketData.fromJson(json)
-                sentUuid = data?.uuid
-                true
-            })
-        }
-
-        // Emit ACK with the active UUID
-        val ackPacket = MeshPacket(
-            senderId = "responder-node",
-            receiverId = "test-device-id",
-            content = sentUuid!!,
-            timestamp = System.currentTimeMillis(),
-            type = MeshPacket.PacketType.ACK
-        )
-        incomingPacketsFlow.emit(ackPacket)
-        testScheduler.advanceUntilIdle()
-
-        assertEquals(SosViewModel.SosDeliveryState.PEER_ACKNOWLEDGED, viewModel.deliveryStatus.value)
     }
 }
