@@ -62,31 +62,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.meshlink.app.domain.model.ConnectionState
 import com.meshlink.app.domain.model.DiscoveredDevice
 
-// Mocked distance helper (Nearby API doesn't expose distance)
-private fun mockDistance(endpointId: String): String {
-    val distances = listOf("42M", "110M", "250M", "85M", "320M", "67M")
-    return distances[Math.abs(endpointId.hashCode()) % distances.size]
-}
-
-@Composable
-private fun getDistanceColor(endpointId: String): Color {
-    val d = mockDistance(endpointId).removeSuffix("M").toIntOrNull() ?: 100
-    return when {
-        d <= 80  -> MaterialTheme.colorScheme.primary
-        d <= 180 -> MaterialTheme.colorScheme.secondary
-        else     -> MaterialTheme.colorScheme.error
-    }
-}
-
-private fun distanceBadgeLabel(endpointId: String): String {
-    val d = mockDistance(endpointId).removeSuffix("M").toIntOrNull() ?: 100
-    return when {
-        d <= 80  -> "NEAR"
-        d <= 180 -> "FAR"
-        else     -> "VERY FAR"
-    }
-}
-
 private fun deviceIcon(index: Int): ImageVector = when (index % 3) {
     0    -> Icons.Default.Person
     1    -> Icons.Default.CellTower
@@ -169,7 +144,6 @@ fun DiscoveryScreen(
                     DeviceCard(
                         device       = device,
                         icon         = deviceIcon(idx),
-                        distance     = mockDistance(device.endpointId),
                         isConnecting = isConnecting,
                         isConnected  = isConnected,
                         onClick      = { if (!isConnecting) viewModel.onDeviceClick(device) },
@@ -342,14 +316,21 @@ private fun ScanningBadge() {
 private fun DeviceCard(
     device:       DiscoveredDevice,
     icon:         ImageVector,
-    distance:     String,
     isConnecting: Boolean,
     isConnected:  Boolean,
     onClick:      () -> Unit,
     onDisconnect: () -> Unit
 ) {
-    val badgeColor = getDistanceColor(device.endpointId)
-    val badgeLabel = distanceBadgeLabel(device.endpointId)
+    val badgeColor = when {
+        isConnected  -> MaterialTheme.colorScheme.primary
+        isConnecting -> MaterialTheme.colorScheme.secondary
+        else         -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val badgeLabel = when {
+        isConnected  -> "CONNECTED"
+        isConnecting -> "CONNECTING"
+        else         -> "AVAILABLE"
+    }
     
     val containerColor by animateColorAsState(
         targetValue = if (isConnected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface,
@@ -396,13 +377,13 @@ private fun DeviceCard(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text  = "$distance away",
+                        text  = "Nearby Direct Link (BLE / Wi-Fi)",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
-                // Distance badge
+                // Status badge
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = badgeColor.copy(alpha = 0.1f),
