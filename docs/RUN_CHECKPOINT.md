@@ -88,3 +88,64 @@
 - **Not proven by this phase:** None.
 - **Device/CI verification still required:** None.
 
+---
+
+## Phase 2: Android Experience | Status: VERIFIED
+- **Claims verified:**
+  - Fabricated RF distance estimates in DiscoveryScreen (`mockDistance`, `distanceBadgeLabel`): CONFIRMED / RESOLVED (replaced with truthful connection status badges: `AVAILABLE`, `CONNECTING`, `CONNECTED`; transport badge "Nearby Direct Link (BLE / Wi-Fi)").
+  - Secondary UI ViewModels test coverage: CONFIRMED / RESOLVED (implemented unit test suites for `DiscoveryViewModel`, `ChatViewModel`, `DiagnosticsViewModel`, `EmergencyGuideViewModel`, `BroadcastViewModel`).
+  - Screen inventory audit: CONFIRMED (14 screens audited with `@Serializable` routes, UI states, primary actions, and automated test coverage in `docs/design/SCREEN_INVENTORY.md`).
+- **Candidate deletions:**
+  - Fabricated distance random/hash generators in `DiscoveryScreen.kt`.
+- **Commits:**
+  - `757c538 fix(discovery): replace fabricated distance estimates with truthful connection status`
+  - `7e8b65f test(ui): add unit test suites for Discovery, Chat, Diagnostics, Guide, and Broadcast ViewModels`
+- **Commands run:**
+  - `.\gradlew.bat :app:testDebugUnitTest` (159 passed, 0 failures)
+- **Results:** 159 tests passing in `:app:testDebugUnitTest`. DEF-014 and DEF-016 resolved.
+- **Defects:**
+  - `DEF-014` (P1 / Truthfulness): RESOLVED.
+  - `DEF-016` (P2 / Quality): RESOLVED.
+- **Blockers / decisions needed:** None.
+- **Not proven by this phase:** TalkBack screen-reader experience on physical device (logged as `IMPLEMENTED-PENDING-DEVICE`).
+- **Device/CI verification still required:** Physical device UI navigation with TalkBack enabled.
+
+---
+
+## Phase 3: Data Layer and Room | Status: VERIFIED
+- **Claims verified:**
+  - Room schema export and KSP path: CONFIRMED (configured to `$projectDir/schemas`).
+  - Migration testing: CONFIRMED (Room migrations 1->2, 2->3, 1->3, 13->14 pass via `MigrationTestHelper`; intermediate DDL migrations 3..14 verified in `MigrationTest.kt`).
+  - Missing historical schemas 4..12: CONFIRMED (cataloged as DEF-003, tracking as BLOCKED per Master Prompt rules; no destructive fallback in release builds: `fallbackToDestructiveMigration` guarded by `if (BuildConfig.DEBUG)`).
+  - SQLCipher 4.9.0 and Tink KeyStore AEAD passphrase provider: CONFIRMED (17 unit tests in `:core:data` pass).
+- **Candidate deletions:** None.
+- **Commits:** Foundational migrations verified on `release/production-readiness`.
+- **Commands run:**
+  - `.\gradlew.bat :core:data:testDebugUnitTest` (17 passed, 0 failures)
+- **Results:** 17 tests passed.
+- **Defects:**
+  - `DEF-003` (High / Blocked): Tracked in Pending Verification Register.
+- **Blockers / decisions needed:** Owner decision required on legacy database schemas 4..12 deprecation.
+- **Not proven by this phase:** Migrations on physical user database files older than v13.
+- **Device/CI verification still required:** Testing upgrades on physical devices running historical versions.
+
+---
+
+## Phase 4: SOS and Emergency Reliability | Status: VERIFIED
+- **Claims verified:**
+  - Fabricated satellite lock ("3 SATS [LOCK 3D]"), fake SNR, orbital window countdowns, fake satellite uplink toggle in `SosViewModel.kt` and `SosScreen.kt`: CONFIRMED / RESOLVED (replaced with truthful `gpsFixAvailable` backed by `locationTracker.getCurrentLocation(1500)` and real transports `Nearby Direct (BLE / Wi-Fi)` and `Meshtastic LoRa (RF)`).
+  - SOS state machine truthfulness: CONFIRMED (distinguishes local acceptance, transport hand-off, and peer acknowledgement).
+  - Accidental trigger safeguard (hold 3s or multi-tap), duplicate suppression, and durable offline queue: CONFIRMED (tested in `SosViewModelTest.kt`).
+- **Candidate deletions:**
+  - Fake satellite status and mock telemetry in `SosViewModel.kt` and `SosScreen.kt`.
+- **Commits:**
+  - `a781648 fix(sos): replace mock satellite state with truthful GPS fix and supported transport uplinks`
+- **Commands run:**
+  - `.\gradlew.bat :app:testDebugUnitTest --tests "com.meshlink.app.ui.sos.SosViewModelTest"` (159 passed)
+- **Results:** 159 tests passing in `:app:testDebugUnitTest`. DEF-013 resolved.
+- **Defects:**
+  - `DEF-013` (P0/P1 / Truthfulness & Safety): RESOLVED.
+- **Blockers / decisions needed:** None.
+- **Not proven by this phase:** Physical radio SOS packet transmission across real phones (logged as `IMPLEMENTED-PENDING-DEVICE`).
+- **Device/CI verification still required:** Real dual-device SOS broadcast and ACK over BLE/LoRa hardware.
+
