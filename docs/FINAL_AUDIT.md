@@ -1,7 +1,6 @@
 # Historical Engineering Audit (Archived)
 
-**Historical audit date:** 2026-09-20  
-**Historical source commit:** `4f6e61c5de8873ad6fa64f6398909c9347528b19`  
+**Last verified:** 2026-09-20 @ 4f6e61c5de8873ad6fa64f6398909c9347528b19
 **Current release scope:** `release/production-readiness`
 
 > **Important:** This document is a historical record, not a current release sign-off. The claims below were recorded against an older repository state and must not be treated as proof that the current branch has passed the same tests or physical-device procedures. In particular, historical multi-hop field-test notes do not close the current release branch's Meshtastic, 4+ device, 16 KB, TLS, Room schema-history, or TalkBack gates.
