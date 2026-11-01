@@ -91,3 +91,4 @@ def consume_ws_ticket(ticket: str) -> bool:
         _ws_tickets.pop(ticket, None)
         return True
     return False
+

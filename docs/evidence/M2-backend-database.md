@@ -55,3 +55,4 @@
 
 - **Pytest (Python 3.14)**: **31 PASSED / 0 FAILED** (includes `test_user_registration_and_persistent_login` and `test_password_hashing_security`).
 - **Vitest (Node.js 22)**: **6 PASSED / 0 FAILED**.
+

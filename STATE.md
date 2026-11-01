@@ -1,77 +1,42 @@
-# STATE.md — Nexus Support (RescueMesh) System State
+# STATE.md — Nexus Support System State
 
-**Last Updated:** 2026-11-01  
-**Current Milestone Branch:** `m2-backend-database-backbone`  
-**Base Commit:** `9d6a11f` (M2 backend modularization + Alembic + persistent users)  
-**Parent Reference Commit:** `ffc16571af3e372490aed91548cc83a0d69bb509` / `b9de422`  
-**Charter Rules Applied:** `.agent/rules/nexus-charter.md`  
+**Phase:** PG-P0 Complete ➔ Transitioning to PG-P1 (PostgreSQL Foundation)  
+**Branch:** `pg-p0-audit-baseline`  
+**Base Commit:** `4f88c01` (Head of baseline transformation)  
+**Charter Rules Applied:** `.agent/rules/nexus-charter.md` + Master Prompt v2 Inherited Rules  
 
 ---
 
-## 1. Baseline Test Execution Reality
+## 1. Verified Test Baselines
 
-| Module / Test Suite | Runner / Command | Status | Notes |
+| Test Suite | Result | Environment | Evidence |
 |---|---|---|---|
-| `:core:data:testDebugUnitTest` | Gradle 8.11.1 / Java 21 | **PASSED** (58 tasks, 17 executed, 41 up-to-date) | Room migrations 1->2, 2->3, 3->13, 13->14 verified; Tink AEAD & SQLCipher operational. |
-| `:core:crypto:testDebugUnitTest` | Gradle 8.11.1 / Java 21 | **PASSED** | StrongBox/TEE key generation and SAS verification intact. |
-| `:core:mesh:testDebugUnitTest` | Gradle 8.11.1 / Java 21 | **PASSED** (87 tasks) | Nearby, BLE SOS, Meshtastic transport, and deterministic SHA-256 node ID tests verified. |
-| `:app:testDebugUnitTest` | Gradle 8.11.1 / Java 21 | **PASSED** (87 tasks) | ViewModel test suites and GatewaySyncWorkerTest verified. |
-| `cloud/backend` | Python 3.14 / pytest 9.1.1 | **PASSED** (31/31 tests passed) | FastAPI route authentication, persistent users, Alembic, WebSocket tickets, nullable GPS, and receipts. |
-| `cloud/frontend` | Node.js 22 / vitest 5.0.5 | **PASSED** (6/6 tests passed) | React tactical command center, situation room, kanban, radar, copilot. |
+| `pytest test_backend.py test_legacy_contract.py` | **35 / 35 PASSED** | Python 3.14 (FastAPI) | `docs/audit/POSTGRES_BACKEND_BASELINE.md` |
+| `cloud/frontend` build & test | **6 / 6 PASSED**, build ok | Node.js 22 (Vite / React) | `cloud/frontend/dist` |
+| `:core:data:testDebugUnitTest` | **58 tasks PASSED** | Java 21 / Room v1..v14 | `docs/evidence/M0-baseline-audit.md` |
+| `:app:testDebugUnitTest` | **87 tasks PASSED** | Java 21 / ViewModels + Sync | `docs/evidence/M1-contracts-and-defects.md` |
 
 ---
 
-## 2. Hardware & Device Reality
+## 2. Key Architecture Decisions (ADR Summary)
 
-- **Physical Device:** Connected via ADB (`ZD222M3BNH`, Motorola Edge 50 Pro, Android 16 / SDK 36, arm64-v8a).
-- **Existing Pre-built APK:** `app/build/outputs/apk/debug/app-debug.apk` (194.9 MB).
-- **Current ADB Status:** Disconnected or awaiting authorization re-handshake; install command queued for execution as soon as device is connected.
-
----
-
-## 3. Architecture Baseline Reality
-
-1. **Android Client (`app`, `core/data`, `core/domain`, `core/mesh`, `core/crypto`)**:
-   - Single cryptographic identity root (Ed25519 / X25519 + StrongBox/TEE).
-   - Room schema assets strictly configured in `core/data/build.gradle.kts` (`$projectDir/schemas`). Current active schema version is 13.
-   - Offline AI bundle: Gemma 3 1B IT int4 bundle with MediaPipe Tasks GenAI and local Emergency RAG.
-   - P2P Mesh Transports: Google Nearby Connections, BLE SOS Beacon advertising/scanning, and Meshtastic GATT transport.
-
-2. **Cloud Backend (`cloud/backend`)**:
-   - Single-file FastAPI application (`main.py`) using SQLite database (`sos_mesh.db`).
-   - Role separation: Gateway write token vs Operator read token.
-   - In-memory WebSocket broadcast hub with single-use authentication tickets.
-   - Defect identified: Flat architecture, in-memory tokens, needs PostgreSQL/PostGIS migration + Alembic migrations.
-
-3. **Cloud Frontend (`cloud/frontend`)**:
-   - Tactical Command Operations Center (Mil-Spec Dark UI, Lucide icons, Tailwind/CSS).
-   - Views: Situation Room (Leaflet tactical map), Incident Triage Kanban (Draggable state progression), Mesh Radar (Live topology & link quality), Broadcast Console (EOC emergency broadcast dispatcher), AI Triage Copilot (RAG-assisted triage).
-   - Honest GPS indicator: Coordinates `(0.0, 0.0)` accurately rendered as "No GPS Fix".
+- **ADR-001 (Strangler Layout):** Modular code lives in `cloud/backend/app/`, with `main.py` acting as compatibility shim preserving legacy endpoints.
+- **ADR-002 (Dual-Dialect DB):** Synchronous SQLAlchemy 2.x + psycopg 3 with SQLite fallback for offline edge testing.
+- **ADR-003 (3 State Machines):** Independent lifecycles for Incidents, Assignments, and Responder Availability. Response state dynamically derived.
+- **ADR-004 (Real-time Pipeline):** Transactional outbox ➔ gapless `stream_seq` ➔ WebSocket replay with Redis pub/sub + Postgres fallback.
 
 ---
 
-## 4. Defect Register & Targeted Remediation
+## 3. Human Approval Gates (Pending Signoff)
 
-- **[E1] GatewaySyncWorker Hardcoding & Reconciliation Defect**: **RESOLVED**
-  - *Location:* `app/src/main/java/com/meshlink/app/sync/GatewaySyncWorker.kt`
-  - *Resolution:* Injected configurable `KEY_GATEWAY_URL` and `KEY_GATEWAY_KEY`, added `X-Gateway-Key` and `Authorization` headers, implemented per-event receipt reconciliation with Room `updateStatus(uuid, "ACKNOWLEDGED")`. Verified with `GatewaySyncWorkerTest`.
+1. **Offline Responder Enrollment Trust Model:** Documented in `docs/policy/offline-enrollment.md`.
+2. **Responder Location Retention & Consent Policy:** Documented in `docs/policy/break-glass.md` & `medical-privacy.md`.
+3. **Downlink Assignment Delivery Channel:** Baseline is pull-on-sync; push/mesh pending approval.
 
-- **[E2] Backend In-Memory Token Management**: **RESOLVED**
-  - *Location:* `cloud/backend/main.py`
-  - *Resolution:* Added persistent `users` table, PBKDF2-HMAC-SHA256 password hashing with random salt, role separation (`operator`, `responder`, `admin`), and registration endpoint `POST /api/auth/register`. Verified with `test_user_registration_and_persistent_login`.
+---
 
-- **[E3] Nullable GPS Constraint Violation in Pydantic Schema**: **RESOLVED**
-  - *Location:* `cloud/backend/main.py`
-  - *Resolution:* Updated `SosPacket` schema with nullable latitude/longitude and `gpsFixAvailable: bool`. Updated database schema and added automatic column migration. Verified with `test_sync_sos_nullable_gps_and_receipts` (31 passed).
+## 4. Next Three Actions
 
-- **[E4] MeshtasticTransport Premature Success & String HashCode**: **RESOLVED**
-  - *Location:* `core/mesh/src/main/java/com/meshlink/app/mesh/transport/MeshtasticTransport.kt`
-  - *Resolution:* Implemented `deterministicNodeId` and `deterministicMessageId` using SHA-256 byte extraction. Added `writeMutex` and `pendingWriteDeferred` awaiting `onCharacteristicWrite` callback with 5s timeout. Verified with `MeshtasticProtoSerializationTest`.
-
-- **[E5] Human Approval Gates**:
-  - *Offline Enrollment Policy:* Documented in `docs/policy/offline-enrollment.md`. Requires human approval prior to coding.
-  - *Medical Break-Glass Policy:* Documented in `docs/policy/break-glass.md`. Requires human approval prior to coding.
-
-- **[E6] Backend Ingestion Idempotency**: **RESOLVED**
-  - *Location:* `cloud/backend/main.py`
-  - *Resolution:* Ingestion endpoints use primary key deduplication (`uuid`, `deviceId`) with `INSERT OR REPLACE` / `ON CONFLICT` semantics, preventing duplicate events during multi-hop relay.
+1. Commit PG-P0 deliverables and create branch `pg-p1-postgres-foundation`.
+2. Implement PostgreSQL entities (`app/models/`), constraint rules, and Alembic migrations (`PG-P1-01`, `PG-P1-02`).
+3. Build idempotent SQLite ➔ PostgreSQL import tool and `create-admin` CLI command (`PG-P1-03`, `PG-P1-04`).

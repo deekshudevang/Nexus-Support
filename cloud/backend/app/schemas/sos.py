@@ -24,3 +24,4 @@ class SosSyncResponse(BaseModel):
     status: str = "success"
     synced_count: int
     receipts: List[SosReceipt] = []
+

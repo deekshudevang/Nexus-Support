@@ -79,3 +79,4 @@
 
 ## 3. Audit Verdict
 Baseline reality is aligned with repository state. Proceed to Milestone M1 (Contracts & Architecture) and immediate critical defect fixes (E1, E3, E4).
+

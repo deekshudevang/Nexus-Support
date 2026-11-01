@@ -44,3 +44,4 @@ This master system audit establishes baseline truth across all components, docum
    - Fix E3: Nullable GPS support in backend schemas and database ingestion.
    - Fix E4: Meshtastic GATT write callback awaiting and deterministic 64-bit node IDs.
 3. **Branch M2**: Backend modularization, PostgreSQL / PostGIS schema, and Alembic migrations.
+

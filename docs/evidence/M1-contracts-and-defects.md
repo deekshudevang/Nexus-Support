@@ -46,3 +46,4 @@
 
 - **`docs/API_CONTRACTS.md`**: Formal specification of role separation, gateway ingestion, and operator read contracts.
 - **`docs/SYNC_PROTOCOL.md`**: Specification of multi-hop mesh store-and-forward gateway synchronization.
+

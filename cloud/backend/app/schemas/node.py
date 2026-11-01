@@ -13,3 +13,4 @@ class NodeStatus(BaseModel):
 class NodeSyncResponse(BaseModel):
     status: str = "success"
     synced_count: int
+

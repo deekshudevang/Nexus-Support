@@ -66,3 +66,4 @@ class MeshtasticProtoSerializationTest {
         assertEquals("EMERGENCY: FLOOD EVACUATION", proto.decoded.payload.toStringUtf8())
     }
 }
+

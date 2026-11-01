@@ -90,3 +90,4 @@ def init_sqlite_tables(db_path: Optional[str] = None):
     """)
     conn.commit()
     conn.close()
+

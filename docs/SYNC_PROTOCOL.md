@@ -49,3 +49,4 @@ In disaster zones without infrastructure, mesh devices buffer emergency telemetr
 7. **Backoff and Failure Handling**:
    If the network connection drops mid-flight or the backend returns 5xx, the worker terminates with `Result.retry()` and relies on WorkManager's exponential backoff policy (10s initial delay, capped at 30m).
    If HTTP 401/403 is received, authentication has failed and the worker terminates with `Result.failure()` to prevent continuous battery drain.
+

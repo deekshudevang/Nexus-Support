@@ -48,6 +48,35 @@
 
 - **DEF-001 (Repo Hygiene)**: RESOLVED. Cleaned tracked dumps, obsolete inference, and unneeded simulator services.
 - **DEF-002 (Room Schema Config)**: RESOLVED. Corrected schema export path to `$projectDir/schemas`.
+
+---
+
+## 4. PostgreSQL Operations & Command Center Matrix (Phases PG-P0 .. PG-P9)
+
+| Phase | Task ID | Description | Status | Ver. Level | Evidence Path | Gate Result |
+|---|---|---|---|---|---|---|
+| **PG-P0** | PG-P0-01 | Audit & Characterization of risks | **VERIFIED** | L1 | `docs/audit/POSTGRES_BACKEND_BASELINE.md` | PASSED |
+| **PG-P0** | PG-P0-02 | Freeze Legacy API Contract | **VERIFIED** | L1 | `docs/api/LEGACY_CONTRACT.md`, `test_legacy_contract.py` | PASSED (35/35) |
+| **PG-P0** | PG-P0-03 | Baseline Runs (Python, Node, Android) | **VERIFIED** | L1 | `docs/evidence/M0-baseline-audit.md` | PASSED |
+| **PG-P1** | PG-P1-01 | PostgreSQL Schema & Entities Definition | **NOT STARTED** | L2 | `docs/evidence/PG-P1-01.md` | PENDING |
+| **PG-P1** | PG-P1-02 | Incremental Alembic Migrations | **NOT STARTED** | L2 | `docs/evidence/PG-P1-02.md` | PENDING |
+| **PG-P1** | PG-P1-03 | SQLite -> PostgreSQL Idempotent Import Tool | **NOT STARTED** | L2 | `docs/evidence/PG-P1-03.md` | PENDING |
+| **PG-P1** | PG-P1-04 | Bootstrap Admin CLI (`app.cli create-admin`) | **NOT STARTED** | L1 | `docs/evidence/PG-P1-04.md` | PENDING |
+| **PG-P2** | PG-P2-01 | Capability-based RBAC & Scoped Authorization | **NOT STARTED** | L1 | `docs/evidence/PG-P2-01.md` | PENDING |
+| **PG-P2** | PG-P2-02 | Negative Authorization & IDOR Tests | **NOT STARTED** | L1 | `docs/evidence/PG-P2-02.md` | PENDING |
+| **PG-P2** | PG-P2-03 | Device Keystore Challenge-Response Auth | **NOT STARTED** | L2 | `docs/evidence/PG-P2-03.md` | PENDING |
+| **PG-Slice**| PG-SLC-01| Vertical Slice: Device SOS -> DB -> Outbox -> WS | **NOT STARTED** | L2 | `docs/evidence/PG-SLC-01.md` | PENDING |
+| **PG-P3** | PG-P3-01 | 3-State-Machine Incident Lifecycle Domain | **NOT STARTED** | L1 | `docs/evidence/PG-P3-01.md` | PENDING |
+| **PG-P3** | PG-P3-02 | Idempotent Ingestion & Duplicate Linking | **NOT STARTED** | L2 | `docs/evidence/PG-P3-02.md` | PENDING |
+| **PG-P4** | PG-P4-01 | Responders, Teams & Availability Model | **NOT STARTED** | L2 | `docs/evidence/PG-P4-01.md` | PENDING |
+| **PG-P4** | PG-P4-02 | Concurrent Dispatch & Partial Unique Index | **NOT STARTED** | L2 | `docs/evidence/PG-P4-02.md` | PENDING |
+| **PG-P5** | PG-P5-01 | Transactional Outbox & Gapless `stream_seq` | **NOT STARTED** | L2 | `docs/evidence/PG-P5-01.md` | PENDING |
+| **PG-P5** | PG-P5-02 | WebSocket Ticket Store & Redis-less Fallback | **NOT STARTED** | L2 | `docs/evidence/PG-P5-02.md` | PENDING |
+| **PG-P6** | PG-P6-01 | Command Center Tactical Overview & Queue | **NOT STARTED** | L2 | `docs/evidence/PG-P6-01.md` | PENDING |
+| **PG-P6** | PG-P6-02 | Map Adapter, Offline Tiles & Honest Missing GPS | **NOT STARTED** | L2 | `docs/evidence/PG-P6-02.md` | PENDING |
+| **PG-P7** | PG-P7-01 | Android Device Integration & Downlink Pull | **NOT STARTED** | L1 | `docs/evidence/PG-P7-01.md` | PENDING |
+| **PG-P8** | PG-P8-01 | Comprehensive End-to-End Flows (A-F) | **NOT STARTED** | L2 | `docs/evidence/PG-P8-01.md` | PENDING |
+| **PG-P9** | PG-P9-01 | Readiness Probes, Structured Logs & Restore Drill | **NOT STARTED** | L2 | `docs/evidence/PG-P9-01.md` | PENDING |
 - **DEF-003 (Historical Room Schemas 4..12)**: RESOLVED (Documented Policy & Tests). Recovered authentic schema understanding; documented legacy DB policy in `docs/architecture/DATABASE_UPGRADE_POLICY.md`; added sequential migration tests (v1->v2, v2->v3, v3->v13, v13->v14) in `MeshDatabaseMigrationTest` and fail-closed release corruption recovery test in `DatabaseCorruptionRecoveryTest` (commit `eb9d03c`).
 - **DEF-004 (Settings Persistence)**: RESOLVED. DataStore persistence verified for `useNearby`, `useMeshtastic`, `batteryOptimization`.
 - **DEF-005 (Meshtastic BLE HW Validation)**: IMPLEMENTED-PENDING-DEVICE. Unified transport routing verified; HW pending.
