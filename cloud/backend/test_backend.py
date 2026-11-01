@@ -401,3 +401,43 @@ def test_operator_token_login(client):
     # Invalid login
     res_bad = client.post("/api/auth/token", json={"username": "admin", "password": "wrong_password"})
     assert res_bad.status_code == 401
+
+def test_sync_sos_nullable_gps_and_receipts(client):
+    gw_headers = {"X-Gateway-Key": "gw_key_valid_1"}
+    op_headers = {"Authorization": "Bearer op_token_valid_1"}
+
+    # SOS packet without GPS fix (e.g. underground or indoor victim)
+    no_gps_packet = [{
+        "uuid": "sos-no-gps-001",
+        "senderId": "node-basement-1",
+        "senderName": "Basement Resident",
+        "emergencyType": "MEDICAL",
+        "severity": 8,
+        "latitude": None,
+        "longitude": None,
+        "gpsFixAvailable": False,
+        "message": "Trapped underground, no GPS lock",
+        "timestamp": int(time.time()),
+        "status": "PENDING",
+        "hopCount": 2
+    }]
+
+    response = client.post("/api/v1/sync/sos", json=no_gps_packet, headers=gw_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["synced_count"] == 1
+    assert "receipts" in data
+    assert len(data["receipts"]) == 1
+    assert data["receipts"][0]["uuid"] == "sos-no-gps-001"
+    assert data["receipts"][0]["status"] == "ACKNOWLEDGED"
+
+    # Query as operator to verify record was stored truthfully
+    get_res = client.get("/api/sos", headers=op_headers)
+    assert get_res.status_code == 200
+    items = get_res.json()
+    found = next((i for i in items if i["uuid"] == "sos-no-gps-001"), None)
+    assert found is not None
+    assert found["latitude"] is None
+    assert found["longitude"] is None
+    assert found["gpsFixAvailable"] == 0

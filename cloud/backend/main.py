@@ -136,8 +136,9 @@ def init_db(db_path: Optional[str] = None):
         senderName TEXT NOT NULL,
         emergencyType TEXT NOT NULL,
         severity INTEGER NOT NULL,
-        latitude REAL NOT NULL,
-        longitude REAL NOT NULL,
+        latitude REAL,
+        longitude REAL,
+        gpsFixAvailable INTEGER DEFAULT 1,
         message TEXT NOT NULL,
         timestamp INTEGER NOT NULL,
         status TEXT NOT NULL,
@@ -146,6 +147,12 @@ def init_db(db_path: Optional[str] = None):
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_sos_packets_timestamp ON sos_packets(timestamp DESC);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_sos_packets_severity ON sos_packets(severity);")
+
+    # Column migration if table already exists without gpsFixAvailable
+    cursor = conn.execute("PRAGMA table_info(sos_packets);")
+    existing_cols = [row[1] for row in cursor.fetchall()]
+    if "gpsFixAvailable" not in existing_cols and len(existing_cols) > 0:
+        conn.execute("ALTER TABLE sos_packets ADD COLUMN gpsFixAvailable INTEGER DEFAULT 1;")
 
     conn.execute("""
     CREATE TABLE IF NOT EXISTS node_status (
@@ -184,8 +191,9 @@ class SosPacket(BaseModel):
     senderName: str = Field(..., min_length=1, max_length=128)
     emergencyType: str = Field(..., min_length=1, max_length=64)
     severity: int = Field(..., ge=1, le=10)
-    latitude: float = Field(..., ge=-90.0, le=90.0)
-    longitude: float = Field(..., ge=-180.0, le=180.0)
+    latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    gpsFixAvailable: Optional[bool] = Field(None)
     message: str = Field(..., max_length=4096)
     timestamp: int
     status: str = Field(..., min_length=1, max_length=32)
@@ -332,24 +340,28 @@ def issue_ws_ticket(_: str = Depends(verify_operator_read)):
 
 # ── Gateway Ingestion Endpoints (WRITE ONLY) ─────────────────────────────────
 @app.post("/api/sync/sos")
+@app.post("/api/v1/sync/sos")
 async def sync_sos(packets: List[SosPacket], _: str = Depends(verify_gateway_write)):
     if len(packets) > 500:
         raise HTTPException(status_code=400, detail="Batch exceeds maximum allowed size of 500 packets")
 
     with get_db() as conn:
         count = 0
+        receipts = []
         try:
             for p in packets:
+                has_fix = 1 if (p.gpsFixAvailable if p.gpsFixAvailable is not None else (p.latitude is not None and p.longitude is not None)) else 0
                 conn.execute("""
                 INSERT OR REPLACE INTO sos_packets 
-                (uuid, senderId, senderName, emergencyType, severity, latitude, longitude, message, timestamp, status, hopCount)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (uuid, senderId, senderName, emergencyType, severity, latitude, longitude, gpsFixAvailable, message, timestamp, status, hopCount)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     p.uuid, p.senderId, p.senderName, p.emergencyType,
-                    p.severity, p.latitude, p.longitude, p.message,
+                    p.severity, p.latitude, p.longitude, has_fix, p.message,
                     p.timestamp, p.status, p.hopCount or 0
                 ))
                 count += 1
+                receipts.append({"uuid": p.uuid, "status": "ACKNOWLEDGED", "synced": True})
             conn.commit()
         except Exception as e:
             conn.rollback()
@@ -360,7 +372,7 @@ async def sync_sos(packets: List[SosPacket], _: str = Depends(verify_gateway_wri
     for p in packets:
         await alert_manager.broadcast_sos(p.model_dump())
 
-    return {"status": "success", "synced_count": count}
+    return {"status": "success", "synced_count": count, "receipts": receipts}
 
 @app.post("/api/sync/nodes")
 def sync_nodes(nodes: List[NodeStatus], _: str = Depends(verify_gateway_write)):

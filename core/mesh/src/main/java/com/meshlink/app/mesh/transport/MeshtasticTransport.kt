@@ -1,6 +1,7 @@
 package com.meshlink.app.mesh.transport
 
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
@@ -18,6 +19,7 @@ import com.geeksville.mesh.MeshProtos
 import com.geeksville.mesh.Portnums
 import com.google.protobuf.ByteString
 import com.meshlink.app.domain.model.MeshPacket
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,7 +31,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.UUID
 
 /**
@@ -47,13 +55,50 @@ interface MeshtasticTransport : MeshTransport {
 }
 
 /**
+ * Deterministically maps arbitrary node strings (IDs, public keys, callsigns)
+ * to a uniform 32-bit integer compatible with Meshtastic protobuf node numbers.
+ */
+fun deterministicNodeId(id: String): Int {
+    if (id.isEmpty()) return 0
+    if (id == MeshPacket.BROADCAST_DEST) return 0xFFFFFFFF.toInt()
+    if (id.startsWith("!") && id.length > 1) {
+        val hex = id.substring(1)
+        hex.toLongOrNull(16)?.let { return it.toInt() }
+    }
+    id.toLongOrNull()?.let { return it.toInt() }
+
+    val md = MessageDigest.getInstance("SHA-256")
+    val digest = md.digest(id.toByteArray(StandardCharsets.UTF_8))
+    return (digest[0].toInt() and 0xFF shl 24) or
+           (digest[1].toInt() and 0xFF shl 16) or
+           (digest[2].toInt() and 0xFF shl 8) or
+           (digest[3].toInt() and 0xFF)
+}
+
+/**
+ * Deterministically maps message IDs to 32-bit integer packet IDs.
+ */
+fun deterministicMessageId(id: String): Int {
+    if (id.isEmpty()) {
+        val bytes = ByteArray(4)
+        SecureRandom().nextBytes(bytes)
+        return (bytes[0].toInt() and 0xFF shl 24) or
+               (bytes[1].toInt() and 0xFF shl 16) or
+               (bytes[2].toInt() and 0xFF shl 8) or
+               (bytes[3].toInt() and 0xFF)
+    }
+    id.toLongOrNull()?.let { return it.toInt() }
+    return deterministicNodeId(id)
+}
+
+/**
  * Converts a domain [MeshPacket] to a Meshtastic protobuf [MeshProtos.MeshPacket].
  */
 fun MeshPacket.toMeshtasticProto(): MeshProtos.MeshPacket {
     val protoBuilder = MeshProtos.MeshPacket.newBuilder()
-        .setId(if (messageId.isNotEmpty()) messageId.hashCode() else UUID.randomUUID().hashCode())
-        .setFrom(originId.hashCode())
-        .setTo(if (finalDestId == MeshPacket.BROADCAST_DEST) 0xFFFFFFFF.toInt() else finalDestId.hashCode())
+        .setId(deterministicMessageId(messageId))
+        .setFrom(deterministicNodeId(originId))
+        .setTo(if (finalDestId == MeshPacket.BROADCAST_DEST) 0xFFFFFFFF.toInt() else deterministicNodeId(finalDestId))
         .setRxTime((timestamp / 1000L).toInt())
         .setHopLimit(maxHops.coerceAtMost(7))
         .setPriority(priority)
@@ -114,6 +159,10 @@ class MeshtasticBleTransport(
 
     private val _incomingPackets = MutableSharedFlow<MeshPacket>(extraBufferCapacity = 64)
     override val incomingPackets: SharedFlow<MeshPacket> = _incomingPackets.asSharedFlow()
+
+    private val writeMutex = Mutex()
+    @Volatile
+    private var pendingWriteDeferred: CompletableDeferred<Boolean>? = null
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
@@ -238,6 +287,18 @@ class MeshtasticBleTransport(
                 @Suppress("DEPRECATION")
                 handleCharacteristicUpdate(gatt, characteristic.uuid, characteristic.value ?: byteArrayOf())
             }
+        }
+
+        override fun onCharacteristicWrite(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int
+        ) {
+            val success = (status == BluetoothGatt.GATT_SUCCESS)
+            Timber.d("Meshtastic onCharacteristicWrite uuid=${characteristic.uuid} status=$status success=$success")
+            val deferred = pendingWriteDeferred
+            pendingWriteDeferred = null
+            deferred?.complete(success)
         }
     }
 
@@ -388,6 +449,8 @@ class MeshtasticBleTransport(
         stopScanning()
 
         try {
+            pendingWriteDeferred?.complete(false)
+            pendingWriteDeferred = null
             bluetoothGatt?.disconnect()
             bluetoothGatt?.close()
         } catch (e: Exception) {
@@ -428,11 +491,63 @@ class MeshtasticBleTransport(
         }
     }
 
+    /**
+     * Serialized, asynchronous GATT write awaiting the onCharacteristicWrite callback.
+     * Prevents GATT saturation and provides truthful delivery feedback.
+     */
+    suspend fun sendPacketAsync(packet: MeshProtos.MeshPacket): Boolean {
+        val gatt = bluetoothGatt ?: run {
+            Timber.w("sendPacketAsync: BluetoothGatt is null (not connected)")
+            return false
+        }
+        val service = gatt.getService(MESHTASTIC_SERVICE_UUID) ?: run {
+            Timber.w("sendPacketAsync: Meshtastic service not found")
+            return false
+        }
+        val toRadioChar = service.getCharacteristic(TO_RADIO_UUID) ?: run {
+            Timber.w("sendPacketAsync: ToRadio characteristic not found")
+            return false
+        }
+
+        val toRadio = MeshProtos.ToRadio.newBuilder().setPacket(packet).build()
+        val bytes = toRadio.toByteArray()
+
+        return writeMutex.withLock {
+            val deferred = CompletableDeferred<Boolean>()
+            pendingWriteDeferred = deferred
+
+            val initiated = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val res = gatt.writeCharacteristic(toRadioChar, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+                res == BluetoothStatusCodes.SUCCESS
+            } else {
+                @Suppress("DEPRECATION")
+                toRadioChar.value = bytes
+                @Suppress("DEPRECATION")
+                toRadioChar.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                @Suppress("DEPRECATION")
+                gatt.writeCharacteristic(toRadioChar)
+            }
+
+            if (!initiated) {
+                Timber.w("Meshtastic GATT write initiation failed")
+                pendingWriteDeferred = null
+                return@withLock false
+            }
+
+            withTimeoutOrNull(5000L) {
+                deferred.await()
+            } ?: run {
+                Timber.w("Meshtastic GATT write timed out waiting for onCharacteristicWrite")
+                pendingWriteDeferred = null
+                false
+            }
+        }
+    }
+
     override suspend fun send(packet: MeshPacket, targetAddress: String?): Boolean {
         return try {
             val proto = packet.toMeshtasticProto()
-            sendPacket(proto)
-            true
+            sendPacketAsync(proto)
         } catch (e: Exception) {
             Timber.e(e, "Failed to send packet across Meshtastic transport")
             false
