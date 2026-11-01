@@ -12,7 +12,13 @@ from urllib.parse import urlparse
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from app.core.security import hash_password, verify_password
+from app.core.security import (
+    hash_password,
+    verify_password,
+    generate_ws_ticket,
+    consume_ws_ticket,
+    _ws_tickets,
+)
 
 # ── Structured Logging Configuration (Never log tokens/secrets) ──────────────
 logging.basicConfig(
@@ -98,11 +104,13 @@ from app.api.v1.auth import router as auth_v1_router
 from app.api.v1.devices import router as devices_v1_router
 from app.api.v1.incidents import router as incidents_v1_router
 from app.api.v1.dispatch import router as dispatch_v1_router
+from app.api.v1.events import router as events_v1_router
 
 app.include_router(auth_v1_router, prefix="/api/v1")
 app.include_router(devices_v1_router, prefix="/api/v1")
 app.include_router(incidents_v1_router, prefix="/api/v1")
 app.include_router(dispatch_v1_router, prefix="/api/v1")
+app.include_router(events_v1_router, prefix="/api/v1")
 
 # ── Rate Limiter ─────────────────────────────────────────────────────────────
 _ip_request_history: Dict[str, List[float]] = {}
@@ -291,27 +299,6 @@ def verify_operator_read(
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid operator token")
 
 # ── WebSocket Single-Use Ticket Store & Connection Manager ───────────────────
-_ws_tickets: Dict[str, float] = {}  # ticket -> expiration timestamp
-
-def generate_ws_ticket() -> str:
-    ticket = secrets.token_urlsafe(32)
-    # 30-second single-use ticket
-    _ws_tickets[ticket] = time.time() + 30.0
-    return ticket
-
-def consume_ws_ticket(ticket: str) -> bool:
-    if not ticket:
-        return False
-    now = time.time()
-    # Clean expired
-    expired = [t for t, exp in _ws_tickets.items() if exp < now]
-    for t in expired:
-        _ws_tickets.pop(t, None)
-
-    if ticket in _ws_tickets and _ws_tickets[ticket] >= now:
-        _ws_tickets.pop(ticket, None)  # strictly single-use
-        return True
-    return False
 
 class AlertConnectionManager:
     def __init__(self):
@@ -508,11 +495,13 @@ def get_nodes(
             for row in rows
         ]
 
-# ── WebSocket Live Alert Stream ──────────────────────────────────────────────
+# ── WebSocket Live Alert & Event Stream ─────────────────────────────────────────
 @app.websocket("/ws/alerts")
+@app.websocket("/ws/events")
 async def websocket_alerts(
     websocket: WebSocket,
-    ticket: Optional[str] = Query(None)
+    ticket: Optional[str] = Query(None),
+    since_seq: Optional[int] = Query(None),
 ):
     # 1. Origin validation against allowed CORS origins
     origin = websocket.headers.get("origin")
@@ -601,6 +590,38 @@ async def websocket_alerts(
             "type": "authenticated",
             "message": "Connected to authenticated live SOS alert stream"
         }))
+
+        # Replay backlog if requested via since_seq
+        if since_seq is not None and since_seq >= 0:
+            from app.core.database import SessionLocal
+            from app.models.stream_event import StreamEventModel
+            with SessionLocal() as db:
+                historical = (
+                    db.query(StreamEventModel)
+                    .filter(StreamEventModel.stream_seq > since_seq)
+                    .order_by(StreamEventModel.stream_seq.asc())
+                    .limit(500)
+                    .all()
+                )
+                max_s = since_seq
+                for he in historical:
+                    max_s = he.stream_seq
+                    await websocket.send_text(json.dumps({
+                        "type": "replay_event",
+                        "stream_seq": he.stream_seq,
+                        "event_id": he.event_id,
+                        "event_type": he.event_type,
+                        "aggregate_type": he.aggregate_type,
+                        "aggregate_id": he.aggregate_id,
+                        "payload": he.payload,
+                        "occurred_at": he.occurred_at,
+                    }))
+                await websocket.send_text(json.dumps({
+                    "type": "replay_complete",
+                    "last_seq": max_s,
+                    "count": len(historical),
+                }))
+
         # Keepalive loop: listen for client pings or heartbeats
         while True:
             data = await websocket.receive_text()

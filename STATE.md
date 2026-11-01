@@ -1,8 +1,8 @@
 # STATE.md — Nexus Support System State
 
-**Phase:** PG-P4 Complete ➔ Transitioning to PG-P5 & PG-P6 (Real-Time Events & Command Center UI)  
-**Branch:** `pg-p4-responders-dispatch`  
-**Base Commit:** `65563c6` (Head of PG-P3)  
+**Phase:** PG-P5 Complete ➔ Transitioning to PG-P6 (Command Center Tactical Web UI)  
+**Branch:** `pg-p5-realtime-events`  
+**Base Commit:** `41363db` (Head of PG-P4)  
 **Charter Rules Applied:** `.agent/rules/nexus-charter.md` + Master Prompt v2 Inherited Rules  
 
 ---
@@ -11,7 +11,7 @@
 
 | Test Suite | Result | Environment | Evidence |
 |---|---|---|---|
-| `pytest test_backend.py test_legacy_contract.py test_pg_p1_entities.py test_pg_p2_rbac.py test_pg_p3_incidents.py test_pg_p4_dispatch.py` | **58 / 58 PASSED** | Python 3.14 (FastAPI + SQLAlchemy) | `docs/evidence/PG-P4-responders-dispatch.md` |
+| `pytest test_backend.py test_legacy_contract.py test_pg_p1_entities.py test_pg_p2_rbac.py test_pg_p3_incidents.py test_pg_p4_dispatch.py test_pg_p5_events.py` | **61 / 61 PASSED** | Python 3.14 (FastAPI + SQLAlchemy) | `docs/evidence/PG-P5-realtime-events.md` |
 | `cloud/frontend` build & test | **6 / 6 PASSED**, build ok | Node.js 22 (Vite / React) | `cloud/frontend/dist` |
 | `:core:data:testDebugUnitTest` | **58 tasks PASSED** | Java 21 / Room v1..v14 | `docs/evidence/M0-baseline-audit.md` |
 | `:app:testDebugUnitTest` | **87 tasks PASSED** | Java 21 / ViewModels + Sync | `docs/evidence/M1-contracts-and-defects.md` |
@@ -28,6 +28,7 @@
 - **ADR-005 (ECDSA Device Keystore):** NIST P-256 (SECP256R1) + SHA-256 challenge-response auth matching Android `ProductionKeyManager.kt`.
 - **ADR-006 (Proximity Duplicate Clustering):** Haversine distance detection automatically links incidents within 500m / 1hr in the same emergency category.
 - **ADR-007 (Concurrency Dispatch Guard):** Partial unique index `uq_assignments_active_responder` prevents double-dispatch of active field units.
+- **ADR-008 (Cursor-Based Gapless Replay):** `/ws/events?since_seq=<n>` backfills missed events on reconnect before joining live broadcast.
 
 ---
 
@@ -41,6 +42,6 @@
 
 ## 4. Next Three Actions
 
-1. Commit PG-P4 deliverables on `pg-p4-responders-dispatch`.
-2. Create branch `pg-p5-realtime-events` and implement cursor-based WebSocket replay (`since_seq`) and event stream filter.
-3. Advance to Phase PG-P6 to implement the Tactical Command Center UI (split monolithic App.jsx into Queue, Map, Dispatch, Timeline).
+1. Commit PG-P5 deliverables on `pg-p5-realtime-events`.
+2. Create branch `pg-p6-command-center-ui`.
+3. Implement Tactical Command Center UI in `cloud/frontend`: decompose monolithic `App.jsx` into modular components (IncidentQueue, TacticalMap, DispatchPanel, EventTimeline) with honest missing GPS badges and Vitest test coverage.
