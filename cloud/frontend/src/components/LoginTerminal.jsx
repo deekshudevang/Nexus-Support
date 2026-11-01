@@ -67,7 +67,7 @@ export default function LoginTerminal({ onAuthenticate, authError, isAuthenticat
               autoComplete="current-password"
               value={tokenInput}
               onChange={(e) => setTokenInput(e.target.value)}
-              placeholder="e.g. op_token_valid_1"
+              placeholder="Enter operator token or password..."
               className="w-full bg-[#090f15] border border-[#30353d] text-[#dee2ec] p-2 text-xs focus:border-[#00e3fd] outline-none"
             />
           </div>
@@ -86,27 +86,6 @@ export default function LoginTerminal({ onAuthenticate, authError, isAuthenticat
             <span>{isAuthenticating ? 'VERIFYING CREDENTIALS...' : 'INITIALIZE COMMAND RADAR'}</span>
           </button>
         </form>
-
-        {/* Quick Demo Helper Chips */}
-        <div className="mt-4 pt-3 border-t border-[#30353d] text-[10px] text-[#8b949e]">
-          <span className="block mb-1">AUTHORIZED DEMO KEYS:</span>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setTokenInput('op_token_valid_1')}
-              className="bg-[#090f15] hover:bg-[#252a32] text-[#9cf0ff] px-2 py-0.5 border border-[#30353d]"
-            >
-              op_token_valid_1
-            </button>
-            <button
-              type="button"
-              onClick={() => setTokenInput('operator-secret-123')}
-              className="bg-[#090f15] hover:bg-[#252a32] text-[#9cf0ff] px-2 py-0.5 border border-[#30353d]"
-            >
-              operator-secret-123
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

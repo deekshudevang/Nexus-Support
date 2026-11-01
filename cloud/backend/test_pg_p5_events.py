@@ -192,3 +192,50 @@ def test_ws_ticket_single_use_and_replay_connection(test_client, commander_token
     with pytest.raises(Exception):
         with test_client.websocket_connect(f"/ws/events?ticket={ticket}") as ws2:
             ws2.receive_json()
+
+
+def test_ws_expired_and_invalid_ticket_rejection(test_client):
+    """Verify expired and nonexistent tickets are rejected immediately."""
+    fake_ticket = f"invalid-ticket-{uuid.uuid4().hex}"
+    with pytest.raises(Exception):
+        with test_client.websocket_connect(f"/ws/events?ticket={fake_ticket}") as ws:
+            ws.receive_json()
+
+
+def test_ws_multiple_simultaneous_subscribers_broadcast(test_client, commander_token):
+    """Verify multiple simultaneous operators receive live broadcasts and disconnect cleanly."""
+    from main import alert_manager
+
+    # 1. Obtain two tickets
+    t1 = test_client.post("/api/v1/auth/ws-ticket", headers={"Authorization": f"Bearer {commander_token}"}).json()["ticket"]
+    t2 = test_client.post("/api/v1/auth/ws-ticket", headers={"Authorization": f"Bearer {commander_token}"}).json()["ticket"]
+
+    with test_client.websocket_connect(f"/ws/events?ticket={t1}") as ws1:
+        assert ws1.receive_json()["type"] == "authenticated"
+
+        with test_client.websocket_connect(f"/ws/events?ticket={t2}") as ws2:
+            assert ws2.receive_json()["type"] == "authenticated"
+
+            # Alert manager must have at least 2 active connections
+            assert len(alert_manager.active_connections) >= 2
+
+            # Broadcast simulated SOS alert
+            import asyncio
+            packet = {
+                "uuid": f"live-{uuid.uuid4().hex[:6]}",
+                "emergencyType": "HAZMAT",
+                "severity": 5,
+                "message": "Chlorine leak confirmed",
+            }
+            asyncio.run(alert_manager.broadcast_sos(packet))
+
+            # Both clients receive the live broadcast
+            msg1 = ws1.receive_json()
+            msg2 = ws2.receive_json()
+            assert msg1["type"] == "sos_alert"
+            assert msg1["packet"]["uuid"] == packet["uuid"]
+            assert msg2["type"] == "sos_alert"
+            assert msg2["packet"]["uuid"] == packet["uuid"]
+
+    # Both connections closed, alert_manager should be clean
+    assert len(alert_manager.active_connections) == 0

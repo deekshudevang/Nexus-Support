@@ -16,75 +16,7 @@ import {
 } from './api';
 import { playEmergencyAlert, requestNotificationPermission, sendBrowserNotification } from './sound';
 
-// Initial Tactical Demo Incidents for instant demo experience when DB is empty
-const DEMO_INCIDENTS = [
-  {
-    uuid: 'inc-demo-4091',
-    id: 'inc-demo-4091',
-    senderId: 'node-mesh-101',
-    senderName: 'SAR Alpha 1',
-    emergencyType: 'MEDICAL',
-    severity: 9,
-    priority: 'CRITICAL',
-    latitude: 37.7749,
-    longitude: -122.4194,
-    message: 'Structural collapse at Sector 4 shelter. Acoustic sensors detect tapping in Void Beta. 3 casualties trapped.',
-    timestamp: Math.floor(Date.now() / 1000) - 180,
-    status: 'ACTIVE',
-    hopCount: 2,
-    duplicate_count: 3,
-    assignedTo: 'SAR-Alpha',
-  },
-  {
-    uuid: 'inc-demo-4088',
-    id: 'inc-demo-4088',
-    senderId: 'node-mesh-104',
-    senderName: 'Bravo Patrol',
-    emergencyType: 'FLOOD',
-    severity: 8,
-    priority: 'CRITICAL',
-    latitude: 37.7858,
-    longitude: -122.4064,
-    message: 'Rapid water surge near coastal levee road. 2 citizens stranded on rooftop. Pending boat extraction.',
-    timestamp: Math.floor(Date.now() / 1000) - 450,
-    status: 'ACTIVE',
-    hopCount: 0,
-    assignedTo: null,
-  },
-  {
-    uuid: 'inc-demo-4082',
-    id: 'inc-demo-4082',
-    senderId: 'node-mesh-108',
-    senderName: 'Scout Echo',
-    emergencyType: 'HAZMAT',
-    severity: 6,
-    priority: 'HIGH',
-    latitude: 37.7658,
-    longitude: -122.4284,
-    message: 'Downed high-voltage powerline in flooded intersection. Class 3 arc hazard.',
-    timestamp: Math.floor(Date.now() / 1000) - 1200,
-    status: 'ACTIVE',
-    hopCount: 1,
-    assignedTo: 'Hazmat-1',
-  },
-  {
-    uuid: 'inc-demo-4075',
-    id: 'inc-demo-4075',
-    senderId: 'node-mesh-112',
-    senderName: 'Medic John',
-    emergencyType: 'MEDICAL',
-    severity: 4,
-    priority: 'MEDIUM',
-    latitude: null, // HONEST ZERO-FABRICATION: NULL GPS
-    longitude: null,
-    message: 'Isolated residential evacuee requires emergency oxygen refill. Node lost GPS lock under canopy.',
-    timestamp: Math.floor(Date.now() / 1000) - 2400,
-    status: 'ACTIVE',
-    hopCount: 3,
-    assignedTo: null,
-  },
-];
-
+// Zero-Fabrication Directive: Operational UI strictly reflects live backend state without synthetic fallbacks
 export default function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem('meshlink_op_token') || '');
   const [authError, setAuthError] = useState(null);
@@ -119,7 +51,7 @@ export default function App() {
 
       sessionStorage.setItem('meshlink_op_token', enteredToken);
       setToken(enteredToken);
-      setIncidents(packets.length > 0 ? packets : DEMO_INCIDENTS);
+      setIncidents(Array.isArray(packets) ? packets : []);
       requestNotificationPermission();
     } catch (err) {
       setAuthError('Invalid operator token or credentials. Check configuration.');
@@ -152,7 +84,7 @@ export default function App() {
       ]);
 
       if (packets.status === 'fulfilled' && Array.isArray(packets.value)) {
-        setIncidents(packets.value.length > 0 ? packets.value : DEMO_INCIDENTS);
+        setIncidents(packets.value);
       }
       if (fetchedNodes.status === 'fulfilled' && Array.isArray(fetchedNodes.value)) {
         setNodes(fetchedNodes.value);
@@ -286,8 +218,8 @@ export default function App() {
         setSoundEnabled={setSoundEnabled}
         onLogout={handleLogout}
         onRefresh={refreshTacticalState}
-        activeNodesCount={nodes.length > 0 ? nodes.length : 142}
-        totalNodesCount={nodes.length > 0 ? nodes.length + 2 : 144}
+        activeNodesCount={nodes.length}
+        totalNodesCount={nodes.length}
       />
 
       {/* 2. Main 3-Column Tactical Bento Workspace */}

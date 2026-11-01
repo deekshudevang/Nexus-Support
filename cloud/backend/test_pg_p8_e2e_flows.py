@@ -177,11 +177,19 @@ def test_flow_b_incident_state_machine_and_audit_timeline(test_client, commander
     assert tr5.status_code == 200
     assert tr5.json()["status"] == "CLOSED"
 
-    # 7. Verify Timeline
+    # 7. Reopening: CLOSED -> TRIAGED
+    tr6 = test_client.post(f"/api/v1/incidents/{incident_id}/transition", json={
+        "new_status": "TRIAGED",
+        "notes": "Secondary flareup reported, reopening incident for assessment"
+    }, headers=headers)
+    assert tr6.status_code == 200
+    assert tr6.json()["status"] == "TRIAGED"
+
+    # 8. Verify Timeline
     timeline_res = test_client.get(f"/api/v1/incidents/{incident_id}/timeline", headers=headers)
     assert timeline_res.status_code == 200
     events = timeline_res.json()
-    assert len(events) >= 6
+    assert len(events) >= 7
     types = [e["event_type"] for e in events]
     assert "CREATED" in types
     assert "STATUS_CHANGED" in types

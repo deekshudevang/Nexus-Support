@@ -20,7 +20,7 @@ ALLOWED_TRANSITIONS = {
     "DISPATCHED": {"ON_SCENE", "TRIAGED", "CANCELLED"},
     "ON_SCENE": {"RESOLVED", "DISPATCHED", "CANCELLED"},
     "RESOLVED": {"CLOSED", "TRIAGED"},
-    "CLOSED": set(),      # Terminal state
+    "CLOSED": {"TRIAGED"},  # Reopening supported for commander review
     "CANCELLED": set(),   # Terminal state
 }
 
