@@ -58,10 +58,10 @@
 | **PG-P0** | PG-P0-01 | Audit & Characterization of risks | **VERIFIED** | L1 | `docs/audit/POSTGRES_BACKEND_BASELINE.md` | PASSED |
 | **PG-P0** | PG-P0-02 | Freeze Legacy API Contract | **VERIFIED** | L1 | `docs/api/LEGACY_CONTRACT.md`, `test_legacy_contract.py` | PASSED (35/35) |
 | **PG-P0** | PG-P0-03 | Baseline Runs (Python, Node, Android) | **VERIFIED** | L1 | `docs/evidence/M0-baseline-audit.md` | PASSED |
-| **PG-P1** | PG-P1-01 | PostgreSQL Schema & Entities Definition | **NOT STARTED** | L2 | `docs/evidence/PG-P1-01.md` | PENDING |
-| **PG-P1** | PG-P1-02 | Incremental Alembic Migrations | **NOT STARTED** | L2 | `docs/evidence/PG-P1-02.md` | PENDING |
-| **PG-P1** | PG-P1-03 | SQLite -> PostgreSQL Idempotent Import Tool | **NOT STARTED** | L2 | `docs/evidence/PG-P1-03.md` | PENDING |
-| **PG-P1** | PG-P1-04 | Bootstrap Admin CLI (`app.cli create-admin`) | **NOT STARTED** | L1 | `docs/evidence/PG-P1-04.md` | PENDING |
+| **PG-P1** | PG-P1-01 | PostgreSQL Schema & Entities Definition | **VERIFIED** | L2 | `docs/evidence/PG-P1-postgres-foundation.md` | PASSED |
+| **PG-P1** | PG-P1-02 | Incremental Alembic Migrations | **VERIFIED** | L2 | `docs/evidence/PG-P1-postgres-foundation.md` | PASSED |
+| **PG-P1** | PG-P1-03 | SQLite -> PostgreSQL Idempotent Import Tool | **VERIFIED** | L2 | `docs/evidence/PG-P1-postgres-foundation.md` | PASSED |
+| **PG-P1** | PG-P1-04 | Bootstrap Admin CLI (`app.cli create-admin`) | **VERIFIED** | L1 | `docs/evidence/PG-P1-postgres-foundation.md` | PASSED |
 | **PG-P2** | PG-P2-01 | Capability-based RBAC & Scoped Authorization | **NOT STARTED** | L1 | `docs/evidence/PG-P2-01.md` | PENDING |
 | **PG-P2** | PG-P2-02 | Negative Authorization & IDOR Tests | **NOT STARTED** | L1 | `docs/evidence/PG-P2-02.md` | PENDING |
 | **PG-P2** | PG-P2-03 | Device Keystore Challenge-Response Auth | **NOT STARTED** | L2 | `docs/evidence/PG-P2-03.md` | PENDING |

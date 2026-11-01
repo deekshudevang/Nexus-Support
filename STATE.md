@@ -1,8 +1,8 @@
 # STATE.md — Nexus Support System State
 
-**Phase:** PG-P0 Complete ➔ Transitioning to PG-P1 (PostgreSQL Foundation)  
-**Branch:** `pg-p0-audit-baseline`  
-**Base Commit:** `4f88c01` (Head of baseline transformation)  
+**Phase:** PG-P1 Complete ➔ Transitioning to PG-P2 (Security & RBAC)  
+**Branch:** `pg-p1-postgres-foundation`  
+**Base Commit:** `a122a6a` (Head of PG-P0)  
 **Charter Rules Applied:** `.agent/rules/nexus-charter.md` + Master Prompt v2 Inherited Rules  
 
 ---
@@ -11,10 +11,11 @@
 
 | Test Suite | Result | Environment | Evidence |
 |---|---|---|---|
-| `pytest test_backend.py test_legacy_contract.py` | **35 / 35 PASSED** | Python 3.14 (FastAPI) | `docs/audit/POSTGRES_BACKEND_BASELINE.md` |
+| `pytest test_backend.py test_legacy_contract.py test_pg_p1_entities.py` | **40 / 40 PASSED** | Python 3.14 (FastAPI + SQLAlchemy) | `docs/evidence/PG-P1-postgres-foundation.md` |
 | `cloud/frontend` build & test | **6 / 6 PASSED**, build ok | Node.js 22 (Vite / React) | `cloud/frontend/dist` |
 | `:core:data:testDebugUnitTest` | **58 tasks PASSED** | Java 21 / Room v1..v14 | `docs/evidence/M0-baseline-audit.md` |
 | `:app:testDebugUnitTest` | **87 tasks PASSED** | Java 21 / ViewModels + Sync | `docs/evidence/M1-contracts-and-defects.md` |
+| `alembic check` & bi-directional migration | **0 drift, 100% reversible** | Alembic 1.20 | `docs/evidence/PG-P1-postgres-foundation.md` |
 
 ---
 
@@ -37,6 +38,6 @@
 
 ## 4. Next Three Actions
 
-1. Commit PG-P0 deliverables and create branch `pg-p1-postgres-foundation`.
-2. Implement PostgreSQL entities (`app/models/`), constraint rules, and Alembic migrations (`PG-P1-01`, `PG-P1-02`).
-3. Build idempotent SQLite ➔ PostgreSQL import tool and `create-admin` CLI command (`PG-P1-03`, `PG-P1-04`).
+1. Commit PG-P1 deliverables on `pg-p1-postgres-foundation`.
+2. Create branch `pg-p2-security-rbac` and implement capability-based RBAC (`incident:create`, `incident:triage`, etc.) and device authentication.
+3. Write negative authorization, IDOR, and device signature tests in `test_pg_p2_rbac.py`.

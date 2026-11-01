@@ -1,18 +1,27 @@
 import sqlite3
 from contextlib import contextmanager
 from typing import Generator, Optional
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, MetaData
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from app.core.config import DATABASE_URL, DATABASE_PATH
 
-# SQLAlchemy Setup
+# Deterministic Alembic constraint naming convention
+convention = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s"
+}
+metadata = MetaData(naming_convention=convention)
+Base = declarative_base(metadata=metadata)
+
 connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False, "timeout": 5.0}
 
 engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
 
 def get_db_session() -> Generator[Session, None, None]:
     db = SessionLocal()
