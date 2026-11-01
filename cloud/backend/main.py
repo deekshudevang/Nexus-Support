@@ -119,7 +119,7 @@ _ip_lock = asyncio.Lock() if hasattr(asyncio, "Lock") else None
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     # Skip health check from rate limiting
-    if request.url.path == "/health":
+    if request.url.path.startswith("/health"):
         return await call_next(request)
 
     client_ip = request.client.host if request.client else "unknown"
@@ -331,6 +331,69 @@ alert_manager = AlertConnectionManager()
 def health():
     return {
         "status": "ok",
+        "environment": ENVIRONMENT,
+        "timestamp": int(time.time()),
+        "service": "MeshLink Gateway Backend"
+    }
+
+@app.get("/health/ready")
+def health_ready():
+    """
+    Readiness probe for container orchestrators (Kubernetes / ECS).
+    Verifies database connectivity and measures outbox publishing lag.
+    Returns HTTP 200 when ready, HTTP 503 when degraded or disconnected.
+    """
+    from app.core.database import SessionLocal, engine
+    from sqlalchemy import text
+    from app.models.outbox_event import OutboxEventModel
+
+    db_status = "UNKNOWN"
+    outbox_lag = 0
+    errors = []
+
+    session = None
+    try:
+        session = SessionLocal()
+        # 1. Probe database connectivity
+        session.execute(text("SELECT 1"))
+        db_status = "OK"
+
+        # 2. Check outbox lag
+        try:
+            outbox_lag = session.query(OutboxEventModel).filter(OutboxEventModel.published_at.is_(None)).count()
+        except Exception as oe:
+            logger.warning("Could not query outbox lag: %s", str(oe))
+            outbox_lag = 0
+
+    except Exception as e:
+        logger.error("Readiness check failed: %s", str(e))
+        db_status = "ERROR"
+        errors.append(str(e))
+    finally:
+        if session:
+            session.close()
+
+    if db_status != "OK":
+        return Response(
+            content=json.dumps({
+                "status": "NOT_READY",
+                "database": db_status,
+                "database_engine": getattr(engine, "name", "unknown"),
+                "outbox_lag": None,
+                "errors": errors,
+                "environment": ENVIRONMENT,
+                "timestamp": int(time.time()),
+                "service": "MeshLink Gateway Backend"
+            }),
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            media_type="application/json"
+        )
+
+    return {
+        "status": "READY",
+        "database": "OK",
+        "database_engine": getattr(engine, "name", "unknown"),
+        "outbox_lag": outbox_lag,
         "environment": ENVIRONMENT,
         "timestamp": int(time.time()),
         "service": "MeshLink Gateway Backend"

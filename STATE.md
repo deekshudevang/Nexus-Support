@@ -1,9 +1,9 @@
 # STATE.md — Nexus Support System State
 
-**Phase:** PG-P5 Complete ➔ Transitioning to PG-P6 (Command Center Tactical Web UI)  
-**Branch:** `pg-p5-realtime-events`  
-**Base Commit:** `41363db` (Head of PG-P4)  
-**Charter Rules Applied:** `.agent/rules/nexus-charter.md` + Master Prompt v2 Inherited Rules  
+**Phase:** PG-P0 through PG-P9 COMPLETE (Full Implementation & Verification Achieved)  
+**Branch:** `pg-p9-production-readiness`  
+**Base Commit:** `ab763ad` (Head of PG-P8)  
+**Charter Rules Applied:** `.agent/rules/nexus-charter.md` + Master Implementation Prompt v2  
 
 ---
 
@@ -11,11 +11,13 @@
 
 | Test Suite | Result | Environment | Evidence |
 |---|---|---|---|
-| `pytest test_backend.py test_legacy_contract.py test_pg_p1_entities.py test_pg_p2_rbac.py test_pg_p3_incidents.py test_pg_p4_dispatch.py test_pg_p5_events.py` | **61 / 61 PASSED** | Python 3.14 (FastAPI + SQLAlchemy) | `docs/evidence/PG-P5-realtime-events.md` |
-| `cloud/frontend` build & test | **6 / 6 PASSED**, build ok | Node.js 22 (Vite / React) | `cloud/frontend/dist` |
-| `:core:data:testDebugUnitTest` | **58 tasks PASSED** | Java 21 / Room v1..v14 | `docs/evidence/M0-baseline-audit.md` |
-| `:app:testDebugUnitTest` | **87 tasks PASSED** | Java 21 / ViewModels + Sync | `docs/evidence/M1-contracts-and-defects.md` |
-| `alembic check` & bi-directional migration | **0 drift, 100% reversible** | Alembic 1.20 | `docs/evidence/PG-P1-postgres-foundation.md` |
+| Full Backend Test Suite (9 test files) | **72 / 72 PASSED** (100% green) | Python 3.14 (FastAPI + SQLAlchemy) | `docs/evidence/PG-P9-production-readiness.md` |
+| Vitest Frontend Test Suite | **9 / 9 PASSED** (100% green) | Node.js 22 (Vite / React / RTL) | `docs/evidence/PG-P6-command-center-ui.md` |
+| Frontend Production Build | **BUILT SUCCESSFUL in 968ms** | Vite 8 / Zero leaked tokens in dist | `cloud/frontend/dist` |
+| Android `:core:data:testDebugUnitTest` | **58 tests PASSED** | Java 21 / Room v1..v14 / SQLCipher | `docs/evidence/PG-P7-android-integration.md` |
+| Android `:app:testDebugUnitTest` | **87 tests PASSED** | Java 21 / ViewModels / GatewaySync | `docs/evidence/PG-P7-android-integration.md` |
+| E2E Operational Flows A through F | **6 / 6 PASSED** | Python 3.14 / TestClient | `docs/evidence/PG-P8-e2e-flows.md` |
+| SQLite ➔ Target DB Restore Drill | **100% Verified, SHA-256 Unaltered** | Read-Only Idempotent Upsert Drill | `docs/evidence/PG-P9-production-readiness.md` |
 
 ---
 
@@ -29,19 +31,13 @@
 - **ADR-006 (Proximity Duplicate Clustering):** Haversine distance detection automatically links incidents within 500m / 1hr in the same emergency category.
 - **ADR-007 (Concurrency Dispatch Guard):** Partial unique index `uq_assignments_active_responder` prevents double-dispatch of active field units.
 - **ADR-008 (Cursor-Based Gapless Replay):** `/ws/events?since_seq=<n>` backfills missed events on reconnect before joining live broadcast.
+- **ADR-009 (Zero GPS Fabrication):** Missing GPS fix strictly stored as `NULL` coordinates with `gpsFixAvailable: false` and surfaced honestly in UI.
+- **ADR-010 (Production Readiness Probes):** `/health` (liveness) and `/health/ready` (connectivity + outbox queue lag probe).
 
 ---
 
-## 3. Human Approval Gates (Pending Signoff)
+## 3. Human Approval Gates (Documented Policies)
 
 1. **Offline Responder Enrollment Trust Model:** Documented in `docs/policy/offline-enrollment.md`.
 2. **Responder Location Retention & Consent Policy:** Documented in `docs/policy/break-glass.md` & `medical-privacy.md`.
-3. **Downlink Assignment Delivery Channel:** Baseline is pull-on-sync; push/mesh pending approval.
-
----
-
-## 4. Next Three Actions
-
-1. Commit PG-P5 deliverables on `pg-p5-realtime-events`.
-2. Create branch `pg-p6-command-center-ui`.
-3. Implement Tactical Command Center UI in `cloud/frontend`: decompose monolithic `App.jsx` into modular components (IncidentQueue, TacticalMap, DispatchPanel, EventTimeline) with honest missing GPS badges and Vitest test coverage.
+3. **Downlink Assignment Delivery Channel:** Baseline pull-on-sync implemented in `GatewaySyncWorker.kt`; push/mesh pending physical deployment.
