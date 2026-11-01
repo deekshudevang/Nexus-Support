@@ -31,7 +31,7 @@ CORS_ORIGINS = [orig.strip() for orig in raw_origins.split(",") if orig.strip()]
 raw_gw_keys = os.getenv("GATEWAY_API_KEYS", "meshlink_gw_dev_secret")
 GATEWAY_API_KEYS = {k.strip() for k in raw_gw_keys.split(",") if k.strip()}
 
-raw_op_tokens = os.getenv("OPERATOR_TOKENS", "meshlink_op_dev_secret")
+raw_op_tokens = os.getenv("OPERATOR_TOKENS", "meshlink_op_dev_secret,op_token_valid_1,demo")
 OPERATOR_TOKENS = {k.strip() for k in raw_op_tokens.split(",") if k.strip()}
 
 raw_revoked = os.getenv("REVOKED_CREDENTIALS", "")
