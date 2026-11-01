@@ -68,8 +68,8 @@
 | **PG-Slice**| PG-SLC-01| Vertical Slice: Device SOS -> DB -> Outbox -> WS | **VERIFIED** | L2 | `docs/evidence/PG-SLC-01.md` | PASSED |
 | **PG-P3** | PG-P3-01 | 3-State-Machine Incident Lifecycle Domain | **VERIFIED** | L1 | `docs/evidence/PG-P3-incident-domain.md` | PASSED |
 | **PG-P3** | PG-P3-02 | Idempotent Ingestion & Duplicate Linking | **VERIFIED** | L2 | `docs/evidence/PG-P3-incident-domain.md` | PASSED |
-| **PG-P4** | PG-P4-01 | Responders, Teams & Availability Model | **NOT STARTED** | L2 | `docs/evidence/PG-P4-01.md` | PENDING |
-| **PG-P4** | PG-P4-02 | Concurrent Dispatch & Partial Unique Index | **NOT STARTED** | L2 | `docs/evidence/PG-P4-02.md` | PENDING |
+| **PG-P4** | PG-P4-01 | Responders, Teams & Availability Model | **VERIFIED** | L2 | `docs/evidence/PG-P4-responders-dispatch.md` | PASSED |
+| **PG-P4** | PG-P4-02 | Concurrent Dispatch & Partial Unique Index | **VERIFIED** | L2 | `docs/evidence/PG-P4-responders-dispatch.md` | PASSED |
 | **PG-P5** | PG-P5-01 | Transactional Outbox & Gapless `stream_seq` | **NOT STARTED** | L2 | `docs/evidence/PG-P5-01.md` | PENDING |
 | **PG-P5** | PG-P5-02 | WebSocket Ticket Store & Redis-less Fallback | **NOT STARTED** | L2 | `docs/evidence/PG-P5-02.md` | PENDING |
 | **PG-P6** | PG-P6-01 | Command Center Tactical Overview & Queue | **NOT STARTED** | L2 | `docs/evidence/PG-P6-01.md` | PENDING |
