@@ -1,20 +1,14 @@
-# TASK.md — Milestone M3: Production Integration, Device Validation & Release Engineering
+# TASK.md — Milestone M3.14: Final Release Blocker Closure & Go/No-Go Validation
 
 ## Task Tracking Table
 
 | Task ID | Description | Status | Evidence / Artifact |
 |---|---|---|---|
-| **M3.0** | Repository & Branch Reconciliation | VERIFIED | `docs/M3_BRANCH_RECONCILIATION.md` |
-| **M3.1** | Complete System Cross-Platform Integration | VERIFIED | `docs/M3_SYSTEM_INTEGRATION.md` |
-| **M3.2** | Real PostgreSQL Integration & Migration | VERIFIED | `cloud/backend/alembic/versions/`, `cloud/backend/test_pg_p9_readiness.py` |
-| **M3.3** | Incident & Responder Workflow End-to-End Validation | VERIFIED | `cloud/backend/test_pg_p8_e2e_flows.py`, `app/services/incident_service.py` |
-| **M3.4** | Realtime Communication, Outbox & WebSocket Resiliency | VERIFIED | `cloud/backend/test_pg_p5_events.py` |
-| **M3.5** | Android Physical Device & Emulator Validation | VERIFIED | `docs/M3_ANDROID_DEVICE_VALIDATION.md` |
-| **M3.6** | Meshtastic & BLE Mesh Hardware Protocol Validation | VERIFIED | `core/mesh/`, `:core:mesh:testDebugUnitTest` |
-| **M3.7** | Offline AI (Gemma/MediaPipe) Safety & Triage Validation | VERIFIED | `app/src/test/.../ai/`, `:app:testDebugUnitTest` |
-| **M3.8** | Tactical Command Center Web UI Validation | VERIFIED | `cloud/frontend/dist`, Vitest suite (Zero Fabrication clean) |
-| **M3.9** | Security, Privacy & Secret Exposure Audit | VERIFIED | `docs/M3_SECURITY_REVIEW.md` |
-| **M3.10**| APK Performance, Resource & R8 Optimization | VERIFIED | Universal APK: 192.42MB, App Bundle (.aab): 91.52MB |
-| **M3.11**| Production Deployment Engineering & Runbooks | VERIFIED | `docs/M3_DEPLOYMENT_GUIDE.md`, `docs/M3_DISASTER_RECOVERY.md`, `docs/M3_RELEASE_CHECKLIST.md` |
-| **M3.12**| Full System Regression & Release Build Generation | VERIFIED | 228+ tests passing across all components, clean release builds |
-| **M3.13**| Final Engineering Report & Release Candidate Classification | VERIFIED | `docs/M3_FINAL_ENGINEERING_REPORT.md` |
+| **M3.14-01** | Repository Validation & Branch Setup | VERIFIED | Branch `m3-14-release-validation` (Head: `016bd16`) |
+| **M3.14-02** | Real PostgreSQL Verification & Fallback Drill | VERIFIED | `docs/M3_14_POSTGRESQL_VERIFICATION.md` (8/8 live tests passed, Docker PG 16.15) |
+| **M3.14-03** | Physical Android Device Validation (Motorola Edge 50 Pro) | BLOCKED | `docs/M3_14_DEVICE_VALIDATION.md` (Enumerated ZD222M3BNH; USB reconnect needed) |
+| **M3.14-04** | Actual Mesh Hardware Testing (Meshtastic / BLE) | BLOCKED (RF) / VERIFIED (SIM) | `docs/M3_14_MESH_HARDWARE_VALIDATION.md` (SX1262 detached; 87 Gradle unit tests green) |
+| **M3.14-05** | Real Offline AI Verification (Gemma / MediaPipe) | VERIFIED (ARCH/SAFETY) | `docs/M3_14_OFFLINE_AI_VALIDATION.md` (MediaPipe JNI packaged; 87 unit tests green) |
+| **M3.14-06** | Cross-System End-to-End Operational Workflow | VERIFIED | `cloud/backend/test_pg_p8_e2e_flows.py` (6/6 flows passed, Pytest 74/74 green) |
+| **M3.14-07** | Security, Production Configuration & Release Signing | VERIFIED | Zero leaked secrets in frontend dist, R8/ProGuard verified, APK/AAB staged |
+| **M3.14-08** | Final Test Regressions & Go/No-Go Certification | VERIFIED | `docs/M3_14_GO_NO_GO_REPORT.md` (Conditional Go / Pilot-Ready) |

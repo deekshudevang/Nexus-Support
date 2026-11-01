@@ -65,6 +65,9 @@ def upgrade() -> None:
     op.create_index(op.f('ix_idempotency_keys_expires_at'), 'idempotency_keys', ['expires_at'], unique=False)
     op.create_index(op.f('ix_idempotency_keys_key'), 'idempotency_keys', ['key'], unique=False)
     op.create_index(op.f('ix_idempotency_keys_scope'), 'idempotency_keys', ['scope'], unique=False)
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute("CREATE SEQUENCE IF NOT EXISTS incident_number_seq START 1001;")
     op.create_table('incidents',
     sa.Column('id', sa.String(length=128), nullable=False),
     sa.Column('incident_number', sa.Integer(), autoincrement=True, nullable=True),
@@ -317,6 +320,9 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_incidents_commander_id'), table_name='incidents')
     op.drop_index(op.f('ix_incidents_category'), table_name='incidents')
     op.drop_table('incidents')
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute("DROP SEQUENCE IF EXISTS incident_number_seq;")
     op.drop_index(op.f('ix_idempotency_keys_scope'), table_name='idempotency_keys')
     op.drop_index(op.f('ix_idempotency_keys_key'), table_name='idempotency_keys')
     op.drop_index(op.f('ix_idempotency_keys_expires_at'), table_name='idempotency_keys')
