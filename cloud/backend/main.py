@@ -96,9 +96,11 @@ app.add_middleware(
 
 from app.api.v1.auth import router as auth_v1_router
 from app.api.v1.devices import router as devices_v1_router
+from app.api.v1.incidents import router as incidents_v1_router
 
 app.include_router(auth_v1_router, prefix="/api/v1")
 app.include_router(devices_v1_router, prefix="/api/v1")
+app.include_router(incidents_v1_router, prefix="/api/v1")
 
 # ── Rate Limiter ─────────────────────────────────────────────────────────────
 _ip_request_history: Dict[str, List[float]] = {}

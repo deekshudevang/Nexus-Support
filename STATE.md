@@ -1,8 +1,8 @@
 # STATE.md — Nexus Support System State
 
-**Phase:** PG-P2 Complete ➔ Transitioning to PG-Slice / PG-P3 (Incident Operations Domain)  
-**Branch:** `pg-p2-security-rbac`  
-**Base Commit:** `e014b51` (Head of PG-P1)  
+**Phase:** PG-P3 Complete ➔ Transitioning to PG-P4 (Responders, Teams & Dispatch Operations)  
+**Branch:** `pg-p3-incident-domain`  
+**Base Commit:** `36f20b3` (Head of PG-P2)  
 **Charter Rules Applied:** `.agent/rules/nexus-charter.md` + Master Prompt v2 Inherited Rules  
 
 ---
@@ -11,7 +11,7 @@
 
 | Test Suite | Result | Environment | Evidence |
 |---|---|---|---|
-| `pytest test_backend.py test_legacy_contract.py test_pg_p1_entities.py test_pg_p2_rbac.py` | **47 / 47 PASSED** | Python 3.14 (FastAPI + SQLAlchemy) | `docs/evidence/PG-P2-security-rbac.md` |
+| `pytest test_backend.py test_legacy_contract.py test_pg_p1_entities.py test_pg_p2_rbac.py test_pg_p3_incidents.py` | **54 / 54 PASSED** | Python 3.14 (FastAPI + SQLAlchemy) | `docs/evidence/PG-P3-incident-domain.md` |
 | `cloud/frontend` build & test | **6 / 6 PASSED**, build ok | Node.js 22 (Vite / React) | `cloud/frontend/dist` |
 | `:core:data:testDebugUnitTest` | **58 tasks PASSED** | Java 21 / Room v1..v14 | `docs/evidence/M0-baseline-audit.md` |
 | `:app:testDebugUnitTest` | **87 tasks PASSED** | Java 21 / ViewModels + Sync | `docs/evidence/M1-contracts-and-defects.md` |
@@ -26,6 +26,7 @@
 - **ADR-003 (3 State Machines):** Independent lifecycles for Incidents, Assignments, and Responder Availability. Response state dynamically derived.
 - **ADR-004 (Real-time Pipeline):** Transactional outbox ➔ gapless `stream_seq` ➔ WebSocket replay with Redis pub/sub + Postgres fallback.
 - **ADR-005 (ECDSA Device Keystore):** NIST P-256 (SECP256R1) + SHA-256 challenge-response auth matching Android `ProductionKeyManager.kt`.
+- **ADR-006 (Proximity Duplicate Clustering):** Haversine distance detection automatically links incidents within 500m / 1hr in the same emergency category.
 
 ---
 
@@ -39,6 +40,6 @@
 
 ## 4. Next Three Actions
 
-1. Commit PG-P2 deliverables on `pg-p2-security-rbac`.
-2. Implement PG-Slice (Thin Vertical Slice) & PG-P3 Incident Domain service (`app/services/incident_service.py`), 3-state-machine validation, and duplicate incident linking.
-3. Verify vertical slice (Device SOS -> DB -> Outbox -> Stream Event -> WebSocket broadcast).
+1. Commit PG-Slice & PG-P3 deliverables on `pg-p3-incident-domain`.
+2. Create branch `pg-p4-responders-dispatch` and implement Responder presence, Team roster management, and Assignment state machine (`DISPATCHED` -> `ACCEPTED` -> `EN_ROUTE` -> `ON_SCENE` -> `COMPLETED`).
+3. Enforce partial unique index concurrency protection (`uq_assignments_active_responder`) preventing double-dispatch of active responders.

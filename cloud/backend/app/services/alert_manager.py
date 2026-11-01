@@ -30,5 +30,18 @@ class AlertConnectionManager:
             for dead in dead_connections:
                 self.active_connections.discard(dead)
 
+    async def broadcast_event(self, event_data: dict):
+        """Broadcast arbitrary structured domain event to all live command dashboard subscribers."""
+        dead_connections = []
+        msg = json.dumps(event_data)
+        async with self._lock:
+            for connection in self.active_connections:
+                try:
+                    await connection.send_text(msg)
+                except Exception:
+                    dead_connections.append(connection)
+            for dead in dead_connections:
+                self.active_connections.discard(dead)
+
 alert_manager = AlertConnectionManager()
 
