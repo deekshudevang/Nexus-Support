@@ -1,8 +1,8 @@
 # STATE.md — Nexus Support System State
 
-**Phase:** PG-P1 Complete ➔ Transitioning to PG-P2 (Security & RBAC)  
-**Branch:** `pg-p1-postgres-foundation`  
-**Base Commit:** `a122a6a` (Head of PG-P0)  
+**Phase:** PG-P2 Complete ➔ Transitioning to PG-Slice / PG-P3 (Incident Operations Domain)  
+**Branch:** `pg-p2-security-rbac`  
+**Base Commit:** `e014b51` (Head of PG-P1)  
 **Charter Rules Applied:** `.agent/rules/nexus-charter.md` + Master Prompt v2 Inherited Rules  
 
 ---
@@ -11,7 +11,7 @@
 
 | Test Suite | Result | Environment | Evidence |
 |---|---|---|---|
-| `pytest test_backend.py test_legacy_contract.py test_pg_p1_entities.py` | **40 / 40 PASSED** | Python 3.14 (FastAPI + SQLAlchemy) | `docs/evidence/PG-P1-postgres-foundation.md` |
+| `pytest test_backend.py test_legacy_contract.py test_pg_p1_entities.py test_pg_p2_rbac.py` | **47 / 47 PASSED** | Python 3.14 (FastAPI + SQLAlchemy) | `docs/evidence/PG-P2-security-rbac.md` |
 | `cloud/frontend` build & test | **6 / 6 PASSED**, build ok | Node.js 22 (Vite / React) | `cloud/frontend/dist` |
 | `:core:data:testDebugUnitTest` | **58 tasks PASSED** | Java 21 / Room v1..v14 | `docs/evidence/M0-baseline-audit.md` |
 | `:app:testDebugUnitTest` | **87 tasks PASSED** | Java 21 / ViewModels + Sync | `docs/evidence/M1-contracts-and-defects.md` |
@@ -25,6 +25,7 @@
 - **ADR-002 (Dual-Dialect DB):** Synchronous SQLAlchemy 2.x + psycopg 3 with SQLite fallback for offline edge testing.
 - **ADR-003 (3 State Machines):** Independent lifecycles for Incidents, Assignments, and Responder Availability. Response state dynamically derived.
 - **ADR-004 (Real-time Pipeline):** Transactional outbox ➔ gapless `stream_seq` ➔ WebSocket replay with Redis pub/sub + Postgres fallback.
+- **ADR-005 (ECDSA Device Keystore):** NIST P-256 (SECP256R1) + SHA-256 challenge-response auth matching Android `ProductionKeyManager.kt`.
 
 ---
 
@@ -38,6 +39,6 @@
 
 ## 4. Next Three Actions
 
-1. Commit PG-P1 deliverables on `pg-p1-postgres-foundation`.
-2. Create branch `pg-p2-security-rbac` and implement capability-based RBAC (`incident:create`, `incident:triage`, etc.) and device authentication.
-3. Write negative authorization, IDOR, and device signature tests in `test_pg_p2_rbac.py`.
+1. Commit PG-P2 deliverables on `pg-p2-security-rbac`.
+2. Implement PG-Slice (Thin Vertical Slice) & PG-P3 Incident Domain service (`app/services/incident_service.py`), 3-state-machine validation, and duplicate incident linking.
+3. Verify vertical slice (Device SOS -> DB -> Outbox -> Stream Event -> WebSocket broadcast).

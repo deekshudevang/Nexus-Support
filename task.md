@@ -62,9 +62,9 @@
 | **PG-P1** | PG-P1-02 | Incremental Alembic Migrations | **VERIFIED** | L2 | `docs/evidence/PG-P1-postgres-foundation.md` | PASSED |
 | **PG-P1** | PG-P1-03 | SQLite -> PostgreSQL Idempotent Import Tool | **VERIFIED** | L2 | `docs/evidence/PG-P1-postgres-foundation.md` | PASSED |
 | **PG-P1** | PG-P1-04 | Bootstrap Admin CLI (`app.cli create-admin`) | **VERIFIED** | L1 | `docs/evidence/PG-P1-postgres-foundation.md` | PASSED |
-| **PG-P2** | PG-P2-01 | Capability-based RBAC & Scoped Authorization | **NOT STARTED** | L1 | `docs/evidence/PG-P2-01.md` | PENDING |
-| **PG-P2** | PG-P2-02 | Negative Authorization & IDOR Tests | **NOT STARTED** | L1 | `docs/evidence/PG-P2-02.md` | PENDING |
-| **PG-P2** | PG-P2-03 | Device Keystore Challenge-Response Auth | **NOT STARTED** | L2 | `docs/evidence/PG-P2-03.md` | PENDING |
+| **PG-P2** | PG-P2-01 | Capability-based RBAC & Scoped Authorization | **VERIFIED** | L1 | `docs/evidence/PG-P2-security-rbac.md` | PASSED |
+| **PG-P2** | PG-P2-02 | Negative Authorization & IDOR Tests | **VERIFIED** | L1 | `docs/evidence/PG-P2-security-rbac.md` | PASSED |
+| **PG-P2** | PG-P2-03 | Device Keystore Challenge-Response Auth | **VERIFIED** | L2 | `docs/evidence/PG-P2-security-rbac.md` | PASSED |
 | **PG-Slice**| PG-SLC-01| Vertical Slice: Device SOS -> DB -> Outbox -> WS | **NOT STARTED** | L2 | `docs/evidence/PG-SLC-01.md` | PENDING |
 | **PG-P3** | PG-P3-01 | 3-State-Machine Incident Lifecycle Domain | **NOT STARTED** | L1 | `docs/evidence/PG-P3-01.md` | PENDING |
 | **PG-P3** | PG-P3-02 | Idempotent Ingestion & Duplicate Linking | **NOT STARTED** | L2 | `docs/evidence/PG-P3-02.md` | PENDING |
