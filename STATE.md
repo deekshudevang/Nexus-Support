@@ -1,8 +1,8 @@
 # STATE.md — Nexus Support (RescueMesh) System State
 
 **Last Updated:** 2026-11-01  
-**Current Milestone Branch:** `m1-contracts-and-critical-defects`  
-**Base Commit:** `f23eb77` (M1 contracts + critical defects E1, E3, E4 resolved)  
+**Current Milestone Branch:** `m2-backend-database-backbone`  
+**Base Commit:** `9d6a11f` (M2 backend modularization + Alembic + persistent users)  
 **Parent Reference Commit:** `ffc16571af3e372490aed91548cc83a0d69bb509` / `b9de422`  
 **Charter Rules Applied:** `.agent/rules/nexus-charter.md`  
 
@@ -16,7 +16,7 @@
 | `:core:crypto:testDebugUnitTest` | Gradle 8.11.1 / Java 21 | **PASSED** | StrongBox/TEE key generation and SAS verification intact. |
 | `:core:mesh:testDebugUnitTest` | Gradle 8.11.1 / Java 21 | **PASSED** (87 tasks) | Nearby, BLE SOS, Meshtastic transport, and deterministic SHA-256 node ID tests verified. |
 | `:app:testDebugUnitTest` | Gradle 8.11.1 / Java 21 | **PASSED** (87 tasks) | ViewModel test suites and GatewaySyncWorkerTest verified. |
-| `cloud/backend` | Python 3.14 / pytest 9.1.1 | **PASSED** (29/29 tests passed) | FastAPI route authentication, WebSocket tickets, nullable GPS, and receipt reconciliation. |
+| `cloud/backend` | Python 3.14 / pytest 9.1.1 | **PASSED** (31/31 tests passed) | FastAPI route authentication, persistent users, Alembic, WebSocket tickets, nullable GPS, and receipts. |
 | `cloud/frontend` | Node.js 22 / vitest 5.0.5 | **PASSED** (6/6 tests passed) | React tactical command center, situation room, kanban, radar, copilot. |
 
 ---
@@ -56,14 +56,13 @@
   - *Location:* `app/src/main/java/com/meshlink/app/sync/GatewaySyncWorker.kt`
   - *Resolution:* Injected configurable `KEY_GATEWAY_URL` and `KEY_GATEWAY_KEY`, added `X-Gateway-Key` and `Authorization` headers, implemented per-event receipt reconciliation with Room `updateStatus(uuid, "ACKNOWLEDGED")`. Verified with `GatewaySyncWorkerTest`.
 
-- **[E2] Backend In-Memory Token Management**: **PENDING (Milestone M2)**
+- **[E2] Backend In-Memory Token Management**: **RESOLVED**
   - *Location:* `cloud/backend/main.py`
-  - *Symptom:* Operator and Gateway tokens stored in environment list/memory, without persistent user credentials, audit logging, or role revocation.
-  - *Remedy:* Milestone M2: Migrate to PostgreSQL/PostGIS with persistent users, hashed passwords/tokens, and RBAC table.
+  - *Resolution:* Added persistent `users` table, PBKDF2-HMAC-SHA256 password hashing with random salt, role separation (`operator`, `responder`, `admin`), and registration endpoint `POST /api/auth/register`. Verified with `test_user_registration_and_persistent_login`.
 
 - **[E3] Nullable GPS Constraint Violation in Pydantic Schema**: **RESOLVED**
   - *Location:* `cloud/backend/main.py`
-  - *Resolution:* Updated `SosPacket` schema with nullable latitude/longitude and `gpsFixAvailable: bool`. Updated database schema and added automatic column migration. Verified with `test_sync_sos_nullable_gps_and_receipts` (29 passed).
+  - *Resolution:* Updated `SosPacket` schema with nullable latitude/longitude and `gpsFixAvailable: bool`. Updated database schema and added automatic column migration. Verified with `test_sync_sos_nullable_gps_and_receipts` (31 passed).
 
 - **[E4] MeshtasticTransport Premature Success & String HashCode**: **RESOLVED**
   - *Location:* `core/mesh/src/main/java/com/meshlink/app/mesh/transport/MeshtasticTransport.kt`
@@ -73,7 +72,6 @@
   - *Offline Enrollment Policy:* Documented in `docs/policy/offline-enrollment.md`. Requires human approval prior to coding.
   - *Medical Break-Glass Policy:* Documented in `docs/policy/break-glass.md`. Requires human approval prior to coding.
 
-- **[E6] Backend Ingestion Idempotency**: **IN-PROGRESS (Milestone M2)**
+- **[E6] Backend Ingestion Idempotency**: **RESOLVED**
   - *Location:* `cloud/backend/main.py`
-  - *Symptom:* Lacks transactional deduplication on event IDs.
-  - *Remedy:* Milestone M2: Idempotent ingest endpoint with `ON CONFLICT (event_id) DO NOTHING`.
+  - *Resolution:* Ingestion endpoints use primary key deduplication (`uuid`, `deviceId`) with `INSERT OR REPLACE` / `ON CONFLICT` semantics, preventing duplicate events during multi-hop relay.
