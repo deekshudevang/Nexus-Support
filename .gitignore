@@ -93,6 +93,7 @@ __pycache__/
 checkpoints/
 runs/
 models/
+!cloud/backend/app/models/
 *.safetensors
 *.bin
 *.task
