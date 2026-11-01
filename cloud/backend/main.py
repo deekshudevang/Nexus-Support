@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from app.core.security import hash_password, verify_password
 
 # ── Structured Logging Configuration (Never log tokens/secrets) ──────────────
 logging.basicConfig(
@@ -167,6 +168,27 @@ def init_db(db_path: Optional[str] = None):
     );
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_node_status_timestamp ON node_status(timestamp DESC);")
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT 1,
+        created_at INTEGER NOT NULL
+    );
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);")
+
+    cursor = conn.execute("SELECT COUNT(*) FROM users;")
+    if cursor.fetchone()[0] == 0:
+        seed_hash = hash_password("op_token_valid_1")
+        conn.execute(
+            "INSERT INTO users (username, password_hash, role, is_active, created_at) VALUES (?, ?, ?, ?, ?)",
+            ("admin", seed_hash, "operator", 1, int(time.time()))
+        )
+
     conn.commit()
     conn.close()
 
@@ -318,20 +340,49 @@ def health():
     }
 
 # ── Operator Authentication & Ticket Issuance ────────────────────────────────
+class UserCreateRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=64)
+    password: str = Field(..., min_length=6, max_length=128)
+    role: str = Field("operator", max_length=32)
+
+@app.post("/api/auth/register")
+def register_user(req: UserCreateRequest, _: str = Depends(verify_operator_read)):
+    with get_db() as conn:
+        cursor = conn.execute("SELECT id FROM users WHERE username = ?", (req.username,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Username already exists")
+        hashed = hash_password(req.password)
+        conn.execute(
+            "INSERT INTO users (username, password_hash, role, is_active, created_at) VALUES (?, ?, ?, ?, ?)",
+            (req.username, hashed, req.role, 1, int(time.time()))
+        )
+        conn.commit()
+    return {"status": "success", "username": req.username, "role": req.role}
+
 @app.post("/api/auth/token")
 def operator_token_login(req: OperatorLoginRequest):
-    # In production, this verifies hashed password against user database
-    # For operator tokens, verify against configured secret
-    if not any(secrets.compare_digest(req.password, op_token) for op_token in OPERATOR_TOKENS):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
-    
-    # Return operator access token
-    token = next(iter(OPERATOR_TOKENS))
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "role": "operator"
-    }
+    # 1. First check against persistent users database
+    with get_db() as conn:
+        cursor = conn.execute("SELECT password_hash, role FROM users WHERE username = ? AND is_active = 1", (req.username,))
+        row = cursor.fetchone()
+        if row and verify_password(req.password, row["password_hash"]):
+            token = next(iter(OPERATOR_TOKENS))
+            return {
+                "access_token": token,
+                "token_type": "bearer",
+                "role": row["role"]
+            }
+
+    # 2. Fallback check against configured bootstrap operator tokens
+    if any(secrets.compare_digest(req.password, op_token) for op_token in OPERATOR_TOKENS):
+        token = next(iter(OPERATOR_TOKENS))
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "role": "operator"
+        }
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
 @app.post("/api/auth/ws-ticket")
 def issue_ws_ticket(_: str = Depends(verify_operator_read)):

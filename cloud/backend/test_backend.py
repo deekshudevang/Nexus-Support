@@ -441,3 +441,52 @@ def test_sync_sos_nullable_gps_and_receipts(client):
     assert found["latitude"] is None
     assert found["longitude"] is None
     assert found["gpsFixAvailable"] == 0
+
+def test_user_registration_and_persistent_login(client):
+    op_headers = {"Authorization": "Bearer op_token_valid_1"}
+
+    # 1. Register a new operator user
+    reg_payload = {
+        "username": "sar_lead_john",
+        "password": "SecurePassword123!",
+        "role": "responder"
+    }
+    reg_res = client.post("/api/auth/register", json=reg_payload, headers=op_headers)
+    assert reg_res.status_code == 200
+    reg_data = reg_res.json()
+    assert reg_data["status"] == "success"
+    assert reg_data["username"] == "sar_lead_john"
+
+    # 2. Login with registered user credentials
+    login_res = client.post("/api/auth/token", json={
+        "username": "sar_lead_john",
+        "password": "SecurePassword123!"
+    })
+    assert login_res.status_code == 200
+    login_data = login_res.json()
+    assert "access_token" in login_data
+    assert login_data["role"] == "responder"
+
+    # 3. Wrong password fails
+    bad_login = client.post("/api/auth/token", json={
+        "username": "sar_lead_john",
+        "password": "WrongPassword!"
+    })
+    assert bad_login.status_code == 401
+
+    # 4. Duplicate username rejected
+    dup_res = client.post("/api/auth/register", json=reg_payload, headers=op_headers)
+    assert dup_res.status_code == 400
+
+def test_password_hashing_security():
+    from app.core.security import hash_password, verify_password
+    pw = "SuperSecretTacticalKey456!"
+    h1 = hash_password(pw)
+    h2 = hash_password(pw)
+
+    # Different salts must generate different hashes
+    assert h1 != h2
+    assert h1.startswith("pbkdf2_sha256$")
+    assert verify_password(pw, h1) is True
+    assert verify_password(pw, h2) is True
+    assert verify_password("WrongKey", h1) is False
