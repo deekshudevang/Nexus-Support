@@ -127,8 +127,9 @@ class GatewaySyncWorker @AssistedInject constructor(
                 val responseBody = BufferedReader(InputStreamReader(connection.inputStream)).use { it.readText() }
                 Timber.i("GatewaySyncWorker: Gateway returned $responseCode: $responseBody")
 
-                // Per-event receipt reconciliation
+                // Per-event receipt reconciliation & downlink assignment processing
                 val acknowledgedUuids = mutableSetOf<String>()
+                val receivedDownlinks = mutableListOf<JSONObject>()
                 try {
                     val respObj = JSONObject(responseBody)
                     if (respObj.has("receipts")) {
@@ -141,8 +142,21 @@ class GatewaySyncWorker @AssistedInject constructor(
                             }
                         }
                     }
+
+                    // Process downlink assignments (Server -> Device Pull on Sync)
+                    if (respObj.has("downlinks")) {
+                        val downlinks = respObj.getJSONArray("downlinks")
+                        for (i in 0 until downlinks.length()) {
+                            val dl = downlinks.getJSONObject(i)
+                            val incidentId = dl.optString("incident_id")
+                            val role = dl.optString("role")
+                            val notes = dl.optString("notes")
+                            receivedDownlinks.add(dl)
+                            Timber.i("GatewaySyncWorker: Downlink assignment received for incident $incidentId [role: $role]: $notes")
+                        }
+                    }
                 } catch (e: Exception) {
-                    Timber.w(e, "Failed to parse receipt array, falling back to batch acknowledgement")
+                    Timber.w(e, "Failed to parse receipt or downlink array, falling back to batch acknowledgement")
                 }
 
                 // If no specific receipts parsed, acknowledge all sent in batch

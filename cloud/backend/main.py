@@ -420,7 +420,7 @@ async def sync_sos(packets: List[SosPacket], _: str = Depends(verify_gateway_wri
     for p in packets:
         await alert_manager.broadcast_sos(p.model_dump())
 
-    return {"status": "success", "synced_count": count, "receipts": receipts}
+    return {"status": "success", "synced_count": count, "receipts": receipts, "downlinks": []}
 
 @app.post("/api/sync/nodes")
 def sync_nodes(nodes: List[NodeStatus], _: str = Depends(verify_gateway_write)):
