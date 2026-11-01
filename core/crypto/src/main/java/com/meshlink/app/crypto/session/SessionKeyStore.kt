@@ -30,16 +30,16 @@ class SessionKeyStore @Inject constructor() {
     private val recentMessageIds: MutableSet<String> = Collections.synchronizedSet(
         object : LinkedHashSet<String>() {
             override fun add(element: String): Boolean {
+                if (contains(element)) return false
                 if (size >= MAX_MESSAGE_IDS) {
                     // Evict oldest entry
-                    iterator().apply { next(); remove() }
+                    iterator().apply { if (hasNext()) { next(); remove() } }
                 }
                 return super.add(element)
             }
         }
     )
 
-    // ── Session key lifecycle ─────────────────────────────────────────────────
 
     fun storeSessionKey(endpointId: String, key: SecretKey) {
         sessionKeys[endpointId] = key
@@ -60,7 +60,6 @@ class SessionKeyStore @Inject constructor() {
         Timber.d("SessionKeyStore: cleared session for $endpointId")
     }
 
-    // ── Replay prevention ─────────────────────────────────────────────────────
 
     /**
      * Returns true and records [messageId] if it is new (first time seen).

@@ -1,7 +1,7 @@
 package com.meshlink.app.crypto.cipher
 
 import android.util.Base64
-import com.meshlink.app.crypto.identity.KeyManager
+import com.meshlink.app.crypto.identity.KeyProvider
 import timber.log.Timber
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
@@ -38,7 +38,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class EciesService @Inject constructor(
-    private val keyManager: KeyManager,
+    private val keyManager: KeyProvider,
     private val encryptionService: EncryptionService
 ) {
     companion object {
@@ -77,8 +77,8 @@ class EciesService @Inject constructor(
         // 3. HKDF-SHA256 → 32-byte AES-256 session key
         val sessionKeyBytes = hkdf(
             inputKeyMaterial = sharedSecret,
-            salt             = "meshlink-ecies".toByteArray(Charsets.UTF_8),
-            info             = "ecies-v1".toByteArray(Charsets.UTF_8),
+            salt             = "meshlink-ecies".toByteArray(Charsets.UTF_8), // lgtm [kt/hardcoded-credentials]
+            info             = "ecies-v1".toByteArray(Charsets.UTF_8), // lgtm [kt/hardcoded-credentials]
             length           = 32
         )
         sharedSecret.fill(0)  // zero ephemeral secret immediately
@@ -122,8 +122,8 @@ class EciesService @Inject constructor(
             // 3. HKDF-SHA256 → same 32-byte AES key
             val sessionKeyBytes = hkdf(
                 inputKeyMaterial = sharedSecret,
-                salt             = "meshlink-ecies".toByteArray(Charsets.UTF_8),
-                info             = "ecies-v1".toByteArray(Charsets.UTF_8),
+                salt             = "meshlink-ecies".toByteArray(Charsets.UTF_8), // lgtm [kt/hardcoded-credentials]
+                info             = "ecies-v1".toByteArray(Charsets.UTF_8), // lgtm [kt/hardcoded-credentials]
                 length           = 32
             )
             sharedSecret.fill(0)
@@ -151,7 +151,6 @@ class EciesService @Inject constructor(
     fun decryptFromBase64(base64Content: String): ByteArray? =
         decrypt(Base64.decode(base64Content, Base64.NO_WRAP))
 
-    // ── HKDF-SHA256 (RFC 5869) — same implementation as HandshakeManager ─────
 
     private fun hkdf(
         inputKeyMaterial: ByteArray,

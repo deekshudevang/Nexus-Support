@@ -4,7 +4,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
-// ── Dark scheme — Stitch design system ────────────────────────────────────────
 private val MeshLinkColorScheme = darkColorScheme(
     primary             = Primary,
     onPrimary           = TextOnPrimary,
@@ -31,15 +30,14 @@ private val MeshLinkColorScheme = darkColorScheme(
     outline             = Outline,
     outlineVariant      = OutlineVariant,
 
-    error               = Primary,
+    error               = StatusError,
     onError             = TextOnPrimaryWhite,
-    errorContainer      = PrimaryLight,
+    errorContainer      = EmergencyRedContainer,
     onErrorContainer    = TextPrimary,
 
     scrim               = Neutral.copy(alpha = 0.32f)
 )
 
-// ── App-level theme (Dark Mode) ──────────────────────────────────────────────
 @Composable
 fun MeshLinkTheme(content: @Composable () -> Unit) {
     MaterialTheme(
@@ -49,7 +47,6 @@ fun MeshLinkTheme(content: @Composable () -> Unit) {
     )
 }
 
-// ── Alias for Medical Profile ──────────────────────────────────────────────
 @Composable
 fun MeshLinkLightTheme(content: @Composable () -> Unit) {
     // Both are now dark theme to maintain consistency with the new aesthetic

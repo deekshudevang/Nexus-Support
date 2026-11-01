@@ -1,5 +1,11 @@
 syntax = "proto3";
 
+// -----------------------------------------------------------------------------
+// PROTOBUF VERSIONING RULES (DO NOT IGNORE)
+// 1. Additive changes only. Never remove or rename existing fields.
+// 2. Never reuse an enum value. If a value is deprecated, leave it in place.
+// -----------------------------------------------------------------------------
+
 package meshtastic;
 
 option java_package = "com.geeksville.mesh";

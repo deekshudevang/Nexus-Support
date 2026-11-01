@@ -33,7 +33,7 @@ class DiagnosticsViewModel @Inject constructor(
         pendingMessageRepository.getPendingCountFlow()
     ) { connStates, graph, scanStrategy, pendingCount ->
 
-        val activeConns = connStates.count { it.value == ConnectionState.CONNECTED }
+        val activeConns = connStates.count { it.value == ConnectionState.CONNECTED || it.value == ConnectionState.AUTHENTICATED }
         val nodes = (graph.keys + graph.values.flatMap { it.keys }).distinct().size
         val links = graph.values.sumOf { it.size }
 

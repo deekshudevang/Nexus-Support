@@ -50,6 +50,11 @@ class AdaptiveScanController @Inject constructor() {
         updateStrategy()
     }
 
+    fun setOptimizationEnabled(enabled: Boolean) {
+        isOptimizationEnabled = enabled
+        updateStrategy()
+    }
+
     private fun updateStrategy() {
         val newStrategy = when {
             isManualPause -> ScanStrategy.PAUSED

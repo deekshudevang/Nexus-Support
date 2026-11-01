@@ -27,8 +27,17 @@ data class Conversation(
     val lastMessage:   String,
     val timestamp:     Long,
     val formattedTime: String,
-    val isSos:         Boolean
+    val isSos:         Boolean,
+    val isOnline:      Boolean = false
 )
+
+enum class MeshNetworkState {
+    SECURE_ACTIVE,
+    CONNECTED,
+    CONNECTING,
+    SCANNING,
+    PAUSED
+}
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -39,9 +48,11 @@ class HomeViewModel @Inject constructor(
     @Named("localDeviceId") private val localDeviceId: String
 ) : ViewModel() {
 
-    val conversations: StateFlow<List<Conversation>> = messageRepository
-        .getLatestMessagePerConversation()
-        .combine(deviceRepository.getAllDevices()) { messages, devices ->
+    val conversations: StateFlow<List<Conversation>> = combine(
+        messageRepository.getLatestMessagePerConversation(),
+        deviceRepository.getAllDevices(),
+        nearbyRepository.connectionStates
+    ) { messages, devices, connectionStates ->
             val deviceNameMap = devices.associate { it.deviceId to it.displayName }
             messages.map { msg ->
                 val peerId   = if (msg.senderId == localDeviceId) msg.receiverId else msg.senderId
@@ -50,22 +61,50 @@ class HomeViewModel @Inject constructor(
                 val peerName = msg.senderName.takeIf { it.isNotEmpty() && msg.senderId != localDeviceId }
                     ?: deviceNameMap[peerId]
                     ?: peerId.take(8)
+                val isOnline = connectionStates[peerId] == ConnectionState.CONNECTED || connectionStates[peerId] == ConnectionState.AUTHENTICATED
                 Conversation(
                     deviceId      = peerId,
                     deviceName    = peerName,
                     lastMessage   = String(msg.ciphertext, Charsets.UTF_8),
                     timestamp     = msg.timestamp,
                     formattedTime = formatConversationTime(msg.timestamp),
-                    isSos         = msg.isSos
+                    isSos         = msg.isSos,
+                    isOnline      = isOnline
                 )
             }.sortedByDescending { it.timestamp }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    private fun calculatePeerCount(states: Map<String, ConnectionState>): Int {
+        return states.count { it.value == ConnectionState.CONNECTED || it.value == ConnectionState.AUTHENTICATED }
+    }
+
     /** Number of currently CONNECTED (post-handshake) peers. */
     val peerCount: StateFlow<Int> = nearbyRepository.connectionStates
-        .map { states -> states.count { it.value == ConnectionState.CONNECTED } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+        .map { calculatePeerCount(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), calculatePeerCount(nearbyRepository.connectionStates.value))
+
+    private fun calculateNetworkState(
+        states: Map<String, ConnectionState>,
+        strategy: com.meshlink.app.domain.model.ScanStrategy
+    ): MeshNetworkState {
+        return when {
+            states.values.any { it == ConnectionState.AUTHENTICATED } -> MeshNetworkState.SECURE_ACTIVE
+            states.values.any { it == ConnectionState.CONNECTED } -> MeshNetworkState.CONNECTED
+            states.values.any { it == ConnectionState.CONNECTING || it == ConnectionState.HANDSHAKING } -> MeshNetworkState.CONNECTING
+            strategy != com.meshlink.app.domain.model.ScanStrategy.PAUSED -> MeshNetworkState.SCANNING
+            else -> MeshNetworkState.PAUSED
+        }
+    }
+
+    val networkState: StateFlow<MeshNetworkState> = combine(
+        nearbyRepository.connectionStates,
+        nearbyRepository.scanStrategy
+    ) { states, strategy ->
+        calculateNetworkState(states, strategy)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 
+        calculateNetworkState(nearbyRepository.connectionStates.value, nearbyRepository.scanStrategy.value)
+    )
 
     val pendingMessageCount: StateFlow<Int> = pendingMessageRepository.getPendingCountFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)

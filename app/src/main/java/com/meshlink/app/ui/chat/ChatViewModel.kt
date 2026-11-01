@@ -8,6 +8,9 @@ import com.meshlink.app.domain.model.Message
 import com.meshlink.app.domain.model.MeshPacket
 import com.meshlink.app.domain.repository.MessageRepository
 import com.meshlink.app.domain.repository.NearbyRepository
+import com.meshlink.app.domain.repository.DeviceRepository
+import com.meshlink.app.crypto.session.HandshakeManager
+import com.meshlink.app.mesh.battery.BatteryMonitor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -19,6 +22,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.net.URLDecoder
+import androidx.navigation.toRoute
+import com.meshlink.app.ui.navigation.Screen
 import javax.inject.Inject
 import javax.inject.Named
 
@@ -30,18 +35,25 @@ class ChatViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val messageRepository: MessageRepository,
     private val nearbyRepository: NearbyRepository,
+    private val deviceRepository: DeviceRepository,
+    private val handshakeManager: HandshakeManager,
+    private val batteryMonitor: BatteryMonitor,
     @Named("localDeviceId") val localDeviceId: String
 ) : ViewModel() {
+
+    private val chatRoute: Screen.Chat? = runCatching {
+        savedStateHandle.toRoute<Screen.Chat>()
+    }.getOrNull()
 
     /**
      * Volatile Nearby endpointId from nav args.
      * Only used for Nearby API calls (requestConnection etc.).
      * Never used as a Room key — use [peerDeviceId] for that.
      */
-    val deviceId: String = checkNotNull(savedStateHandle["deviceId"])
+    val deviceId: String = chatRoute?.deviceId ?: checkNotNull(savedStateHandle["deviceId"])
 
-    val deviceName: String = (savedStateHandle.get<String>("deviceName"))?.let {
-        URLDecoder.decode(it, "UTF-8")
+    val deviceName: String = chatRoute?.deviceName ?: (savedStateHandle.get<String>("deviceName"))?.let {
+        try { URLDecoder.decode(it, "UTF-8") } catch (_: Exception) { it }
     } ?: deviceId
 
     /**
@@ -76,6 +88,35 @@ class ChatViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /**
+     * Short Authentication String (SAS) for the pairing ceremony.
+     * Computed from the peer's stored public key.
+     */
+    val sasCode: StateFlow<String?> = peerDeviceId
+        .map { peerId ->
+            val device = deviceRepository.getDeviceById(peerId)
+            device?.let { handshakeManager.computeSAS(it.publicKey) }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val isPeerVerified: StateFlow<Boolean> = peerDeviceId
+        .flatMapLatest { peerId ->
+            // Use distinctUntilChanged inside flatMapLatest for reactivity if device updates
+            // Wait, DeviceRepository doesn't expose a flow of single device, we have to map from getAllDevices()
+            // or just fetch once and rely on UI refresh. A better way:
+            deviceRepository.getAllDevices().map { devices ->
+                devices.find { it.deviceId == peerId }?.isVerified ?: false
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun onVerifyContactConfirmed() {
+        val peerId = peerDeviceId.value
+        viewModelScope.launch {
+            deviceRepository.markDeviceAsVerified(peerId)
+        }
+    }
+
     val connectionState: StateFlow<ConnectionState> = nearbyRepository.connectionStates
         .map { states ->
             states[liveEndpointId]
@@ -86,7 +127,7 @@ class ChatViewModel @Inject constructor(
 
     /** Number of currently CONNECTED peers across the whole mesh (for top bar chip). */
     val peerCount: StateFlow<Int> = nearbyRepository.connectionStates
-        .map { states -> states.count { it.value == ConnectionState.CONNECTED } }
+        .map { states -> states.count { it.value == ConnectionState.CONNECTED || it.value == ConnectionState.AUTHENTICATED } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     private val _inputText = MutableStateFlow("")
@@ -146,11 +187,5 @@ class ChatViewModel @Inject constructor(
         nearbyRepository.sendBroadcast(content)
     }
 
-    // --- MOCK TELEMETRY FOR UI REDESIGN ---
-    val snr = MutableStateFlow("+8.2 dB")
-    val signalStrength = MutableStateFlow("-62 dBm")
-    val battery = MutableStateFlow("88%")
-    val protocol = MutableStateFlow("NOISE-XX PROTOCOL")
-    val modulation = MutableStateFlow("SF11 / BW: 125 kHz")
-    val dutyCycleAirtime = MutableStateFlow("~0.84s")
+    val battery = MutableStateFlow(batteryMonitor.getBatteryLevel().toString())
 }

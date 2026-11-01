@@ -26,9 +26,8 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
-    // Jetpack Security — EncryptedSharedPreferences wraps the private key
-    // with an AES-256-GCM master key stored inside Android Keystore
-    implementation(libs.androidx.security.crypto)
+    // Tink AEAD (AES-256-GCM) with Android Keystore for secure key storage
+    implementation(libs.tink.android)
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.timber)
@@ -36,4 +35,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.junit)
 }

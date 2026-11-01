@@ -2,9 +2,9 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ master, main, 'feature/**', 'fix/**', 'release/**' ]
   pull_request:
-    branches: [ master, main ]
+    branches: [ master, main, 'feature/**', 'fix/**', 'release/**' ]
   workflow_dispatch:
 
 concurrency:
@@ -12,51 +12,72 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  unit-tests:
-    name: Unit Tests & Simulations
+  docs-consistency:
+    name: Structural Doc-Sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run verify-docs.sh
+        run: |
+          chmod +x scripts/verify-docs.sh
+          ./scripts/verify-docs.sh
+
+  android-unit-and-migration-tests:
+    name: Android Unit & Migration Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           cache: gradle
 
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
-      - name: Run JVM Unit Tests
-        run: ./gradlew testDebugUnitTest --continue
+      - name: Run JVM Unit & Room Migration Tests
+        run: ./gradlew testDebugUnitTest :core:domain:test --continue
 
       - name: Upload Test Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: android-test-results
           path: |
             **/build/reports/tests/
             **/build/test-results/
 
-  build-verification:
-    name: Build Verification & Lint
+  android-build-and-lint:
+    name: Android Build & Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           cache: gradle
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Check for hardcoded local paths
+        run: |
+          if grep -q "org.gradle.java.home" gradle.properties; then
+            echo "Error: Machine-specific Java home found in gradle.properties"
+            exit 1
+          fi
+
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
 
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
@@ -72,4 +93,166 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lint-results
-          path: "**/build/reports/lint-results-debug.html"
+          path: "**/build/reports/lint-results-debug.*"
+
+  backend-tests:
+    name: Cloud Backend Pytest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: cloud/backend/requirements.txt
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r cloud/backend/requirements.txt
+
+      - name: Run Pytest Test Suite
+        run: |
+          mkdir -p test-results
+          pytest cloud/backend/test_backend.py -v --junitxml=test-results/backend-junit.xml
+
+      - name: Upload Backend Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: test-results/backend-junit.xml
+
+  frontend-tests-and-build:
+    name: Cloud Frontend Tests & Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: cloud/frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: cloud/frontend
+        run: npm ci
+
+      - name: Run Vitest Unit Tests
+        working-directory: cloud/frontend
+        run: |
+          mkdir -p test-results
+          npm run test -- --reporter=junit --outputFile=./test-results/frontend-junit.xml
+
+      - name: Upload Frontend Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: cloud/frontend/test-results/frontend-junit.xml
+
+      - name: Build Production Dashboard Bundle
+        working-directory: cloud/frontend
+        run: npm run build
+
+      - name: Verify No Secrets Inlined in Client Bundle
+        working-directory: cloud/frontend
+        run: |
+          if grep -E "(meshlink_gw_dev_secret|meshlink_op_dev_secret)" -r dist/; then
+            echo "Security Error: Secrets detected in built frontend bundle!"
+            exit 1
+          fi
+
+  aggregate-test-results:
+    name: Aggregate Cross-Stack Test Reports
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - android-unit-and-migration-tests
+      - backend-tests
+      - frontend-tests-and-build
+    steps:
+      - name: Download test report artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*-test-results"
+          path: aggregated-test-results
+
+      - name: Summarize JUnit XML reports
+        id: summarize
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+          import sys
+
+          files = sorted(Path("aggregated-test-results").rglob("*.xml"))
+          totals = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+          report_lines = ["## Cross-stack test report", "", "| Report | Tests | Failures | Errors | Skipped |", "|---|---:|---:|---:|---:|"]
+          if not files:
+              report_lines += ["", "No JUnit XML files were downloaded. This is not evidence that tests passed."]
+              Path("test-summary.md").write_text("\n".join(report_lines) + "\n")
+              print("No JUnit XML reports found.")
+              sys.exit(1)
+
+          for file in files:
+              try:
+                  root = ET.parse(file).getroot()
+              except (ET.ParseError, OSError) as exc:
+                  print(f"Invalid JUnit report {file}: {exc}", file=sys.stderr)
+                  sys.exit(1)
+              suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
+              counts = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+              for suite in suites:
+                  for key in counts:
+                      counts[key] += int(suite.attrib.get(key, 0))
+              for key in totals:
+                  totals[key] += counts[key]
+              label = file.name.replace("|", "-")
+              report_lines.append(f"| {label} | {counts['tests']} | {counts['failures']} | {counts['errors']} | {counts['skipped']} |")
+
+          report_lines += ["", f"**Totals:** {totals['tests']} tests; {totals['failures']} failures; {totals['errors']} errors; {totals['skipped']} skipped."]
+          Path("test-summary.md").write_text("\n".join(report_lines) + "\n")
+          print("\n".join(report_lines))
+          if totals["failures"] or totals["errors"]:
+              sys.exit(1)
+          PY
+          cat test-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload aggregate test summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aggregate-test-summary
+          path: test-summary.md
+  vulnerability-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Check Frontend Dependencies
+        working-directory: cloud/frontend
+        run: npm audit --audit-level=high
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check Backend Dependencies
+        run: |
+          python -m pip install pip-audit
+          pip-audit -r cloud/backend/requirements.txt

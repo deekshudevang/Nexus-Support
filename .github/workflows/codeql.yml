@@ -2,11 +2,16 @@ name: CodeQL Security Scan
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ master, main, 'feature/**', 'fix/**', 'release/**' ]
   pull_request:
-    branches: [ master, main ]
+    branches: [ master, main, 'feature/**', 'fix/**', 'release/**' ]
   schedule:
     - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analyze:
@@ -26,12 +31,15 @@ jobs:
         with:
           languages: java-kotlin
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           cache: gradle
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
 
       - name: Build Project
         run: ./gradlew assembleDebug -x test

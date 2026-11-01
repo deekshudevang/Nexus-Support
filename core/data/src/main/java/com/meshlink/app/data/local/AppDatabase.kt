@@ -13,6 +13,7 @@ import com.meshlink.app.data.local.entity.LocationSyncQueueEntity
 import com.meshlink.app.data.local.entity.MessageEntity
 import com.meshlink.app.data.local.entity.PendingMessageEntity
 import com.meshlink.app.data.local.entity.ProcessedEventEntity
+import com.meshlink.app.data.local.entity.SosPacketEntity
 
 @Database(
     entities = [
@@ -21,10 +22,11 @@ import com.meshlink.app.data.local.entity.ProcessedEventEntity
         PendingMessageEntity::class,
         LocationEventEntity::class,
         LocationSyncQueueEntity::class,
-        ProcessedEventEntity::class
+        ProcessedEventEntity::class,
+        SosPacketEntity::class
     ],
-    version = 12,
-    exportSchema = false
+    version = 14,
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
@@ -33,6 +35,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun locationEventDao(): com.meshlink.app.data.local.dao.LocationEventDao
     abstract fun locationSyncQueueDao(): com.meshlink.app.data.local.dao.LocationSyncQueueDao
     abstract fun processedEventDao(): com.meshlink.app.data.local.dao.ProcessedEventDao
+    abstract fun sosPacketDao(): com.meshlink.app.data.local.dao.SosPacketDao
 
     companion object {
         /**
@@ -97,6 +100,24 @@ abstract class AppDatabase : RoomDatabase() {
          * the missing @ColumnInfo(defaultValue="0") on priority.
          */
         val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // No schema changes required
+            }
+        }
+
+        /**
+         * v6 → v7: Empty migration to fix the missing migration gap.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // No schema changes required
+            }
+        }
+
+        /**
+         * v7 → v8: Empty migration to fix the missing migration gap.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // No schema changes required
             }
@@ -170,6 +191,40 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE location_events ADD COLUMN publicKey TEXT NOT NULL DEFAULT ''")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_location_sync_queue_eventId` ON `location_sync_queue` (`eventId`)")
+            }
+        }
+
+        /**
+         * v12 → v13: adds sos_packets table for structured SOS persistence
+         */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS sos_packets (
+                        uuid          TEXT    NOT NULL PRIMARY KEY,
+                        senderId      TEXT    NOT NULL,
+                        senderName    TEXT    NOT NULL DEFAULT '',
+                        emergencyType TEXT    NOT NULL,
+                        severity      INTEGER NOT NULL DEFAULT 3,
+                        latitude      REAL    NOT NULL DEFAULT 0.0,
+                        longitude     REAL    NOT NULL DEFAULT 0.0,
+                        message       TEXT    NOT NULL DEFAULT '',
+                        timestamp     INTEGER NOT NULL,
+                        hopCount      INTEGER NOT NULL DEFAULT 0,
+                        status        TEXT    NOT NULL DEFAULT 'PENDING'
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
+        /**
+         * v13 → v14: adds isVerified flag to known_devices for SAS verification status
+         */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE known_devices ADD COLUMN isVerified INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

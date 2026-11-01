@@ -118,7 +118,6 @@ class PendingMessageDaoTest {
         assertEquals("device-B", all[0].targetDeviceId)
     }
 
-    // ── Helper ───────────────────────────────────────────────────────────────
 
     private fun pendingEntity(
         id: String,

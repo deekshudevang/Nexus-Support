@@ -1,5 +1,6 @@
 package com.meshlink.app.mesh.routing
 
+import com.meshlink.app.domain.model.NodeStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -102,7 +103,8 @@ class RoutingTable @Inject constructor(
         queue.add(Pair(myDeviceId, 0))
 
         while (queue.isNotEmpty()) {
-            val (u, distU) = queue.poll()
+            val pollResult = queue.poll() ?: continue
+            val (u, distU) = pollResult
 
             if (distU > (distances[u] ?: Int.MAX_VALUE)) continue
             if (u == destinationDeviceId) break // Found shortest path
@@ -189,4 +191,22 @@ class RoutingTable @Inject constructor(
         graph.clear()
         publishState()
     }
+
+
+    private val nodeStatusMap = HashMap<String, NodeStatus>()
+
+    private val _nodeStatusFlow = MutableStateFlow<Map<String, NodeStatus>>(emptyMap())
+    val nodeStatusFlow: StateFlow<Map<String, NodeStatus>> = _nodeStatusFlow
+
+    @Synchronized
+    fun updateNodeStatus(status: NodeStatus) {
+        nodeStatusMap[status.deviceId] = status
+        _nodeStatusFlow.value = nodeStatusMap.toMap()
+    }
+
+    @Synchronized
+    fun getNodeStatus(deviceId: String): NodeStatus? = nodeStatusMap[deviceId]
+
+    @Synchronized
+    fun getAllNodeStatuses(): Map<String, NodeStatus> = nodeStatusMap.toMap()
 }

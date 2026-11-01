@@ -1,0 +1,157 @@
+:root {
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Tactical Mil-Spec Cyber Palette */
+  --bg-void: #0a0d12;
+  --bg-surface: #121820;
+  --bg-panel: #182230;
+  --bg-panel-hover: #1f2c3d;
+  --border-tactical: #223147;
+  --border-light: rgba(148, 163, 184, 0.15);
+
+  --text-main: #f1f5f9;
+  --text-muted: #8e9fb5;
+  --text-dim: #54657a;
+
+  /* Semantic Alert Accents */
+  --accent-sos: #ef4444;
+  --accent-sos-glow: rgba(239, 68, 68, 0.4);
+  --accent-healthy: #10b981;
+  --accent-healthy-glow: rgba(16, 185, 129, 0.35);
+  --accent-warning: #f59e0b;
+  --accent-cyan: #06b6d4;
+  --accent-blue: #3b82f6;
+
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  background: var(--bg-void);
+  color: var(--text-main);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-void);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-tactical);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+
+/* Tactical Pulse & Scan Animations */
+@keyframes pulse-sos {
+  0% { transform: scale(1); opacity: 0.9; box-shadow: 0 0 0 0 var(--accent-sos-glow); }
+  50% { transform: scale(1.08); opacity: 1; box-shadow: 0 0 16px 6px var(--accent-sos-glow); }
+  100% { transform: scale(1); opacity: 0.9; box-shadow: 0 0 0 0 var(--accent-sos-glow); }
+}
+
+@keyframes ping-radar {
+  0% { transform: scale(0.6); opacity: 1; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+.sos-pulsing {
+  animation: pulse-sos 1.8s infinite ease-in-out;
+}
+
+.radar-ping {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent-sos-glow);
+  animation: ping-radar 2s infinite ease-out;
+}
+
+/* Tactical Dark Leaflet Map */
+.tactical-map-container .leaflet-tile-pane {
+  filter: brightness(0.7) invert(1) contrast(2.6) hue-rotate(195deg) saturate(0.25) brightness(0.65);
+}
+
+.leaflet-container {
+  background-color: #0d131a !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: var(--bg-panel) !important;
+  color: var(--text-main) !important;
+  border: 1px solid var(--border-tactical) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7) !important;
+}
+
+.leaflet-popup-tip {
+  background: var(--bg-panel) !important;
+}
+
+/* Custom Map Marker Styling */
+.marker-pin-sos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: #ef4444;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 800;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.8);
+  cursor: pointer;
+}
+
+.marker-pin-node {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: #10b981;
+  border: 2px solid #0a0d12;
+  border-radius: 6px;
+  color: #0a0d12;
+  font-size: 11px;
+  font-weight: bold;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+  cursor: pointer;
+}
+
+/* Tactical Data Monospace */
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Button & Focus Affordances */
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  transition: all 0.15s ease;
+}
+
+button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 1px;
+}

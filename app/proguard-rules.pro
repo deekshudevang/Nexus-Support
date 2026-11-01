@@ -28,9 +28,12 @@
     @androidx.room.Delete <methods>;
 }
 
-# ── SQLCipher ─────────────────────────────────────────────────────────────────
+# ── SQLCipher (Legacy & net.zetetic:sqlcipher-android) ────────────────────────
+-keep class net.zetetic.** { *; }
+-keep class net.zetetic.database.** { *; }
 -keep class net.sqlcipher.** { *; }
 -keep class net.sqlcipher.database.** { *; }
+-dontwarn net.zetetic.**
 -dontwarn net.sqlcipher.**
 
 # ── Retrofit / Gson ───────────────────────────────────────────────────────────
@@ -56,7 +59,10 @@
 # ── Google Nearby / Play Services ─────────────────────────────────────────────
 -keep class com.google.android.gms.nearby.** { *; }
 -keep class com.google.android.gms.** { *; }
+-keep class com.google.android.gms.internal.location.** { *; }
+-keepclassmembers class com.google.android.gms.internal.location.** { *; }
 -dontwarn com.google.android.gms.**
+-dontwarn com.google.android.gms.internal.location.**
 
 # ── WorkManager ───────────────────────────────────────────────────────────────
 -keep class androidx.work.** { *; }
@@ -86,3 +92,32 @@
 # ── Coroutines ────────────────────────────────────────────────────────────────
 -keep class kotlinx.coroutines.** { *; }
 -dontwarn kotlinx.coroutines.**
+
+# ── MediaPipe Tasks GenAI & ML Kit ───────────────────────────────────────────
+-keep class com.google.mediapipe.** { *; }
+-dontwarn com.google.mediapipe.**
+-keep class com.google.mlkit.** { *; }
+-dontwarn com.google.mlkit.**
+
+# ── Annotation Processors / AutoValue ─────────────────────────────────────────
+-dontwarn javax.lang.model.**
+-dontwarn autovalue.shaded.**
+-dontwarn com.google.auto.value.**
+-dontwarn javax.annotation.processing.**
+
+# ── Google Tink ───────────────────────────────────────────────────────────────
+-keep class com.google.crypto.tink.** { *; }
+-dontwarn com.google.crypto.tink.**
+
+# ── Kotlinx Serialization ─────────────────────────────────────────────────────
+-keepattributes *Annotation*,InnerClasses
+-dontnote kotlinx.serialization.SerializationKt
+-keepclassmembers class * {
+    *** Companion;
+}
+-keepclasseswithmembers class * {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keep,allowobfuscation,allowshrinking class * {
+    <init>(...);
+}

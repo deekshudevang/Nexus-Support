@@ -1,8 +1,9 @@
 package com.meshlink.app.crypto.session
 
 import android.util.Base64
-import com.meshlink.app.crypto.identity.KeyManager
+import com.meshlink.app.crypto.identity.KeyProvider
 import com.meshlink.app.domain.model.MeshPacket
+import com.meshlink.app.domain.repository.DeviceRepository
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
@@ -31,15 +32,15 @@ import java.util.UUID
  */
 @Singleton
 class HandshakeManager @Inject constructor(
-    private val keyManager: KeyManager,
-    private val sessionKeyStore: SessionKeyStore
+    private val keyManager: KeyProvider,
+    private val sessionKeyStore: SessionKeyStore,
+    private val deviceRepository: DeviceRepository
 ) {
     companion object {
         private const val HKDF_INFO = "MeshLink_v1_AES256GCM_Session"
         private const val SESSION_KEY_BYTES = 32   // AES-256
     }
 
-    // ── Outbound handshake ────────────────────────────────────────────────────
 
     /**
      * Creates the HANDSHAKE packet this device should send immediately after
@@ -55,7 +56,6 @@ class HandshakeManager @Inject constructor(
             messageId  = UUID.randomUUID().toString()
         )
 
-    // ── Inbound handshake ─────────────────────────────────────────────────────
 
     /**
      * Processes a HANDSHAKE packet received from [endpointId].
@@ -63,9 +63,18 @@ class HandshakeManager @Inject constructor(
      *
      * @return true if the session key was successfully derived and stored.
      */
-    fun processHandshake(endpointId: String, peerPublicKeyBase64: String): Boolean {
+    suspend fun processHandshake(endpointId: String, peerDeviceId: String, peerPublicKeyBase64: String): Boolean {
         return try {
             val peerPubKeyBytes = Base64.decode(peerPublicKeyBase64, Base64.NO_WRAP)
+            
+            // TOFU pinning
+            // NOTE: TOFU pinning is inherently vulnerable to first-contact MITM. 
+            // SAS UI verification (computeSAS) must be completed by the user to actually close this gap.
+            val existingDevice = deviceRepository.getDeviceById(peerDeviceId)
+            if (existingDevice != null && !existingDevice.publicKey.contentEquals(peerPubKeyBytes)) {
+                Timber.e("MITM alert: Key mismatch for device $peerDeviceId at endpoint $endpointId!")
+                return false
+            }
 
             // 1. ECDH shared secret
             val sharedSecret = keyManager.computeSharedSecret(peerPubKeyBytes)
@@ -98,14 +107,12 @@ class HandshakeManager @Inject constructor(
         }
     }
 
-    // ── Convenience delegations ───────────────────────────────────────────────
 
     fun isHandshakeComplete(endpointId: String): Boolean =
         sessionKeyStore.isHandshakeComplete(endpointId)
 
     fun clearSession(endpointId: String) = sessionKeyStore.clearSession(endpointId)
 
-    // ── HKDF-SHA256 ───────────────────────────────────────────────────────────
 
     /**
      * RFC 5869 HKDF using HMAC-SHA256.
@@ -139,7 +146,27 @@ class HandshakeManager @Inject constructor(
         return output.toByteArray().copyOfRange(0, length)
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Computes a Short Authentication String (SAS) from the two public keys.
+     * Used for out-of-band verification to prevent MITM attacks.
+     */
+    fun computeSAS(peerPublicKey: ByteArray): String {
+        val (first, second) = sortKeys(keyManager.publicKeyBytes, peerPublicKey)
+        val md = MessageDigest.getInstance("SHA-256")
+        md.update(first)
+        md.update(second)
+        val hash = md.digest()
+        
+        // Extract 4 bytes and format as a 6-digit number
+        val num = ((hash[0].toInt() and 0xFF) shl 24) or
+                  ((hash[1].toInt() and 0xFF) shl 16) or
+                  ((hash[2].toInt() and 0xFF) shl 8) or
+                  (hash[3].toInt() and 0xFF)
+        val positiveNum = num and 0x7FFFFFFF
+        return String.format("%06d", positiveNum % 1000000)
+    }
+
 
     /**
      * Lexicographic sort: ensures HKDF salt is identical on both devices,

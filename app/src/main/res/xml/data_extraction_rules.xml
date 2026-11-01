@@ -5,15 +5,17 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="database" path="meshlink.db" />
+        <exclude domain="sharedpref" path="meshlink_db_secure_prefs.xml" />
+        <exclude domain="sharedpref" path="meshlink_keyset_prefs.xml" />
+        <exclude domain="sharedpref" path="meshlink_identity_secure_v2.xml" />
+        <exclude domain="sharedpref" path="meshlink_identity_secure_v2_keyset.xml" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="database" path="meshlink.db" />
+        <exclude domain="sharedpref" path="meshlink_db_secure_prefs.xml" />
+        <exclude domain="sharedpref" path="meshlink_keyset_prefs.xml" />
+        <exclude domain="sharedpref" path="meshlink_identity_secure_v2.xml" />
+        <exclude domain="sharedpref" path="meshlink_identity_secure_v2_keyset.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>

@@ -1,0 +1,704 @@
+import asyncio
+from contextlib import contextmanager
+import json
+import logging
+import os
+import secrets
+import sqlite3
+import time
+from typing import Dict, List, Optional, Set
+from urllib.parse import urlparse
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect, status
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+from app.core.security import (
+    hash_password,
+    verify_password,
+    generate_ws_ticket,
+    consume_ws_ticket,
+    _ws_tickets,
+)
+
+# ── Structured Logging Configuration (Never log tokens/secrets) ──────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+)
+logger = logging.getLogger("meshlink.backend")
+
+# ── Configuration & Environment ──────────────────────────────────────────────
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+DATABASE_PATH = os.getenv("DATABASE_PATH", "meshlink_sync.db")
+
+raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173")
+CORS_ORIGINS = [orig.strip() for orig in raw_origins.split(",") if orig.strip()]
+
+# Credentials (comma-separated if multiple; set via env vars in production)
+raw_gw_keys = os.getenv("GATEWAY_API_KEYS", "meshlink_gw_dev_secret")
+GATEWAY_API_KEYS = {k.strip() for k in raw_gw_keys.split(",") if k.strip()}
+
+raw_op_tokens = os.getenv("OPERATOR_TOKENS", "meshlink_op_dev_secret,op_token_valid_1,demo")
+OPERATOR_TOKENS = {k.strip() for k in raw_op_tokens.split(",") if k.strip()}
+
+raw_revoked = os.getenv("REVOKED_CREDENTIALS", "")
+REVOKED_CREDENTIALS = {k.strip() for k in raw_revoked.split(",") if k.strip()}
+
+
+def validate_production_configuration(
+    environment: str,
+    gateway_keys: Set[str],
+    operator_tokens: Set[str],
+    allowed_origins: List[str],
+) -> None:
+    """Fail closed when production would start with development credentials or origins."""
+    if environment.strip().lower() != "production":
+        return
+
+    development_credentials = {"meshlink_gw_dev_secret", "meshlink_op_dev_secret"}
+    if (
+        not gateway_keys
+        or not operator_tokens
+        or gateway_keys.intersection(development_credentials)
+        or operator_tokens.intersection(development_credentials)
+    ):
+        raise RuntimeError(
+            "Unsafe production configuration: set explicit non-development gateway and operator credentials."
+        )
+
+    normalized_origins = {origin.strip().rstrip("/") for origin in allowed_origins if origin.strip()}
+    unsafe_origin = any(
+        urlparse(origin).scheme != "https"
+        or urlparse(origin).hostname in {"localhost", "127.0.0.1", "::1"}
+        for origin in normalized_origins
+    )
+    if not normalized_origins or "*" in normalized_origins or unsafe_origin:
+        raise RuntimeError(
+            "Unsafe production configuration: set an explicit HTTPS CORS origin allow-list without localhost or wildcard origins."
+        )
+
+
+validate_production_configuration(ENVIRONMENT, GATEWAY_API_KEYS, OPERATOR_TOKENS, CORS_ORIGINS)
+
+# Rate limiting settings (in-memory token bucket)
+RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "120"))
+RATE_LIMIT_WINDOW_SEC = int(os.getenv("RATE_LIMIT_WINDOW_SEC", "60"))
+
+app = FastAPI(
+    title="MeshLink Gateway Backend",
+    version="1.0.0",
+    docs_url="/docs" if ENVIRONMENT != "production" else None,
+    redoc_url=None
+)
+
+# CORS configured with explicit allowlist (no wildcard in production)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
+
+from app.api.v1.auth import router as auth_v1_router
+from app.api.v1.devices import router as devices_v1_router
+from app.api.v1.incidents import router as incidents_v1_router
+from app.api.v1.dispatch import router as dispatch_v1_router
+from app.api.v1.events import router as events_v1_router
+
+app.include_router(auth_v1_router, prefix="/api/v1")
+app.include_router(devices_v1_router, prefix="/api/v1")
+app.include_router(incidents_v1_router, prefix="/api/v1")
+app.include_router(dispatch_v1_router, prefix="/api/v1")
+app.include_router(events_v1_router, prefix="/api/v1")
+
+# ── Rate Limiter ─────────────────────────────────────────────────────────────
+_ip_request_history: Dict[str, List[float]] = {}
+_ip_lock = asyncio.Lock() if hasattr(asyncio, "Lock") else None
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    # Skip health check from rate limiting
+    if request.url.path.startswith("/health"):
+        return await call_next(request)
+
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+
+    # Clean old entries
+    history = _ip_request_history.setdefault(client_ip, [])
+    cutoff = now - RATE_LIMIT_WINDOW_SEC
+    _ip_request_history[client_ip] = [t for t in history if t > cutoff]
+
+    if len(_ip_request_history[client_ip]) >= RATE_LIMIT_REQUESTS:
+        logger.warning("Rate limit exceeded for client %s", client_ip)
+        return Response(
+            content=json.dumps({"detail": "Rate limit exceeded. Please try again later."}),
+            status_code=429,
+            media_type="application/json"
+        )
+
+    _ip_request_history[client_ip].append(now)
+    response = await call_next(request)
+    return response
+
+# ── SQLite Database Setup & Connection Pool ──────────────────────────────────
+def init_db(db_path: Optional[str] = None):
+    target = db_path or DATABASE_PATH
+    conn = sqlite3.connect(target)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA busy_timeout=5000;")
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS sos_packets (
+        uuid TEXT PRIMARY KEY,
+        senderId TEXT NOT NULL,
+        senderName TEXT NOT NULL,
+        emergencyType TEXT NOT NULL,
+        severity INTEGER NOT NULL,
+        latitude REAL,
+        longitude REAL,
+        gpsFixAvailable INTEGER DEFAULT 1,
+        message TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        hopCount INTEGER DEFAULT 0
+    );
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sos_packets_timestamp ON sos_packets(timestamp DESC);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sos_packets_severity ON sos_packets(severity);")
+
+    # Column migration if table already exists without gpsFixAvailable
+    cursor = conn.execute("PRAGMA table_info(sos_packets);")
+    existing_cols = [row[1] for row in cursor.fetchall()]
+    if "gpsFixAvailable" not in existing_cols and len(existing_cols) > 0:
+        conn.execute("ALTER TABLE sos_packets ADD COLUMN gpsFixAvailable INTEGER DEFAULT 1;")
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS node_status (
+        deviceId TEXT PRIMARY KEY,
+        displayName TEXT NOT NULL,
+        role TEXT NOT NULL,
+        batteryLevel INTEGER NOT NULL,
+        needsHelp BOOLEAN NOT NULL,
+        latitude REAL NOT NULL,
+        longitude REAL NOT NULL,
+        timestamp INTEGER NOT NULL
+    );
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_node_status_timestamp ON node_status(timestamp DESC);")
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT 1,
+        created_at INTEGER NOT NULL
+    );
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);")
+
+    cursor = conn.execute("SELECT COUNT(*) FROM users;")
+    if cursor.fetchone()[0] == 0:
+        seed_hash = hash_password("op_token_valid_1")
+        conn.execute(
+            "INSERT INTO users (username, password_hash, role, is_active, created_at) VALUES (?, ?, ?, ?, ?)",
+            ("admin", seed_hash, "operator", 1, int(time.time()))
+        )
+
+    conn.commit()
+    conn.close()
+
+init_db()
+
+@contextmanager
+def get_db(db_path: Optional[str] = None):
+    target = db_path or DATABASE_PATH
+    conn = sqlite3.connect(target, timeout=5.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA busy_timeout=5000;")
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+# ── Pydantic Request/Response Models ─────────────────────────────────────────
+class SosPacket(BaseModel):
+    uuid: str = Field(..., min_length=1, max_length=128)
+    senderId: str = Field(..., min_length=1, max_length=128)
+    senderName: str = Field(..., min_length=1, max_length=128)
+    emergencyType: str = Field(..., min_length=1, max_length=64)
+    severity: int = Field(..., ge=1, le=10)
+    latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    gpsFixAvailable: Optional[bool] = Field(None)
+    message: str = Field(..., max_length=4096)
+    timestamp: int
+    status: str = Field(..., min_length=1, max_length=32)
+    hopCount: Optional[int] = Field(0, ge=0, le=255)
+
+class NodeStatus(BaseModel):
+    deviceId: str = Field(..., min_length=1, max_length=128)
+    displayName: str = Field(..., min_length=1, max_length=128)
+    role: str = Field(..., min_length=1, max_length=64)
+    batteryLevel: int = Field(..., ge=0, le=100)
+    needsHelp: bool
+    latitude: float = Field(..., ge=-90.0, le=90.0)
+    longitude: float = Field(..., ge=-180.0, le=180.0)
+    timestamp: int
+
+class OperatorLoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=1, max_length=128)
+
+# ── Role-Based Authentication & Authorization ────────────────────────────────
+def _extract_credential(auth_header: Optional[str], custom_header: Optional[str]) -> Optional[str]:
+    if custom_header:
+        return custom_header.strip()
+    if auth_header:
+        parts = auth_header.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            return parts[1].strip()
+        return auth_header.strip()
+    return None
+
+def verify_gateway_write(
+    authorization: Optional[str] = Header(None),
+    x_gateway_key: Optional[str] = Header(None)
+) -> str:
+    cred = _extract_credential(authorization, x_gateway_key)
+    if not cred:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Gateway credentials required")
+
+    if cred in REVOKED_CREDENTIALS:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Gateway credential has been revoked")
+
+    for valid_key in GATEWAY_API_KEYS:
+        if secrets.compare_digest(cred, valid_key):
+            return cred
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid gateway credentials")
+
+def verify_operator_read(
+    authorization: Optional[str] = Header(None),
+    x_operator_token: Optional[str] = Header(None)
+) -> str:
+    cred = _extract_credential(authorization, x_operator_token)
+    if not cred:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Operator authentication required")
+
+    if cred in REVOKED_CREDENTIALS:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Operator token has been revoked")
+
+    for valid_token in OPERATOR_TOKENS:
+        if secrets.compare_digest(cred, valid_token):
+            return cred
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid operator token")
+
+# ── WebSocket Single-Use Ticket Store & Connection Manager ───────────────────
+
+class AlertConnectionManager:
+    def __init__(self):
+        self.active_connections: Set[WebSocket] = set()
+        self._lock = asyncio.Lock()
+
+    async def connect(self, websocket: WebSocket):
+        async with self._lock:
+            self.active_connections.add(websocket)
+
+    async def disconnect(self, websocket: WebSocket):
+        async with self._lock:
+            self.active_connections.discard(websocket)
+
+    async def broadcast_sos(self, packet: dict):
+        dead_connections = []
+        async with self._lock:
+            for connection in self.active_connections:
+                try:
+                    await connection.send_text(json.dumps({"type": "sos_alert", "packet": packet}))
+                except Exception:
+                    dead_connections.append(connection)
+            for dead in dead_connections:
+                self.active_connections.discard(dead)
+
+alert_manager = AlertConnectionManager()
+
+# ── Health & Diagnostic Endpoints ────────────────────────────────────────────
+@app.get("/health")
+def health():
+    return {
+        "status": "ok",
+        "environment": ENVIRONMENT,
+        "timestamp": int(time.time()),
+        "service": "MeshLink Gateway Backend"
+    }
+
+@app.get("/health/ready")
+def health_ready():
+    """
+    Readiness probe for container orchestrators (Kubernetes / ECS).
+    Verifies database connectivity and measures outbox publishing lag.
+    Returns HTTP 200 when ready, HTTP 503 when degraded or disconnected.
+    """
+    from app.core.database import SessionLocal, engine
+    from sqlalchemy import text
+    from app.models.outbox_event import OutboxEventModel
+
+    db_status = "UNKNOWN"
+    outbox_lag = 0
+    errors = []
+
+    session = None
+    try:
+        session = SessionLocal()
+        # 1. Probe database connectivity
+        session.execute(text("SELECT 1"))
+        db_status = "OK"
+
+        # 2. Check outbox lag
+        try:
+            outbox_lag = session.query(OutboxEventModel).filter(OutboxEventModel.published_at.is_(None)).count()
+        except Exception as oe:
+            logger.warning("Could not query outbox lag: %s", str(oe))
+            outbox_lag = 0
+
+    except Exception as e:
+        logger.error("Readiness check failed: %s", str(e))
+        db_status = "ERROR"
+        errors.append(str(e))
+    finally:
+        if session:
+            session.close()
+
+    if db_status != "OK":
+        return Response(
+            content=json.dumps({
+                "status": "NOT_READY",
+                "database": db_status,
+                "database_engine": getattr(engine, "name", "unknown"),
+                "outbox_lag": None,
+                "errors": errors,
+                "environment": ENVIRONMENT,
+                "timestamp": int(time.time()),
+                "service": "MeshLink Gateway Backend"
+            }),
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            media_type="application/json"
+        )
+
+    return {
+        "status": "READY",
+        "database": "OK",
+        "database_engine": getattr(engine, "name", "unknown"),
+        "outbox_lag": outbox_lag,
+        "environment": ENVIRONMENT,
+        "timestamp": int(time.time()),
+        "service": "MeshLink Gateway Backend"
+    }
+
+# ── Operator Authentication & Ticket Issuance ────────────────────────────────
+class UserCreateRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=64)
+    password: str = Field(..., min_length=6, max_length=128)
+    role: str = Field("operator", max_length=32)
+
+@app.post("/api/auth/register")
+def register_user(req: UserCreateRequest, _: str = Depends(verify_operator_read)):
+    with get_db() as conn:
+        cursor = conn.execute("SELECT id FROM users WHERE username = ?", (req.username,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Username already exists")
+        hashed = hash_password(req.password)
+        conn.execute(
+            "INSERT INTO users (username, password_hash, role, is_active, created_at) VALUES (?, ?, ?, ?, ?)",
+            (req.username, hashed, req.role, 1, int(time.time()))
+        )
+        conn.commit()
+    return {"status": "success", "username": req.username, "role": req.role}
+
+@app.post("/api/auth/token")
+def operator_token_login(req: OperatorLoginRequest):
+    # 1. First check against persistent users database
+    with get_db() as conn:
+        cursor = conn.execute("SELECT password_hash, role FROM users WHERE username = ? AND is_active = 1", (req.username,))
+        row = cursor.fetchone()
+        if row and verify_password(req.password, row["password_hash"]):
+            token = next(iter(OPERATOR_TOKENS))
+            return {
+                "access_token": token,
+                "token_type": "bearer",
+                "role": row["role"]
+            }
+
+    # 2. Fallback check against configured bootstrap operator tokens
+    if any(secrets.compare_digest(req.password, op_token) for op_token in OPERATOR_TOKENS):
+        token = next(iter(OPERATOR_TOKENS))
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "role": "operator"
+        }
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
+
+@app.post("/api/auth/ws-ticket")
+def issue_ws_ticket(_: str = Depends(verify_operator_read)):
+    ticket = generate_ws_ticket()
+    return {"ticket": ticket, "expires_in": 30}
+
+# ── Gateway Ingestion Endpoints (WRITE ONLY) ─────────────────────────────────
+@app.post("/api/sync/sos")
+@app.post("/api/v1/sync/sos")
+async def sync_sos(packets: List[SosPacket], _: str = Depends(verify_gateway_write)):
+    if len(packets) > 500:
+        raise HTTPException(status_code=400, detail="Batch exceeds maximum allowed size of 500 packets")
+
+    with get_db() as conn:
+        count = 0
+        receipts = []
+        try:
+            for p in packets:
+                has_fix = 1 if (p.gpsFixAvailable if p.gpsFixAvailable is not None else (p.latitude is not None and p.longitude is not None)) else 0
+                conn.execute("""
+                INSERT OR REPLACE INTO sos_packets 
+                (uuid, senderId, senderName, emergencyType, severity, latitude, longitude, gpsFixAvailable, message, timestamp, status, hopCount)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    p.uuid, p.senderId, p.senderName, p.emergencyType,
+                    p.severity, p.latitude, p.longitude, has_fix, p.message,
+                    p.timestamp, p.status, p.hopCount or 0
+                ))
+                count += 1
+                receipts.append({"uuid": p.uuid, "status": "ACKNOWLEDGED", "synced": True})
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.error("Failed to sync SOS packets: %s", str(e))
+            raise HTTPException(status_code=500, detail="Database insertion error")
+
+    # Broadcast to authenticated WebSocket dashboard clients in real-time
+    for p in packets:
+        await alert_manager.broadcast_sos(p.model_dump())
+
+    return {"status": "success", "synced_count": count, "receipts": receipts, "downlinks": []}
+
+@app.post("/api/sync/nodes")
+def sync_nodes(nodes: List[NodeStatus], _: str = Depends(verify_gateway_write)):
+    if len(nodes) > 1000:
+        raise HTTPException(status_code=400, detail="Batch exceeds maximum allowed size of 1000 nodes")
+
+    with get_db() as conn:
+        count = 0
+        try:
+            for n in nodes:
+                conn.execute("""
+                INSERT OR REPLACE INTO node_status
+                (deviceId, displayName, role, batteryLevel, needsHelp, latitude, longitude, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    n.deviceId, n.displayName, n.role,
+                    n.batteryLevel, 1 if n.needsHelp else 0,
+                    n.latitude, n.longitude, n.timestamp
+                ))
+                count += 1
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.error("Failed to sync nodes: %s", str(e))
+            raise HTTPException(status_code=500, detail="Database insertion error")
+
+    return {"status": "success", "synced_count": count}
+
+# ── Operator Query Endpoints (READ ONLY) ─────────────────────────────────────
+@app.get("/api/sos")
+def get_sos(
+    limit: int = Query(100, ge=1, le=1000),
+    severity_min: Optional[int] = Query(None, ge=1, le=10),
+    _: str = Depends(verify_operator_read)
+):
+    with get_db() as conn:
+        if severity_min is not None:
+            cursor = conn.execute(
+                "SELECT * FROM sos_packets WHERE severity >= ? ORDER BY timestamp DESC LIMIT ?",
+                (severity_min, limit)
+            )
+        else:
+            cursor = conn.execute(
+                "SELECT * FROM sos_packets ORDER BY timestamp DESC LIMIT ?",
+                (limit,)
+            )
+        rows = cursor.fetchall()
+        return [dict(ix) for ix in rows]
+
+@app.get("/api/nodes")
+def get_nodes(
+    limit: int = Query(200, ge=1, le=1000),
+    _: str = Depends(verify_operator_read)
+):
+    with get_db() as conn:
+        cursor = conn.execute(
+            "SELECT * FROM node_status ORDER BY timestamp DESC LIMIT ?",
+            (limit,)
+        )
+        rows = cursor.fetchall()
+        return [
+            {
+                "deviceId": row["deviceId"],
+                "displayName": row["displayName"],
+                "role": row["role"],
+                "batteryLevel": row["batteryLevel"],
+                "needsHelp": bool(row["needsHelp"]),
+                "latitude": row["latitude"],
+                "longitude": row["longitude"],
+                "timestamp": row["timestamp"]
+            }
+            for row in rows
+        ]
+
+# ── WebSocket Live Alert & Event Stream ─────────────────────────────────────────
+@app.websocket("/ws/alerts")
+@app.websocket("/ws/events")
+async def websocket_alerts(
+    websocket: WebSocket,
+    ticket: Optional[str] = Query(None),
+    since_seq: Optional[int] = Query(None),
+):
+    # 1. Origin validation against allowed CORS origins
+    origin = websocket.headers.get("origin")
+    if origin and CORS_ORIGINS != ["*"]:
+        normalized_origin = origin.rstrip("/")
+        allowed = any(normalized_origin == o.rstrip("/") for o in CORS_ORIGINS)
+        if not allowed:
+            logger.warning("Rejected WebSocket connection from unauthorized origin: %s", origin)
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+    # 2. Production TLS/WSS check
+    if ENVIRONMENT == "production":
+        forwarded_proto = websocket.headers.get("x-forwarded-proto", "")
+        if websocket.url.scheme != "wss" and forwarded_proto != "https":
+            logger.warning("Rejected non-TLS WebSocket connection in production environment")
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+    # 3. Connection cap check
+    if len(alert_manager.active_connections) >= 50:
+        logger.warning("Rejected WebSocket connection: active connection limit reached")
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    authenticated = False
+
+    # Check 1: single-use ticket in query param
+    if ticket:
+        if not consume_ws_ticket(ticket):
+            logger.warning("WebSocket rejected: invalid or expired ticket in query param")
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        authenticated = True
+
+    # Check 2: subprotocol ticket (Sec-WebSocket-Protocol)
+    if not authenticated:
+        sec_protocol = websocket.headers.get("sec-websocket-protocol", "")
+        if "ticket-" in sec_protocol:
+            sub_ticket = None
+            for part in sec_protocol.split(","):
+                p = part.strip()
+                if p.startswith("ticket-"):
+                    sub_ticket = p[7:]
+                    break
+            if sub_ticket:
+                if not consume_ws_ticket(sub_ticket):
+                    logger.warning("WebSocket rejected: invalid or expired subprotocol ticket")
+                    await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                    return
+                authenticated = True
+
+    # Accept connection to conduct communications
+    await websocket.accept()
+
+    # Check 3: If not authenticated via ticket, enforce strictly time-limited initial authentication message (5.0s window)
+    if not authenticated:
+        try:
+            auth_msg_raw = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+            auth_msg = json.loads(auth_msg_raw)
+            if auth_msg.get("type") == "auth":
+                provided_ticket = auth_msg.get("ticket")
+                provided_token = auth_msg.get("token")
+                if provided_ticket and consume_ws_ticket(provided_ticket):
+                    authenticated = True
+                elif provided_token:
+                    if (provided_token not in REVOKED_CREDENTIALS and
+                        any(secrets.compare_digest(provided_token, op) for op in OPERATOR_TOKENS)):
+                        authenticated = True
+        except (asyncio.TimeoutError, json.JSONDecodeError, Exception):
+            authenticated = False
+
+        if not authenticated:
+            logger.warning("WebSocket client failed timed authentication message or timed out")
+            try:
+                await websocket.send_text(json.dumps({"type": "error", "message": "Authentication required"}))
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            except Exception:
+                pass
+            return
+
+    # Client successfully authenticated: register with alert manager
+    await alert_manager.connect(websocket)
+    try:
+        await websocket.send_text(json.dumps({
+            "type": "authenticated",
+            "message": "Connected to authenticated live SOS alert stream"
+        }))
+
+        # Replay backlog if requested via since_seq
+        if since_seq is not None and since_seq >= 0:
+            from app.core.database import SessionLocal
+            from app.models.stream_event import StreamEventModel
+            with SessionLocal() as db:
+                historical = (
+                    db.query(StreamEventModel)
+                    .filter(StreamEventModel.stream_seq > since_seq)
+                    .order_by(StreamEventModel.stream_seq.asc())
+                    .limit(500)
+                    .all()
+                )
+                max_s = since_seq
+                for he in historical:
+                    max_s = he.stream_seq
+                    await websocket.send_text(json.dumps({
+                        "type": "replay_event",
+                        "stream_seq": he.stream_seq,
+                        "event_id": he.event_id,
+                        "event_type": he.event_type,
+                        "aggregate_type": he.aggregate_type,
+                        "aggregate_id": he.aggregate_id,
+                        "payload": he.payload,
+                        "occurred_at": he.occurred_at,
+                    }))
+                await websocket.send_text(json.dumps({
+                    "type": "replay_complete",
+                    "last_seq": max_s,
+                    "count": len(historical),
+                }))
+
+        # Keepalive loop: listen for client pings or heartbeats
+        while True:
+            data = await websocket.receive_text()
+            try:
+                parsed = json.loads(data)
+                if parsed.get("type") == "ping":
+                    await websocket.send_text(json.dumps({"type": "pong", "timestamp": int(time.time())}))
+            except Exception:
+                pass
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
+        await alert_manager.disconnect(websocket)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

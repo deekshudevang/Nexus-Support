@@ -22,9 +22,10 @@ fun SettingsScreen(
     onDebugDashboardClick: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    // Note: In a real app we would persist these settings to SharedPreferences or DataStore.
-    var useMeshtastic by remember { mutableStateOf(false) }
-    var useNearby by remember { mutableStateOf(true) }
+    val useMeshtastic by viewModel.useMeshtastic.collectAsState()
+    val useNearby by viewModel.useNearby.collectAsState()
+    val batteryOptimization by viewModel.batteryOptimization.collectAsState()
+    val crashReportingOptIn by viewModel.crashReportingOptIn.collectAsState()
     
     val isMasterPaused by viewModel.isMasterScanningPaused.collectAsState()
 
@@ -79,7 +80,7 @@ fun SettingsScreen(
                     }
                     Switch(
                         checked = useNearby,
-                        onCheckedChange = { useNearby = it }
+                        onCheckedChange = { viewModel.setUseNearby(it) }
                     )
                 }
             }
@@ -106,7 +107,7 @@ fun SettingsScreen(
                     }
                     Switch(
                         checked = useMeshtastic,
-                        onCheckedChange = { useMeshtastic = it }
+                        onCheckedChange = { viewModel.setUseMeshtastic(it) }
                     )
                 }
             }
@@ -120,7 +121,6 @@ fun SettingsScreen(
                 fontWeight = FontWeight.Bold
             )
 
-            var batteryOptimization by remember { mutableStateOf(true) }
             NexusCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -143,7 +143,7 @@ fun SettingsScreen(
                     }
                     Switch(
                         checked = batteryOptimization,
-                        onCheckedChange = { batteryOptimization = it }
+                        onCheckedChange = { viewModel.setBatteryOptimization(it) }
                     )
                 }
             }
@@ -170,6 +170,186 @@ fun SettingsScreen(
                     Switch(
                         checked = isMasterPaused,
                         onCheckedChange = { viewModel.toggleMasterScanning(it) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val isAiEnabled by viewModel.isAiEnabled.collectAsState()
+            val aiState by viewModel.aiState.collectAsState()
+
+            Text(
+                text = "Offline AI Assistant",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+
+            NexusCard(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Enable Offline AI",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Status: ${aiState.name} (Strictly on-device, 0 network use)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = isAiEnabled,
+                            onCheckedChange = { viewModel.toggleAiEnabled(it) }
+                        )
+                    }
+
+                    val importStatus by viewModel.importStatus.collectAsState()
+                    val modelPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+                    ) { uri ->
+                        if (uri != null) {
+                            viewModel.importModel(uri)
+                        }
+                    }
+
+                    val pendingHash by viewModel.pendingHashConfirmation.collectAsState()
+                    if (pendingHash != null) {
+                        AlertDialog(
+                            onDismissRequest = { viewModel.cancelPendingModelHash() },
+                            title = { Text("Confirm Model Integrity", fontWeight = FontWeight.Bold) },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("Computed SHA-256 Checksum:")
+                                    Text(
+                                        text = pendingHash!!,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "Verify this checksum against the official model provider before loading into memory.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            },
+                            confirmButton = {
+                                Button(onClick = { viewModel.confirmPendingModelHash() }) {
+                                    Text("Confirm & Load")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { viewModel.cancelPendingModelHash() }) {
+                                    Text("Reject")
+                                }
+                            }
+                        )
+                    }
+
+                    if (importStatus != null) {
+                        Text(
+                            text = importStatus!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                // Accept all binary containers (.litertlm, .task, .bin, octet-stream)
+                                modelPickerLauncher.launch(
+                                    arrayOf(
+                                        "application/octet-stream",
+                                        "application/*",
+                                        "*/*"
+                                    )
+                                )
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Import Model (SAF)", style = MaterialTheme.typography.labelMedium)
+                        }
+
+                        OutlinedButton(
+                            onClick = { viewModel.clearAiData() },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text("Clear AI Data", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+
+                    val canRollback by viewModel.canRollback.collectAsState()
+                    if (canRollback) {
+                        OutlinedButton(
+                            onClick = { viewModel.rollbackModel() },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("Rollback to Previous Model", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
+                    if (isAiEnabled) {
+                        Button(
+                            onClick = { viewModel.triggerAiKillSwitch() },
+
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("EMERGENCY AI KILL SWITCH", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onError)
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Privacy & Diagnostics",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+
+            NexusCard(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Crash & Diagnostic Reporting",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Opt-in anonymous error reports to help diagnose crashes. Disabled by default to protect offline privacy and battery.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = crashReportingOptIn,
+                        onCheckedChange = { viewModel.setCrashReportingOptIn(it) }
                     )
                 }
             }

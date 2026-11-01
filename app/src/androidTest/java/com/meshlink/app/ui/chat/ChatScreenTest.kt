@@ -21,6 +21,7 @@ import com.meshlink.app.domain.repository.MessageRepository
 import com.meshlink.app.domain.repository.NearbyRepository
 import com.meshlink.app.domain.repository.PendingMessageRepository
 import com.meshlink.app.domain.repository.UserProfileManager
+import com.meshlink.app.domain.repository.EmergencyGuideRepository
 import com.meshlink.app.data.di.RepositoryModule
 import com.meshlink.app.mesh.di.NearbyBindModule
 import dagger.hilt.android.testing.BindValue
@@ -67,6 +68,10 @@ class ChatScreenTest {
     @BindValue
     @JvmField
     val nearbyRepo: NearbyRepository = mockk(relaxed = true)
+
+    @BindValue
+    @JvmField
+    val emergencyGuideRepo: EmergencyGuideRepository = mockk(relaxed = true)
 
     private val testEndpointId = "test-endpoint-1"
     private val testDeviceName = "TestDevice"

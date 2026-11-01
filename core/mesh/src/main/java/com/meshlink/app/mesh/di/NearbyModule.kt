@@ -3,7 +3,7 @@ package com.meshlink.app.mesh.di
 import android.content.Context
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.ConnectionsClient
-import com.meshlink.app.crypto.identity.KeyManager
+import com.meshlink.app.crypto.identity.KeyProvider
 import com.meshlink.app.domain.repository.NearbyRepository
 import com.meshlink.app.mesh.battery.AdaptiveScanController
 import com.meshlink.app.mesh.repository.NearbyRepositoryImpl
@@ -34,7 +34,7 @@ object NearbyProvideModule {
     @Provides
     @Singleton
     @Named("localDeviceId")
-    fun provideLocalDeviceId(keyManager: KeyManager): String = keyManager.deviceId
+    fun provideLocalDeviceId(keyManager: KeyProvider): String = keyManager.deviceId
 
     @Provides
     @Singleton
@@ -44,6 +44,16 @@ object NearbyProvideModule {
     @Singleton
     fun provideMeshtasticTransport(@ApplicationContext context: Context): com.meshlink.app.mesh.transport.MeshtasticTransport =
         com.meshlink.app.mesh.transport.MeshtasticBleTransport(context)
+
+    @Provides
+    @Singleton
+    fun provideSosBeaconAdvertiser(@ApplicationContext context: Context): com.meshlink.app.mesh.transport.SosBeaconAdvertiser =
+        com.meshlink.app.mesh.transport.SosBeaconAdvertiser(context)
+
+    @Provides
+    @Singleton
+    fun provideSosNonceGenerator(@ApplicationContext context: Context): com.meshlink.app.mesh.transport.SosNonceGenerator =
+        com.meshlink.app.mesh.transport.SosNonceGenerator(context)
 }
 
 @Module

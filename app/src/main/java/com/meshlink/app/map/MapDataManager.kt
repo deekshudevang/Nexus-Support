@@ -41,11 +41,14 @@ class MapDataManager @Inject constructor(
     private val _downloadStates = MutableStateFlow<Map<String, DownloadState>>(emptyMap())
     val downloadStates: StateFlow<Map<String, DownloadState>> = _downloadStates.asStateFlow()
 
-    // Sample regions. In a real app, this would be fetched from a server.
+    // Regional zones for India, directly sourced from the official Mapsforge distribution server.
     val availableRegions = listOf(
-        MapRegion("berlin", "Berlin, Germany", "https://raw.githubusercontent.com/mapsforge/mapsforge/master/mapsforge-map-reader/src/test/resources/berlin.map", 1500000),
-        MapRegion("california", "California, USA", "https://example.com/california.map", 150000000),
-        MapRegion("london", "London, UK", "https://example.com/london.map", 50000000)
+        MapRegion("central-zone", "Central Zone", "https://download.mapsforge.org/maps/v5/asia/india/central-zone.map", 328000000),
+        MapRegion("eastern-zone", "Eastern Zone", "https://download.mapsforge.org/maps/v5/asia/india/eastern-zone.map", 220000000),
+        MapRegion("north-eastern-zone", "North-Eastern Zone", "https://download.mapsforge.org/maps/v5/asia/india/north-eastern-zone.map", 118000000),
+        MapRegion("northern-zone", "Northern Zone", "https://download.mapsforge.org/maps/v5/asia/india/northern-zone.map", 214000000),
+        MapRegion("southern-zone", "Southern Zone", "https://download.mapsforge.org/maps/v5/asia/india/southern-zone.map", 545000000),
+        MapRegion("western-zone", "Western Zone", "https://download.mapsforge.org/maps/v5/asia/india/western-zone.map", 212000000)
     )
 
     suspend fun downloadRegionalMap(regionId: String, downloadUrl: String): Boolean {

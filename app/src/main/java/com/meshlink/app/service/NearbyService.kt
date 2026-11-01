@@ -78,7 +78,25 @@ class NearbyService : Service() {
         }
     }
 
-    // ── Lifecycle ────────────────────────────────────────────────────────────
+    private val bluetoothReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED) {
+                val state = intent.getIntExtra(android.bluetooth.BluetoothAdapter.EXTRA_STATE, android.bluetooth.BluetoothAdapter.ERROR)
+                when (state) {
+                    android.bluetooth.BluetoothAdapter.STATE_OFF -> {
+                        Timber.w("Bluetooth turned OFF — pausing discovery")
+                        updateNotification("Bluetooth disabled — discovery paused")
+                    }
+                    android.bluetooth.BluetoothAdapter.STATE_ON -> {
+                        Timber.i("Bluetooth turned ON — resuming discovery")
+                        nearbyRepository.onUserActive()
+                        updateNotification("Looking for people nearby…")
+                    }
+                }
+            }
+        }
+    }
+
 
     override fun onCreate() {
         super.onCreate()
@@ -105,6 +123,7 @@ class NearbyService : Service() {
         serviceScope.cancel()
         safeUnregisterReceiver(batteryReceiver)
         safeUnregisterReceiver(screenReceiver)
+        safeUnregisterReceiver(bluetoothReceiver)
         nearbyRepository.stopAdvertisingAndDiscovery()
         Timber.d("NearbyService destroyed")
         super.onDestroy()
@@ -112,7 +131,6 @@ class NearbyService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private fun registerReceivers() {
         // Android 14+ (API 34) requires RECEIVER_EXPORTED / RECEIVER_NOT_EXPORTED flag.
@@ -126,6 +144,11 @@ class NearbyService : Service() {
             this, screenReceiver,
             IntentFilter(Intent.ACTION_SCREEN_ON),
             ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        ContextCompat.registerReceiver(
+            this, bluetoothReceiver,
+            IntentFilter(android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED),
+            ContextCompat.RECEIVER_EXPORTED // Bluetooth broadcasts are sent by the system globally
         )
     }
 

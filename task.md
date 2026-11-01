@@ -1,0 +1,104 @@
+# NEXUS-SUPPORT: Production Transformation Task Register
+
+**Repository:** `https://github.com/deekshudevang/Nexus-Support.git`  
+**Working Branch:** `release/production-readiness`  
+**Authorization Flags:** `ALLOW_LOCAL_COMMITS=true`, `ALLOW_FETCH=true`, `ALLOW_PUSH=false`, `ALLOW_DEPLOY_PUBLISH=false`  
+**Source of Truth Checkpoint:** `docs/RUN_CHECKPOINT.md`
+
+---
+
+## 1. Phase Execution Matrix (Phases 0–15)
+
+| Phase | Focus Area | Status | Key Evidence / Commands | Gate Result |
+|---|---|---|---|---|
+| **Phase 0** | Repository Baseline | **VERIFIED** | `pytest cloud/backend` (28 pass), `npm test` (6 pass), `.\gradlew.bat testDebugUnitTest` (284 pass) | PASSED |
+| **Phase 1** | Hygiene & Architecture | **VERIFIED** | Removed `MockMeshBackendService.kt` and dead telemetry; aligned Nexus-Support naming (`strings.xml`, `README.md`) | PASSED |
+| **Phase 2** | Android Experience | **VERIFIED** | Replaced fabricated distance with truthful badges; audited 14 screens in `SCREEN_INVENTORY.md`; added 5 ViewModel test suites (159 pass in `:app`) | PASSED |
+| **Phase 3** | Data Layer & Room | **RESOLVED (Policy & Tests)** | Room migrations 1->2, 2->3, 3->13, 13->14 pass; SQLCipher 4.9.0 & Tink AEAD (17 pass in `:core:data`); legacy DB policy documented in `docs/architecture/DATABASE_UPGRADE_POLICY.md`; fail-closed corruption recovery tested (commit `eb9d03c`) | PASSED |
+| **Phase 4** | SOS & Reliability | **VERIFIED (Local) / PENDING-DEVICE (RF)** | Truthful `gpsFixAvailable` via `LocationTracker`; durable 50-item queue; bounded exponential backoff (2s..30s); process recovery; broadcast cancellation & duplicate ACK deduplication (commit `bb20d89`); 16 ViewModel tests pass | PASSED (Local) |
+| **Phase 5** | Mesh Transport | **IMPLEMENTED-PENDING-DEVICE** | Unified `MeshTransport` interface; official Meshtastic UUIDs; API 33+ `writeCharacteristic`; settings toggle routing; disconnection & tie-breaker tests in `NearbyRepositoryImplTest` (commit `9f5a351`); 98+ unit tests in `:core:mesh` pass | PENDING-DEVICE (Physical Radio RF) |
+| **Phase 6** | Fully Offline AI | **IMPLEMENTED-PENDING-DEVICE** | MediaPipe Tasks & ML Kit on-device inference; magic-byte format validation; Emergency RAG; prompt injection & rescue disclaimer filters (`AiSafetyGuard`); adversarial safety tests (commit `9f5a351`); 90+ tests pass | PENDING-DEVICE (On-Device Benchmarks) |
+| **Phase 7** | Cloud Backend | **IMPLEMENTED-UNEXECUTED** | Role-based auth (Gateway write vs Operator read); single-use WS tickets; SQLite WAL; rate limiting; 28 tests in `cloud/backend` pass | IMPLEMENTED-UNEXECUTED (Production TLS) |
+| **Phase 8** | Web Dashboard | **VERIFIED (Local)** | Zero secrets in built bundle (`npm run build`); Vite 5; honest GPS; Vitest RTL test suite (6 pass); WS ticket authentication | PASSED (Local) |
+| **Phase 9** | Security & Privacy | **VERIFIED (Local)** | SQLCipher 4.9.0; Google Tink Keystore AEAD; `allowBackup=false`; secure backup rules; cleartext disabled in network security config; 0 npm CVEs; 0 pip CVEs | PASSED (Local) |
+| **Phase 10** | Performance & Resilience | **IMPLEMENTED-PENDING-DEVICE** | `AdaptiveScanController` with battery backoff (FAST 1.5s, SLOW 5s..30s, PAUSED <=15%); bounded queues; single-flight AI mutex; low-memory callbacks | PENDING-DEVICE (24h Hardware Battery Drain) |
+| **Phase 11** | Testing & CI | **IMPLEMENTED-UNEXECUTED / OWNER-ACTION** | `.github/workflows/ci.yml`, `codeql.yml`, `release.yml` aligned; `verify-docs.sh` passes; remote run pending owner push | OWNER-ACTION (Push Authorization) |
+| **Phase 12** | Release Compatibility | **RESOLVED (Zip & ELF 16KB Verified) / PENDING-DEVICE** | Upgraded `mlkit:image-labeling:17.0.9` (commit `87f2d1d`); minified release APK assembled; `zipalign -P 16` passes; ALL 64-bit native `.so` libs have 16 KB segment alignment (`p_align=16384`) | PASSED (Build/ELF) / PENDING-DEVICE (16 KB Kernel Runtime) |
+| **Phase 13** | Docs & Operations | **VERIFIED** | Updated `RUN_CHECKPOINT.md`, `DEFECT_REGISTER.md`, `FINAL_AUDIT.md`, `task.md`, and README; verified doc sync | PASSED |
+| **Phase 14** | End-to-End Regression | **IMPLEMENTED-PENDING-DEVICE** | 350+ automated tests passing across Android, backend, and frontend; zero regressions; gated on hardware & schemas 4..12 | PENDING-DEVICE (Field Tests) |
+| **Phase 15** | Release Candidate | **IMPLEMENTED / OWNER-ACTION** | Unsigned minified release APK generated: `app-release-unsigned.apk` | OWNER-ACTION (Signing Keystore) |
+
+---
+
+## 2. Pending Verification Register (Tier 2 External / Device Requirements)
+
+| Item | Phase | Status | Evidence Needed | Exact Verification Steps |
+|---|---|---|---|---|
+| Physical Meshtastic BLE/LoRa communication | Phase 5 | **IMPLEMENTED-PENDING-DEVICE** | Real hardware node pairing and packet TX/RX logs | Connect physical Heltec/T-Beam Meshtastic node via BLE; transmit SOS packet; observe RF transmission and ACK. |
+| Multi-hop physical mesh relay | Phase 5 | **IMPLEMENTED-PENDING-DEVICE** | 4+ physical node relay trace | Place 4+ devices in non-line-of-sight topology; verify multi-hop packet forwarding and TTL decrement. |
+| Android 16 KB device execution | Phase 12 | **IMPLEMENTED-PENDING-DEVICE** | Physical/emulator execution on 16 KB page-size kernel | Install release APK on Android 15+ 16 KB emulator/device; verify startup and native library loading. |
+| TalkBack accessibility navigation | Phase 2 / Phase 14 | **IMPLEMENTED-PENDING-DEVICE** | Manual accessibility audit with TalkBack | Enable TalkBack on physical device; navigate all primary flows; verify announcements and touch targets. |
+| Production HTTPS/WSS deployment | Phase 7 | **IMPLEMENTED-UNEXECUTED** | TLS certificate and live WSS stream validation | Deploy backend behind reverse proxy; test WSS handshake, origin enforcement, and ticket consumption. |
+| CI Pipeline execution on latest SHA | Phase 11 | **OWNER-ACTION** | Remote GitHub Actions run status and logs | When `ALLOW_PUSH=true`, push candidate commit to remote and verify all CI workflow jobs pass green. |
+| Release signing & distribution | Phase 12 / Phase 15 | **OWNER-ACTION** | Production keystore and release publication | Supply signing secrets (`SIGNING_KEYSTORE_BASE64`, `KEY_ALIAS`, `KEY_PASSWORD`) to execute `release.yml`. |
+
+---
+
+## 3. Defect Resolution Summary
+
+- **DEF-001 (Repo Hygiene)**: RESOLVED. Cleaned tracked dumps, obsolete inference, and unneeded simulator services.
+- **DEF-002 (Room Schema Config)**: RESOLVED. Corrected schema export path to `$projectDir/schemas`.
+
+---
+
+## 4. PostgreSQL Operations & Command Center Matrix (Phases PG-P0 .. PG-P9)
+
+| Phase | Task ID | Description | Status | Ver. Level | Evidence Path | Gate Result |
+|---|---|---|---|---|---|---|
+| **PG-P0** | PG-P0-01 | Audit & Characterization of risks | **VERIFIED** | L1 | `docs/audit/POSTGRES_BACKEND_BASELINE.md` | PASSED |
+| **PG-P0** | PG-P0-02 | Freeze Legacy API Contract | **VERIFIED** | L1 | `docs/api/LEGACY_CONTRACT.md`, `test_legacy_contract.py` | PASSED (35/35) |
+| **PG-P0** | PG-P0-03 | Baseline Runs (Python, Node, Android) | **VERIFIED** | L1 | `docs/evidence/M0-baseline-audit.md` | PASSED |
+| **PG-P1** | PG-P1-01 | PostgreSQL Schema & Entities Definition | **VERIFIED** | L2 | `docs/evidence/PG-P1-postgres-foundation.md` | PASSED |
+| **PG-P1** | PG-P1-02 | Incremental Alembic Migrations | **VERIFIED** | L2 | `docs/evidence/PG-P1-postgres-foundation.md` | PASSED |
+| **PG-P1** | PG-P1-03 | SQLite -> PostgreSQL Idempotent Import Tool | **VERIFIED** | L2 | `docs/evidence/PG-P1-postgres-foundation.md` | PASSED |
+| **PG-P1** | PG-P1-04 | Bootstrap Admin CLI (`app.cli create-admin`) | **VERIFIED** | L1 | `docs/evidence/PG-P1-postgres-foundation.md` | PASSED |
+| **PG-P2** | PG-P2-01 | Capability-based RBAC & Scoped Authorization | **VERIFIED** | L1 | `docs/evidence/PG-P2-security-rbac.md` | PASSED |
+| **PG-P2** | PG-P2-02 | Negative Authorization & IDOR Tests | **VERIFIED** | L1 | `docs/evidence/PG-P2-security-rbac.md` | PASSED |
+| **PG-P2** | PG-P2-03 | Device Keystore Challenge-Response Auth | **VERIFIED** | L2 | `docs/evidence/PG-P2-security-rbac.md` | PASSED |
+| **PG-Slice**| PG-SLC-01| Vertical Slice: Device SOS -> DB -> Outbox -> WS | **VERIFIED** | L2 | `docs/evidence/PG-SLC-01.md` | PASSED |
+| **PG-P3** | PG-P3-01 | 3-State-Machine Incident Lifecycle Domain | **VERIFIED** | L1 | `docs/evidence/PG-P3-incident-domain.md` | PASSED |
+| **PG-P3** | PG-P3-02 | Idempotent Ingestion & Duplicate Linking | **VERIFIED** | L2 | `docs/evidence/PG-P3-incident-domain.md` | PASSED |
+| **PG-P4** | PG-P4-01 | Responders, Teams & Availability Model | **VERIFIED** | L2 | `docs/evidence/PG-P4-responders-dispatch.md` | PASSED |
+| **PG-P4** | PG-P4-02 | Concurrent Dispatch & Partial Unique Index | **VERIFIED** | L2 | `docs/evidence/PG-P4-responders-dispatch.md` | PASSED |
+| **PG-P5** | PG-P5-01 | Transactional Outbox & Gapless `stream_seq` | **VERIFIED** | L2 | `docs/evidence/PG-P5-realtime-events.md` | PASSED |
+| **PG-P5** | PG-P5-02 | WebSocket Ticket Store & Redis-less Fallback | **VERIFIED** | L2 | `docs/evidence/PG-P5-realtime-events.md` | PASSED |
+| **PG-P6** | PG-P6-01 | Command Center Tactical Overview & Queue | **NOT STARTED** | L2 | `docs/evidence/PG-P6-01.md` | PENDING |
+| **PG-P6** | PG-P6-02 | Map Adapter, Offline Tiles & Honest Missing GPS | **NOT STARTED** | L2 | `docs/evidence/PG-P6-02.md` | PENDING |
+| **PG-P7** | PG-P7-01 | Android Device Integration & Downlink Pull | **NOT STARTED** | L1 | `docs/evidence/PG-P7-01.md` | PENDING |
+| **PG-P8** | PG-P8-01 | Comprehensive End-to-End Flows (A-F) | **NOT STARTED** | L2 | `docs/evidence/PG-P8-01.md` | PENDING |
+| **PG-P9** | PG-P9-01 | Readiness Probes, Structured Logs & Restore Drill | **NOT STARTED** | L2 | `docs/evidence/PG-P9-01.md` | PENDING |
+- **DEF-003 (Historical Room Schemas 4..12)**: RESOLVED (Documented Policy & Tests). Recovered authentic schema understanding; documented legacy DB policy in `docs/architecture/DATABASE_UPGRADE_POLICY.md`; added sequential migration tests (v1->v2, v2->v3, v3->v13, v13->v14) in `MeshDatabaseMigrationTest` and fail-closed release corruption recovery test in `DatabaseCorruptionRecoveryTest` (commit `eb9d03c`).
+- **DEF-004 (Settings Persistence)**: RESOLVED. DataStore persistence verified for `useNearby`, `useMeshtastic`, `batteryOptimization`.
+- **DEF-005 (Meshtastic BLE HW Validation)**: IMPLEMENTED-PENDING-DEVICE. Unified transport routing verified; HW pending.
+- **DEF-006 (Type-safe Navigation)**: RESOLVED. All 14 screens migrated to `@Serializable` routes in Navigation Compose 2.8+.
+- **DEF-007 (Security Modernization)**: RESOLVED. Migrated to `net.zetetic:sqlcipher-android:4.9.0` and Google Tink Keystore AEAD.
+- **DEF-008 (16 KB Page-Size Compatibility)**: RESOLVED (Zip & ELF 16KB Verified) / PENDING-DEVICE. Zip 16 KB alignment verified (`zipalign -c -P 16 -v 4`); upgraded `mlkit:image-labeling:17.0.9` (commit `87f2d1d`); native ELF inspection confirmed ALL 64-bit `.so` libraries have 16 KB segment alignment (`p_align = 16384`), including `libmlkitcommonpipeline.so`. Physical 16 KB kernel execution remains pending device test.
+- **DEF-009 (Backend Auth & WSS)**: VERIFIED (Local). Role-based auth, rate limiting, and single-use tickets verified; production TLS pending deployment.
+- **DEF-010 (Dashboard Hygiene)**: VERIFIED. Production bundle built with 0 secrets detected; RTL tests pass.
+- **DEF-011 (CI Workflow Provenance)**: VERIFIED (Local). Workflows configured and doc sync verified.
+- **DEF-012 (Privacy Diagnostics)**: VERIFIED. Redacted diagnostic logging with default-off toggle.
+- **DEF-013 (SOS Truthfulness & Reliability)**: RESOLVED. Replaced mock satellite state with truthful GPS fix and supported transport uplinks; implemented durable 50-item Room queue, rate limiting backoff (2s..30s), process recovery, and peer ACK resolution.
+- **DEF-014 (Discovery Truthfulness / Fake Distance)**: RESOLVED. Removed fabricated RF distance estimates; replaced with truthful connection status badges (`AVAILABLE`, `CONNECTING`, `CONNECTED`).
+- **DEF-015 (Architecture Hygiene / Simulator)**: RESOLVED. Removed dead `MockMeshBackendService.kt` simulator from production sources.
+- **DEF-016 (UI Test Coverage)**: RESOLVED. Added unit test suites for Discovery, Chat, Diagnostics, Guide, and Broadcast ViewModels.
+- **DEF-017 (SOS Reliability Concurrency & ACKs)**: RESOLVED. Fixed broadcastJob cancellation, rapid toggle race conditions, and duplicate ACK resolution in `SosViewModel` (commit `bb20d89`).
+- **DEF-018 (Mesh & AI Safety Coverage)**: RESOLVED. Added unit tests for Nearby disconnection/reconnection/tie-breakers, TTL expiration, and adversarial AI prompt injection/hallucinations (commit `9f5a351`).
+
+---
+
+## 4. Current Verification Baseline
+
+- **Android Unit Tests**: 300+ tests passing in `:app`, `:core:domain`, `:core:mesh`, `:core:crypto`, `:core:data` (including 11 `SosViewModel` tests and `SosRepositoryImplTest`).
+- **Backend Tests**: 28 tests passing in `cloud/backend/test_backend.py`.
+- **Frontend Tests**: 6 tests passing in `cloud/frontend/src/App.test.jsx`.
+- **Build Quality**: 0 lint errors, 0 vulnerabilities in `npm audit`, 0 vulnerabilities in `pip-audit`, minified release APK successfully assembled with R8.
