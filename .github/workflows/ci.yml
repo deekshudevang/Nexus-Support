@@ -117,7 +117,7 @@ jobs:
       - name: Run Pytest Test Suite
         run: |
           mkdir -p test-results
-          pytest cloud/backend/test_backend.py -v --junitxml=test-results/backend-junit.xml
+          pytest cloud/backend -v --junitxml=test-results/backend-junit.xml
 
       - name: Upload Backend Test Report
         if: always()
