@@ -152,4 +152,71 @@ describe('Tactical Command Center Enhanced Tests (PG-P6)', () => {
     expect(screen.getByText(/REPLAY FROM STREAM_SEQ:/i)).toBeInTheDocument();
     expect(screen.getByText(/TRIGGER REPLAY/i)).toBeInTheDocument();
   });
+
+  it('successfully executes end-to-end dispatch workflow: dispatches available responder and displays confirmation', async () => {
+    const mockPackets = [
+      {
+        uuid: 'sos-e2e-workflow-1',
+        senderId: 'node-sar-9',
+        senderName: 'Echo Team',
+        emergencyType: 'FLOOD',
+        severity: 8,
+        latitude: 37.7749,
+        longitude: -122.4194,
+        message: 'Trapped on roof by rising floodwaters',
+        status: 'ACTIVE',
+        hopCount: 1,
+      },
+    ];
+
+    const mockResponders = [
+      {
+        id: 'resp-available-1',
+        name: 'Sarah Connor',
+        callsign: 'RESCUE-1',
+        status: 'AVAILABLE',
+        team: 'Water Rescue',
+      },
+    ];
+
+    sessionStorage.setItem('meshlink_op_token', 'valid-op-token');
+    vi.spyOn(api, 'fetchSosPackets').mockResolvedValue(mockPackets);
+    vi.spyOn(api, 'fetchNodes').mockResolvedValue([]);
+    vi.spyOn(api, 'fetchV1Responders').mockResolvedValue(mockResponders);
+    vi.spyOn(api, 'requestWsTicket').mockResolvedValue('test-ticket');
+    vi.spyOn(api, 'createV1Assignment').mockResolvedValue({
+      id: 'assign-101',
+      incident_id: 'sos-e2e-workflow-1',
+      responder_id: 'resp-available-1',
+      status: 'DISPATCHED',
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Trapped on roof by rising floodwaters')[0]).toBeInTheDocument();
+    });
+
+    // Click dispatch button
+    const dispatchButtons = screen.getAllByText('DISPATCH');
+    fireEvent.click(dispatchButtons[0]);
+
+    // Modal appears
+    await waitFor(() => {
+      expect(screen.getByText(/DISPATCH ASSIGNMENT \/\/ COMMAND OVERRIDE/i)).toBeInTheDocument();
+    });
+
+    // Select available responder
+    const responderSelect = screen.getByTestId('responder-select');
+    fireEvent.change(responderSelect, { target: { value: 'resp-available-1' } });
+
+    // Click Confirm Dispatch
+    const confirmBtn = screen.getByTestId('confirm-dispatch-btn');
+    fireEvent.click(confirmBtn);
+
+    // Verify success banner appears
+    await waitFor(() => {
+      expect(screen.getByText(/Tactical assignment successfully committed and relayed to field mesh/i)).toBeInTheDocument();
+    });
+  });
 });
