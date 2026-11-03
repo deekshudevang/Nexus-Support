@@ -39,5 +39,7 @@ data class RagResponse(
     val answer: String,
     val citations: List<EmergencySourceCitation>,
     val hasSufficientEvidence: Boolean,
-    val latencyMs: Long
+    val latencyMs: Long,
+    val knowledgeBaseVersion: String = "2026.11-v1",
+    val knowledgeBaseFreshnessEpochMs: Long = 1793710000000L
 )

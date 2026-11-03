@@ -49,6 +49,7 @@ def create_incident(
     description: str,
     source: str,
     actor_id: str,
+    organization_id: str = "org-default",
     latitude: Optional[float] = None,
     longitude: Optional[float] = None,
     location_accuracy_m: Optional[float] = None,
@@ -82,6 +83,7 @@ def create_incident(
         priority=priority,
         severity=severity,
         status="REPORTED",
+        organization_id=organization_id,
         source=source,
         reporter_name=reporter_name,
         reporter_contact=reporter_contact,
@@ -110,6 +112,7 @@ def create_incident(
                 "priority": priority,
                 "severity": severity,
                 "source": source,
+                "organization_id": organization_id,
             },
             created_at=now,
         )
@@ -130,6 +133,7 @@ def create_incident(
                 "priority": priority,
                 "severity": severity,
                 "status": "REPORTED",
+                "organization_id": organization_id,
                 "latitude": latitude,
                 "longitude": longitude,
                 "actor_id": actor_id,
@@ -139,13 +143,14 @@ def create_incident(
         )
     )
 
-    # Duplicate detection: Find existing active incidents in same category within 500m and 1 hour
+    # Duplicate detection: Find existing active incidents in same category within 500m and 1 hour in same org
     if latitude is not None and longitude is not None:
         recent_threshold = now - 3600
         candidates = (
             db.query(IncidentModel)
             .filter(
                 IncidentModel.category == category.upper(),
+                IncidentModel.organization_id == organization_id,
                 IncidentModel.status.in_(["REPORTED", "TRIAGED", "DISPATCHED", "ON_SCENE"]),
                 IncidentModel.created_at >= recent_threshold,
                 IncidentModel.latitude.is_not(None),
@@ -186,10 +191,11 @@ def transition_incident(
     new_status: str,
     actor_id: str,
     notes: Optional[str] = None,
+    organization_id: Optional[str] = None,
 ) -> IncidentModel:
     """Transition an incident through the formal state machine, verifying allowed transitions."""
     incident = db.query(IncidentModel).filter(IncidentModel.id == incident_id).first()
-    if not incident:
+    if not incident or (organization_id is not None and incident.organization_id != organization_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Incident '{incident_id}' not found",

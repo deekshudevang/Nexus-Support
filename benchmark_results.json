@@ -1,0 +1,50 @@
+{
+  "sos_ingestion": {
+    "samples": 200,
+    "throughput_req_sec": 74.41,
+    "p50_ms": 12.77,
+    "p95_ms": 16.15,
+    "p99_ms": 17.21,
+    "min_ms": 11.13,
+    "max_ms": 85.19,
+    "mean_ms": 13.43
+  },
+  "ack_processing": {
+    "samples": 100,
+    "p50_ms": 2.61,
+    "p95_ms": 3.31,
+    "p99_ms": 17.81,
+    "mean_ms": 3.22
+  },
+  "incident_creation": {
+    "samples": 50,
+    "p50_ms": 12.77,
+    "p95_ms": 20.16,
+    "p99_ms": 31.92,
+    "mean_ms": 14.2
+  },
+  "dispatch_assignment": {
+    "samples": 50,
+    "p50_ms": 13.91,
+    "p95_ms": 22.74,
+    "p99_ms": 28.59,
+    "mean_ms": 15.1
+  },
+  "websocket_fanout": {
+    "subscribers": 25,
+    "samples": 30,
+    "p50_ms": 0.042,
+    "p95_ms": 0.046,
+    "p99_ms": 0.054,
+    "mean_ms": 0.043
+  },
+  "android_battery_profile": {
+    "device": "Motorola Edge 50 Pro (XT2403-1)",
+    "os": "Android 16 (API 36, vanilla_icecream)",
+    "app_process": "com.meshlink.app.debug",
+    "background_ble_duty_cycle_pct": 10.0,
+    "estimated_drain_rate_pct_per_hour": "1.8% - 2.4%",
+    "foreground_incident_response_drain_pct_per_hour": "4.5% - 6.0%",
+    "recommended_operational_window_hours": "14 - 18 hours continuous standby"
+  }
+}

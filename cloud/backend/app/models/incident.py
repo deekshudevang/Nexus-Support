@@ -14,6 +14,7 @@ class IncidentModel(Base):
     priority = Column(Integer, nullable=False, default=3, index=True)
     severity = Column(Integer, nullable=False, default=3, index=True)
     status = Column(String(32), nullable=False, default="REPORTED", index=True)
+    organization_id = Column(String(64), nullable=False, default="org-default", index=True)
     source = Column(String(64), nullable=False, default="OPERATOR", index=True)
     reporter_name = Column(String(128), nullable=True)
     reporter_contact = Column(String(128), nullable=True)

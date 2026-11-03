@@ -11,8 +11,8 @@ object AiSafetyGuard {
     // Targeting commands that explicitly attempt to hijack instruction hierarchy,
     // evade safety rules, or break context boundaries.
     private val injectionPatterns = listOf(
-        Regex("""(?i)\bignore\s+(?:(?:all|previous|the|medical)\s+)*(?:context|instructions?|rules?|prompts?|guidelines?|system\s+directives?)\b"""),
-        Regex("""(?i)\bdisregard\s+(?:(?:all|previous|the|medical)\s+)*(?:context|instructions?|rules?|prompts?|guidelines?)\b"""),
+        Regex("""(?i)\bignore\s+(?:(?:all|previous|the|medical|emergency|system)\s+)*(?:context|instructions?|rules?|prompts?|guidelines?|system\s+directives?)\b"""),
+        Regex("""(?i)\bdisregard\s+(?:(?:all|previous|the|medical|emergency|system)\s+)*(?:context|instructions?|rules?|prompts?|guidelines?)\b"""),
         Regex("""(?i)\bgenerate\s+fake\b"""),
         Regex("""(?i)\bsystem\s+(?:command\s+)?override\b"""),
         Regex("""(?i)\bsystem\s+override\s*:"""),

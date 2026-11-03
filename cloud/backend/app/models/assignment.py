@@ -8,6 +8,7 @@ class AssignmentModel(Base):
     incident_id = Column(String(128), ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False, index=True)
     responder_id = Column(String(128), ForeignKey("responders.id", ondelete="CASCADE"), nullable=False, index=True)
     team_id = Column(String(128), ForeignKey("teams.id", ondelete="SET NULL"), nullable=True, index=True)
+    organization_id = Column(String(64), nullable=False, default="org-default", index=True)
     status = Column(String(32), nullable=False, default="PROPOSED", index=True)
     offered_at = Column(Integer, nullable=False)
     responded_at = Column(Integer, nullable=True)

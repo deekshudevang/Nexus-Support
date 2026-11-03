@@ -9,6 +9,7 @@ class DeviceModel(Base):
     public_key_pem = Column(Text, nullable=False)
     enrollment_token_id = Column(String(128), nullable=True)
     role = Column(String(32), nullable=False, default="gateway")
+    organization_id = Column(String(64), nullable=False, default="org-default", index=True)
     status = Column(String(32), nullable=False, default="active")
     last_seen_at = Column(Integer, nullable=True)
     token_version = Column(Integer, nullable=False, default=1)

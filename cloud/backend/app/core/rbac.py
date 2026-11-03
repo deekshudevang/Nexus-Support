@@ -152,6 +152,7 @@ class AuthenticatedActor:
     username: str
     role: str
     permissions: Set[Permission]
+    organization_id: str = "org-default"
     user_id: Optional[int] = None
     device_id: Optional[str] = None
     responder_id: Optional[str] = None
@@ -165,6 +166,7 @@ def create_access_token(
     username: str,
     role: str,
     token_version: int,
+    organization_id: str = "org-default",
     expires_in_sec: int = 86400,
 ) -> str:
     """Create a tamper-evident HS256 signed access token without external dependencies."""
@@ -174,6 +176,7 @@ def create_access_token(
         "sub": str(user_id),
         "username": username,
         "role": role,
+        "org_id": organization_id,
         "ver": token_version,
         "iat": now,
         "exp": now + expires_in_sec,
@@ -225,6 +228,7 @@ async def get_current_actor(
     authorization: Optional[str] = Header(None),
     x_operator_token: Optional[str] = Header(None),
     x_gateway_key: Optional[str] = Header(None),
+    x_organization_id: Optional[str] = Header(None),
     x_device_id: Optional[str] = Header(None),
     x_device_timestamp: Optional[str] = Header(None),
     x_device_signature: Optional[str] = Header(None),
@@ -264,11 +268,13 @@ async def get_current_actor(
 
             role_val = user.role.lower()
             perms = ROLE_PERMISSIONS.get(role_val, set())
+            org_id = payload.get("org_id") or getattr(user, "organization_id", "org-default")
             return AuthenticatedActor(
                 actor_id=f"user:{user.id}",
                 username=user.username,
                 role=role_val,
                 permissions=perms,
+                organization_id=org_id,
                 user_id=user.id,
             )
 
@@ -276,11 +282,13 @@ async def get_current_actor(
         for valid_token in OPERATOR_TOKENS:
             if secrets.compare_digest(token, valid_token):
                 role_val = Role.COMMANDER.value
+                org_id = x_organization_id or "org-default"
                 return AuthenticatedActor(
                     actor_id=f"operator:{token[:8]}",
                     username="operator",
                     role=role_val,
                     permissions=ROLE_PERMISSIONS[role_val],
+                    organization_id=org_id,
                 )
 
     # ── Channel 2: ECDSA Device Signature Authentication ────────────────────────
@@ -297,11 +305,13 @@ async def get_current_actor(
             db=db,
         )
         perms = ROLE_PERMISSIONS[Role.DEVICE.value]
+        org_id = getattr(device, "organization_id", "org-default")
         return AuthenticatedActor(
             actor_id=f"device:{device.device_id}",
             username=f"node_{device.device_id[:8]}",
             role=Role.DEVICE.value,
             permissions=perms,
+            organization_id=org_id,
             device_id=device.device_id,
         )
 
@@ -313,11 +323,13 @@ async def get_current_actor(
 
         for valid_gw in GATEWAY_API_KEYS:
             if secrets.compare_digest(gw_key, valid_gw):
+                org_id = x_organization_id or "org-default"
                 return AuthenticatedActor(
                     actor_id="gateway:legacy",
                     username="mesh_gateway",
                     role=Role.DEVICE.value,
                     permissions=ROLE_PERMISSIONS[Role.DEVICE.value],
+                    organization_id=org_id,
                 )
 
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication credentials required")

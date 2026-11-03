@@ -7,6 +7,7 @@ class ResponderModel(Base):
     id = Column(String(128), primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     callsign = Column(String(64), nullable=False)
+    organization_id = Column(String(64), nullable=False, default="org-default", index=True)
     responder_type = Column(String(64), nullable=False, default="SAR")
     skills = Column(JSON, default=list, nullable=False)
     team_id = Column(String(128), ForeignKey("teams.id", ondelete="SET NULL"), nullable=True, index=True)

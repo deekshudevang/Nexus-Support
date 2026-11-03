@@ -270,6 +270,12 @@ class MeshRouter(
             heartbeatLastSeen[packet.originId] = now
         }
 
+        // 1b. Routing loop prevention via route history inspection
+        if (packet.routeHistory.contains(myDeviceId)) {
+            Timber.d("MeshRouter: DROP routing loop detected — myDeviceId already in routeHistory: ${packet.routeHistory}")
+            return@withContext RoutingResult.Drop
+        }
+
         // 2. TTL check
         if (packet.hopCount >= packet.maxHops) {
             Timber.d("MeshRouter: DROP TTL exceeded hopCount=${packet.hopCount} maxHops=${packet.maxHops}")

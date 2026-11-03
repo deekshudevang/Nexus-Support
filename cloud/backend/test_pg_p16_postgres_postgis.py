@@ -122,8 +122,8 @@ def test_alembic_migrations_roundtrip():
     incident_indexes = [idx["name"] for idx in inspector.get_indexes("incidents")]
     assert "ix_incidents_spatial_lat_lon" in incident_indexes
 
-    # 2. Downgrade one revision (back to 1366b03464eb)
-    command.downgrade(cfg, "-1")
+    # 2. Downgrade back to 1366b03464eb (prior to spatial indexes)
+    command.downgrade(cfg, "1366b03464eb")
     inspector_down = sa.inspect(engine_temp)
     incident_indexes_down = [idx["name"] for idx in inspector_down.get_indexes("incidents")]
     assert "ix_incidents_spatial_lat_lon" not in incident_indexes_down

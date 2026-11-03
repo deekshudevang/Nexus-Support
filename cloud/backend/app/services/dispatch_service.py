@@ -41,6 +41,7 @@ def create_responder(
     skills: Optional[List[str]] = None,
     user_id: Optional[int] = None,
     device_id: Optional[str] = None,
+    organization_id: str = "org-default",
 ) -> ResponderModel:
     now = int(time.time())
     resp_id = f"resp_{uuid.uuid4().hex[:12]}"
@@ -51,6 +52,7 @@ def create_responder(
         skills=skills or [],
         user_id=user_id,
         device_id=device_id,
+        organization_id=organization_id,
         availability="AVAILABLE",
         created_at=now,
     )
@@ -65,6 +67,7 @@ def create_team(
     name: str,
     callsign: str,
     leader_id: Optional[str] = None,
+    organization_id: str = "org-default",
 ) -> TeamModel:
     now = int(time.time())
     team = TeamModel(
@@ -72,6 +75,7 @@ def create_team(
         name=name,
         callsign=callsign,
         leader_id=leader_id,
+        organization_id=organization_id,
         status="active",
         created_at=now,
     )
@@ -104,13 +108,14 @@ def dispatch_responder(
     responder_id: str,
     team_id: Optional[str] = None,
     actor_id: str = "dispatcher",
+    organization_id: Optional[str] = None,
 ) -> AssignmentModel:
     """
-    Dispatch a responder to an incident with strict partial-unique concurrency protection.
-    Prevents assigning a responder who is already engaged on an active assignment.
+    Dispatch a responder to an incident with strict partial-unique concurrency protection
+    and multi-tenant organization boundary verification.
     """
     incident = db.query(IncidentModel).filter(IncidentModel.id == incident_id).first()
-    if not incident:
+    if not incident or (organization_id is not None and incident.organization_id != organization_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
     if incident.status in ("CLOSED", "CANCELLED"):
         raise HTTPException(
@@ -119,8 +124,14 @@ def dispatch_responder(
         )
 
     responder = db.query(ResponderModel).filter(ResponderModel.id == responder_id).first()
-    if not responder:
+    if not responder or (organization_id is not None and responder.organization_id != organization_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Responder not found")
+
+    if incident.organization_id != responder.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Cross-organization dispatch forbidden: incident org '{incident.organization_id}' != responder org '{responder.organization_id}'",
+        )
 
     # Application-level check
     active_assignment = (
@@ -144,6 +155,7 @@ def dispatch_responder(
         incident_id=incident_id,
         responder_id=responder_id,
         team_id=team_id,
+        organization_id=incident.organization_id,
         status="DISPATCHED",
         offered_at=now,
     )
@@ -207,10 +219,14 @@ def transition_assignment(
     actor: AuthenticatedActor,
     reason: Optional[str] = None,
 ) -> AssignmentModel:
-    """Transition assignment state with strict IDOR and capability checks."""
+    """Transition assignment state with strict IDOR, multi-tenant boundaries, and capability checks."""
     assignment = db.query(AssignmentModel).filter(AssignmentModel.id == assignment_id).first()
     if not assignment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+
+    if hasattr(actor, "organization_id") and actor.organization_id:
+        if assignment.organization_id != actor.organization_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
 
     target_status = new_status.upper().strip()
     current_status = assignment.status.upper().strip()

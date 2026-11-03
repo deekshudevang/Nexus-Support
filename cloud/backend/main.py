@@ -19,6 +19,7 @@ from app.core.security import (
     consume_ws_ticket,
     _ws_tickets,
 )
+from app.services.push_notification_service import push_fallback_service
 
 # ── Structured Logging Configuration (Never log tokens/secrets) ──────────────
 logging.basicConfig(
@@ -235,6 +236,8 @@ def init_db(db_path: Optional[str] = None):
         conn.execute("ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 1;")
     if "last_login" not in user_cols and len(user_cols) > 0:
         conn.execute("ALTER TABLE users ADD COLUMN last_login INTEGER;")
+    if "organization_id" not in user_cols and len(user_cols) > 0:
+        conn.execute("ALTER TABLE users ADD COLUMN organization_id TEXT DEFAULT 'org-default';")
 
     cursor = conn.execute("SELECT COUNT(*) FROM users;")
     if cursor.fetchone()[0] == 0:
@@ -332,6 +335,15 @@ def verify_operator_read(
     for valid_token in OPERATOR_TOKENS:
         if secrets.compare_digest(cred, valid_token):
             return cred
+
+    # Allow signed JWT user sessions
+    if cred and cred.count(".") == 2:
+        try:
+            from app.core.rbac import decode_access_token
+            payload = decode_access_token(cred)
+            return payload.get("username", "jwt_operator")
+        except Exception:
+            pass
 
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid operator token")
 
@@ -517,8 +529,12 @@ async def sync_sos(packets: List[SosPacket], _: str = Depends(verify_gateway_wri
             raise HTTPException(status_code=500, detail="Database insertion error")
 
     # Broadcast to authenticated WebSocket dashboard clients in real-time
+    ws_subscribers = len(alert_manager.active_connections)
     for p in packets:
         await alert_manager.broadcast_sos(p.model_dump())
+        # Resilient fallback: If no active WebSocket connections or high-priority, trigger push fallback
+        if ws_subscribers == 0 or (p.severity and p.severity >= 4):
+            await push_fallback_service.dispatch_push_fallback(p.model_dump())
 
     return {"status": "success", "synced_count": count, "receipts": receipts, "downlinks": []}
 
@@ -594,6 +610,50 @@ def get_nodes(
             }
             for row in rows
         ]
+
+# ── SOS Delivery Status & Authenticated Acknowledgment Endpoints ─────────────
+class SosAckRequest(BaseModel):
+    recipient: str = Field(..., min_length=2, max_length=128)
+    signature: str = Field(..., min_length=16)
+
+@app.post("/api/v1/sos/{sos_id}/ack")
+def acknowledge_sos_delivery(
+    sos_id: str,
+    req: SosAckRequest,
+    _: str = Depends(verify_operator_read),
+):
+    try:
+        record = push_fallback_service.process_authenticated_ack(
+            message_id=sos_id,
+            recipient=req.recipient,
+            ack_signature=req.signature,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "status": "success",
+        "message_id": sos_id,
+        "delivery_status": record.status if record else "NOT_FOUND",
+        "delivered": push_fallback_service.is_delivered(sos_id),
+    }
+
+@app.get("/api/v1/sos/{sos_id}/delivery-status")
+def get_sos_delivery_status(
+    sos_id: str,
+    _: str = Depends(verify_operator_read),
+):
+    record = push_fallback_service.delivery_records.get(sos_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="SOS delivery record not found")
+    return {
+        "message_id": sos_id,
+        "channel": record.channel,
+        "status": record.status,
+        "delivered": push_fallback_service.is_delivered(sos_id),
+        "acknowledged_at": record.acknowledged_at,
+        "attempts": record.attempt_count,
+    }
 
 # ── WebSocket Live Alert & Event Stream ─────────────────────────────────────────
 @app.websocket("/ws/alerts")

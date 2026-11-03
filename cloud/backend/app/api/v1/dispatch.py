@@ -35,6 +35,7 @@ class ResponderResponse(BaseModel):
     callsign: str
     responder_type: str
     skills: List[str]
+    organization_id: str = "org-default"
     team_id: Optional[str] = None
     availability: str
     last_latitude: Optional[float] = None
@@ -53,6 +54,7 @@ class TeamResponse(BaseModel):
     id: str
     name: str
     callsign: str
+    organization_id: str = "org-default"
     leader_id: Optional[str] = None
     status: str
     created_at: int
@@ -77,6 +79,7 @@ class AssignmentResponse(BaseModel):
     id: str
     incident_id: str
     responder_id: str
+    organization_id: str = "org-default"
     team_id: Optional[str] = None
     status: str
     offered_at: int
@@ -92,7 +95,7 @@ def create_responder_endpoint(
     actor: AuthenticatedActor = Depends(require_permission(Permission.RESPONDER_MANAGE)),
     db: Session = Depends(get_db_session),
 ):
-    """Enroll a new certified responder into operational roster."""
+    """Enroll a new certified responder into operational roster within the organization."""
     return dispatch_service.create_responder(
         db=db,
         callsign=req.callsign,
@@ -100,6 +103,7 @@ def create_responder_endpoint(
         skills=req.skills,
         user_id=req.user_id,
         device_id=req.device_id,
+        organization_id=actor.organization_id,
     )
 
 
@@ -110,8 +114,8 @@ def list_responders_endpoint(
     actor: AuthenticatedActor = Depends(require_permission(Permission.RESPONDER_READ)),
     db: Session = Depends(get_db_session),
 ):
-    """List operational responders with availability filtering."""
-    query = db.query(ResponderModel)
+    """List operational responders with availability filtering within actor's organization."""
+    query = db.query(ResponderModel).filter(ResponderModel.organization_id == actor.organization_id)
     if availability:
         query = query.filter(ResponderModel.availability == availability.upper().strip())
     if responder_type:
@@ -125,8 +129,12 @@ def get_responder_endpoint(
     actor: AuthenticatedActor = Depends(require_permission(Permission.RESPONDER_READ)),
     db: Session = Depends(get_db_session),
 ):
-    """Retrieve responder profile and telemetry."""
-    responder = db.query(ResponderModel).filter(ResponderModel.id == responder_id).first()
+    """Retrieve responder profile and telemetry with tenant isolation."""
+    responder = (
+        db.query(ResponderModel)
+        .filter(ResponderModel.id == responder_id, ResponderModel.organization_id == actor.organization_id)
+        .first()
+    )
     if not responder:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Responder not found")
     return responder
@@ -140,12 +148,13 @@ def create_team_endpoint(
     actor: AuthenticatedActor = Depends(require_permission(Permission.TEAM_MANAGE)),
     db: Session = Depends(get_db_session),
 ):
-    """Create a tactical search & rescue or medical team."""
+    """Create a tactical search & rescue or medical team within the organization."""
     return dispatch_service.create_team(
         db=db,
         name=req.name,
         callsign=req.callsign,
         leader_id=req.leader_id,
+        organization_id=actor.organization_id,
     )
 
 
@@ -154,8 +163,8 @@ def list_teams_endpoint(
     actor: AuthenticatedActor = Depends(require_permission(Permission.TEAM_READ)),
     db: Session = Depends(get_db_session),
 ):
-    """List active operational teams."""
-    return db.query(TeamModel).all()
+    """List active operational teams within actor's organization."""
+    return db.query(TeamModel).filter(TeamModel.organization_id == actor.organization_id).all()
 
 
 @router.post("/teams/{team_id}/members")
@@ -165,7 +174,14 @@ def add_team_member_endpoint(
     actor: AuthenticatedActor = Depends(require_permission(Permission.TEAM_MANAGE)),
     db: Session = Depends(get_db_session),
 ):
-    """Assign responder to team roster."""
+    """Assign responder to team roster within organization."""
+    team = db.query(TeamModel).filter(TeamModel.id == team_id, TeamModel.organization_id == actor.organization_id).first()
+    if not team:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+    responder = db.query(ResponderModel).filter(ResponderModel.id == req.responder_id, ResponderModel.organization_id == actor.organization_id).first()
+    if not responder:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Responder not found")
+
     member = dispatch_service.add_team_member(
         db=db,
         team_id=team_id,
@@ -183,13 +199,14 @@ def dispatch_incident_endpoint(
     actor: AuthenticatedActor = Depends(require_permission(Permission.ASSIGNMENT_DISPATCH)),
     db: Session = Depends(get_db_session),
 ):
-    """Dispatch responder to an incident with concurrency conflict protection."""
+    """Dispatch responder to an incident with multi-tenant and concurrency protection."""
     return dispatch_service.dispatch_responder(
         db=db,
         incident_id=incident_id,
         responder_id=req.responder_id,
         team_id=req.team_id,
         actor_id=actor.actor_id,
+        organization_id=actor.organization_id,
     )
 
 
@@ -199,8 +216,11 @@ def list_incident_assignments_endpoint(
     actor: AuthenticatedActor = Depends(require_permission(Permission.ASSIGNMENT_READ)),
     db: Session = Depends(get_db_session),
 ):
-    """List all assignments associated with an incident."""
-    return db.query(AssignmentModel).filter(AssignmentModel.incident_id == incident_id).all()
+    """List all assignments associated with an incident within actor's organization."""
+    incident = db.query(IncidentModel).filter(IncidentModel.id == incident_id, IncidentModel.organization_id == actor.organization_id).first()
+    if not incident:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
+    return db.query(AssignmentModel).filter(AssignmentModel.incident_id == incident_id, AssignmentModel.organization_id == actor.organization_id).all()
 
 
 @router.post("/assignments/{assignment_id}/transition", response_model=AssignmentResponse)

@@ -58,6 +58,7 @@ class IncidentResponse(BaseModel):
     priority: int
     severity: int
     status: str
+    organization_id: str = "org-default"
     source: str
     reporter_name: Optional[str] = None
     latitude: Optional[float] = None
@@ -92,6 +93,7 @@ def create_incident_endpoint(
         description=req.description,
         source=req.source,
         actor_id=actor.actor_id,
+        organization_id=actor.organization_id,
         latitude=req.latitude,
         longitude=req.longitude,
         location_accuracy_m=req.location_accuracy_m,
@@ -114,8 +116,8 @@ def list_incidents_endpoint(
     actor: AuthenticatedActor = Depends(require_permission(Permission.INCIDENT_READ)),
     db: Session = Depends(get_db_session),
 ):
-    """List operational incidents with situational filtering."""
-    query = db.query(IncidentModel)
+    """List operational incidents with situational filtering and tenant isolation."""
+    query = db.query(IncidentModel).filter(IncidentModel.organization_id == actor.organization_id)
 
     if status_filter:
         statuses = [s.strip().upper() for s in status_filter.split(",") if s.strip()]
@@ -137,8 +139,12 @@ def get_incident_endpoint(
     actor: AuthenticatedActor = Depends(require_permission(Permission.INCIDENT_READ)),
     db: Session = Depends(get_db_session),
 ):
-    """Retrieve full incident details including links and recent timeline events."""
-    inc = db.query(IncidentModel).filter(IncidentModel.id == incident_id).first()
+    """Retrieve full incident details with strict tenant isolation."""
+    inc = (
+        db.query(IncidentModel)
+        .filter(IncidentModel.id == incident_id, IncidentModel.organization_id == actor.organization_id)
+        .first()
+    )
     if not inc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
 
@@ -217,6 +223,7 @@ def transition_incident_endpoint(
         new_status=target_status,
         actor_id=actor.actor_id,
         notes=req.notes,
+        organization_id=actor.organization_id,
     )
 
 
@@ -227,7 +234,12 @@ def link_incidents_endpoint(
     actor: AuthenticatedActor = Depends(require_permission(Permission.INCIDENT_TRIAGE)),
     db: Session = Depends(get_db_session),
 ):
-    """Manually link related or duplicate incidents."""
+    """Manually link related or duplicate incidents within the same organization."""
+    inc1 = db.query(IncidentModel).filter(IncidentModel.id == incident_id, IncidentModel.organization_id == actor.organization_id).first()
+    inc2 = db.query(IncidentModel).filter(IncidentModel.id == req.target_incident_id, IncidentModel.organization_id == actor.organization_id).first()
+    if not inc1 or not inc2:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found in your organization")
+
     link = incident_service.link_incidents(
         db=db,
         incident_id=incident_id,
@@ -252,8 +264,8 @@ def get_incident_timeline_endpoint(
     actor: AuthenticatedActor = Depends(require_permission(Permission.INCIDENT_READ)),
     db: Session = Depends(get_db_session),
 ):
-    """Retrieve full append-only audit timeline for an incident."""
-    inc = db.query(IncidentModel).filter(IncidentModel.id == incident_id).first()
+    """Retrieve full append-only audit timeline for an incident within the organization."""
+    inc = db.query(IncidentModel).filter(IncidentModel.id == incident_id, IncidentModel.organization_id == actor.organization_id).first()
     if not inc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
 
