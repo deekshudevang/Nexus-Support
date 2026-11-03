@@ -16,9 +16,9 @@ fun TacticalCard(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
         content()
     }
@@ -36,9 +36,9 @@ fun TacticalButton(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(6.dp),
         colors = ButtonDefaults.buttonColors(containerColor = containerColor),
-        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp)
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
     ) {
         Text(text, style = MaterialTheme.typography.labelLarge)
     }

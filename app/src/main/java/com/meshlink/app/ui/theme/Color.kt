@@ -3,63 +3,65 @@ package com.meshlink.app.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  Startup SaaS Design System — MeshLink
+//  Public Safety & Emergency Operations Design System — MeshLink
+//  Engineered for high contrast, direct sunlight legibility, and zero visual slop
 // ═══════════════════════════════════════════════════════════════════════════════
 
-val Primary            = Color(0xFF00E5FF)   // Neon Cyan / Electric Blue
-val PrimaryDark        = Color(0xFF00B2CC)   // Deeper cyan
-val PrimaryLight       = Color(0x3300E5FF)   // Light tint for containers (20% opacity)
-val PrimaryContainer   = Color(0x4D00E5FF)   // Container (30% opacity)
+val Primary            = Color(0xFF2563EB)   // Rescue Command Blue (ANSI Public Safety standard)
+val PrimaryDark        = Color(0xFF1D4ED8)   // Deep Command Blue
+val PrimaryLight       = Color(0x262563EB)   // 15% Blue container tint
+val PrimaryContainer   = Color(0x332563EB)   // 20% Blue container
 
-val Secondary          = Color(0xFFB026FF)   // Neon Purple
-val SecondaryDark      = Color(0xFF8B12CC)   // Deep purple
-val SecondaryLight     = Color(0x33B026FF)   // Light purple tint
-val SecondaryContainer = Color(0x4DB026FF)   // Purple container
+val Secondary          = Color(0xFF0284C7)   // Cadet Telemetry Blue/Slate
+val SecondaryDark      = Color(0xFF0369A1)   // Darker Telemetry Blue
+val SecondaryLight     = Color(0x260284C7)   // Light Telemetry tint
+val SecondaryContainer = Color(0x330284C7)   // Telemetry container
 
-val Tertiary           = Color(0xFF00FFA3)   // Neon Green
-val TertiaryDark       = Color(0xFF00CC82)   // Deeper green
-val TertiaryLight      = Color(0x3300FFA3)   // Light green tint
-val TertiaryContainer  = Color(0x4D00FFA3)   // Green container
+val Tertiary           = Color(0xFF16A34A)   // Operational Safety Green
+val TertiaryDark       = Color(0xFF15803D)   // Forest Operational Green
+val TertiaryLight      = Color(0x2616A34A)   // Light Green tint
+val TertiaryContainer  = Color(0x3316A34A)   // Green container
 
-val Neutral            = Color(0xFFFFFFFF)   // Near-white — primary text on dark
+val Neutral            = Color(0xFFF8FAFC)   // Crisp High-Contrast Off-White
 
-val AppBackground      = Color(0xFF000000)   // True OLED Black
-val CardSurface        = Color(0xFF0F0F13)   // Elevated sleek surface for cards
-val SurfaceVariant     = Color(0xFF16161A)   // Input fields, secondary surfaces
-val SurfaceBright      = Color(0xFF1F1F24)   // Elevated bright surface
+val AppBackground      = Color(0xFF0B0F19)   // Deep Matte Slate Canvas (prevents glare & eye strain)
+val CardSurface        = Color(0xFF131B2B)   // Rugged Slate Surface for tactical cards
+val SurfaceVariant     = Color(0xFF1E293B)   // Secondary slate panels, input fields
+val SurfaceBright      = Color(0xFF243046)   // Focused/elevated field elements
 
-val TextPrimary        = Color(0xFFF0F0F0)   // Primary text (Soft White)
-val TextSecondary      = Color(0xFFA0A0A5)   // Secondary / body text
-val TextMuted          = Color(0xFF6B6B70)   // Placeholder, disabled text
+val TextPrimary        = Color(0xFFF8FAFC)   // Primary High-Contrast Text (100% legibility outdoors)
+val TextSecondary      = Color(0xFF94A3B8)   // Secondary Telemetry & metadata text
+val TextMuted          = Color(0xFF64748B)   // Disabled/de-emphasized label text
 val TextOnPrimary      = Color(0xFFFFFFFF)   // White text on primary buttons
 val TextOnPrimaryWhite = Color(0xFFFFFFFF)   // White text on primary buttons
 
-val Outline            = Color(0xFF2C2C32)   // Dividers, card borders
-val OutlineVariant     = Color(0xFF1F1F24)   // Subtle dividers
+val Outline            = Color(0xFF334155)   // Crisp structural perimeter borders
+val OutlineVariant     = Color(0xFF1E293B)   // Subtle panel dividers
 
-val StatusConnected    = Tertiary             // Green — connected
-val StatusConnecting   = Secondary            // Purple — connecting
-val StatusOffline      = Color(0xFF5A5A60)    // Gray — offline
-val StatusError        = Color(0xFFFF3B30)    // iOS Red — error / disconnected
+val StatusConnected    = Tertiary             // Green — operational link
+val StatusConnecting   = Color(0xFFD97706)    // Amber — acquiring signal / synchronizing
+val StatusOffline      = Color(0xFF64748B)    // Neutral Slate — offline / standby
+val StatusError        = Color(0xFFDC2626)    // ANSI Emergency Red — beacon active / failure
 
-val BadgeNear          = Tertiary             // Green
-val BadgeFar           = Primary              // Blue
-val BadgeVeryFar       = Color(0xFF5A5A60)    // Gray
+val BadgeNear          = Tertiary             // Operational Green
+val BadgeFar           = Secondary            // Telemetry Blue
+val BadgeVeryFar       = Color(0xFF64748B)    // Slate Gray
 
-val BubbleSent         = Primary              // Primary sent bubble
-val BubbleReceived     = SurfaceVariant       // Dark gray received bubble
+val BubbleSent         = Primary              // Command Blue bubble
+val BubbleReceived     = SurfaceVariant       // Neutral slate bubble
 
-val EmergencyRed          = StatusError
-val EmergencyRedDark      = Color(0xFFD32F2F)
+val EmergencyRed          = StatusError       // 0xFFDC2626
+val EmergencyRedDark      = Color(0xFFB91C1C)
 val EmergencyRedSurface   = StatusError
-val EmergencyRedContainer = Color(0x33FF3B30)
-val EmergencyRedLight     = Color(0x33FF3B30)
-val EmergencyGreen        = Tertiary
+val EmergencyRedContainer = Color(0x33DC2626)
+val EmergencyRedLight     = Color(0x33DC2626)
+val EmergencyGreen        = Tertiary          // 0xFF16A34A
 val EmergencyGreenDark    = TertiaryDark
 val EmergencyGreenLight   = TertiaryLight
-val EmergencyAmber        = Color(0xFFFF9500)
-val EmergencyAmberLight   = Color(0x33FF9500)
-val EmergencyAmberDark    = Color(0xFFF39C12)
+val EmergencyAmber        = Color(0xFFD97706)
+val EmergencyAmberLight   = Color(0x33D97706)
+val EmergencyAmberDark    = Color(0xFFB45309)
+
 val DarkBackground        = AppBackground
 val DarkSurface           = CardSurface
 val DarkSurfaceElevated   = SurfaceVariant
@@ -84,20 +86,20 @@ val MeshSecondary         = Secondary
 val MeshSecondaryContainer= SecondaryContainer
 val MeshConnected         = StatusConnected
 val MeshConnecting        = StatusConnecting
-val MeshHandshaking       = Secondary
+val MeshHandshaking       = StatusConnecting
 val MeshDisconnected      = StatusError
 val MeshOnBackground      = TextPrimary
 val MeshOnBackgroundDim   = TextSecondary
 val MeshOnBackgroundMuted = TextMuted
 val MeshOutline           = Outline
 val NavBarBackground      = AppBackground
-val NavItemActive         = Primary
+val NavItemActive         = Color(0xFF38BDF8) // High-visibility Sky Blue
 val NavItemInactive       = TextMuted
 val NavIndicator          = PrimaryLight
 val BloodGroupSelected    = Primary
 val BloodGroupUnselected  = SurfaceVariant
 val MeshReadyGreen        = Tertiary
-val ContactAvatarSalmon   = Color(0xFFEF5350)
-val RadarRing1            = Color(0x332979FF)
-val RadarRing2            = Color(0x552979FF)
-val RadarRing3            = Color(0x882979FF)
+val ContactAvatarSalmon   = Color(0xFFE11D48)
+val RadarRing1            = Color(0x2638BDF8)
+val RadarRing2            = Color(0x3338BDF8)
+val RadarRing3            = Color(0x4D38BDF8)

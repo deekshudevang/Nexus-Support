@@ -5,7 +5,6 @@ import {
   Waves,
   ShieldAlert,
   Search,
-  Filter,
   Users,
   MapPin,
   Clock,
@@ -28,10 +27,10 @@ export default function IncidentQueue({
   // Priority / Severity icon mapper
   const getEmergencyIcon = (type = '') => {
     const t = (type || '').toUpperCase();
-    if (t.includes('FIRE') || t.includes('SMOKE')) return <Flame className="w-4 h-4 text-[#ff5625]" />;
+    if (t.includes('FIRE') || t.includes('SMOKE')) return <Flame className="w-4 h-4 text-[#ef4444]" />;
     if (t.includes('MED') || t.includes('TRAUMA')) return <HeartPulse className="w-4 h-4 text-[#ef4444]" />;
-    if (t.includes('FLOOD') || t.includes('WATER')) return <Waves className="w-4 h-4 text-[#00e3fd]" />;
-    return <ShieldAlert className="w-4 h-4 text-[#ffb5a0]" />;
+    if (t.includes('FLOOD') || t.includes('WATER')) return <Waves className="w-4 h-4 text-[#38bdf8]" />;
+    return <ShieldAlert className="w-4 h-4 text-[#cbd5e1]" />;
   };
 
   // Filter and search logic
@@ -88,15 +87,15 @@ export default function IncidentQueue({
   }, [incidents]);
 
   return (
-    <aside className="w-80 md:w-88 xl:w-96 flex flex-col bg-[#090f15] border-r border-[#30353d] shrink-0 z-20 select-none">
+    <aside className="w-80 md:w-88 xl:w-96 flex flex-col bg-[#0b0f19] border-r border-[#334155] shrink-0 z-20 select-none">
       {/* Panel Header */}
-      <div className="p-2.5 bg-[#171c23] border-b border-[#30353d] flex items-center justify-between">
+      <div className="p-2.5 bg-[#111827] border-b border-[#334155] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <ShieldAlert className="w-4 h-4 text-[#00e3fd]" />
-          <h2 className="font-bold text-xs uppercase tracking-wider text-[#dee2ec]">
+          <ShieldAlert className="w-4 h-4 text-[#38bdf8]" />
+          <h2 className="font-bold text-xs uppercase tracking-wider text-[#f8fafc]">
             INCIDENT QUEUE
           </h2>
-          <span className="bg-[#30353d] text-[#dee2ec] text-[10px] font-mono font-bold px-1.5 py-0.5">
+          <span className="bg-[#1e293b] text-[#cbd5e1] text-[10px] font-mono font-semibold px-2 py-0.5 rounded border border-[#334155]">
             {incidents.length} TOTAL
           </span>
         </div>
@@ -106,7 +105,7 @@ export default function IncidentQueue({
               onOpenDispatch(filteredIncidents[0]);
             }
           }}
-          className="bg-[#ff5625] hover:bg-[#b12d00] text-[#090f15] text-[10px] font-mono font-bold px-2 py-1 flex items-center gap-1 border border-[#ffb5a0] transition-colors"
+          className="bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-[11px] font-semibold px-2.5 py-1 rounded flex items-center gap-1.5 transition-colors shadow-sm"
         >
           <Send className="w-3 h-3" />
           <span>NEW DISPATCH</span>
@@ -114,13 +113,13 @@ export default function IncidentQueue({
       </div>
 
       {/* Filter Tabs */}
-      <div className="grid grid-cols-4 gap-px bg-[#30353d] border-b border-[#30353d] text-center font-mono text-[10px] font-bold">
+      <div className="grid grid-cols-4 bg-[#111827] border-b border-[#334155] text-center font-sans text-xs font-semibold">
         <button
           onClick={() => setFilterSeverity('ALL')}
-          className={`py-1.5 transition-colors ${
+          className={`py-1.5 transition-colors border-b-2 ${
             filterSeverity === 'ALL'
-              ? 'bg-[#252a32] text-[#dee2ec] border-b-2 border-[#00e3fd]'
-              : 'bg-[#171c23] text-[#8b949e] hover:bg-[#1b2027]'
+              ? 'bg-[#1e293b] text-[#f8fafc] border-[#2563eb]'
+              : 'text-[#94a3b8] hover:bg-[#1e293b]/50 border-transparent'
           }`}
         >
           ALL ({incidents.length})
@@ -128,21 +127,21 @@ export default function IncidentQueue({
         <button
           data-testid="filter-critical"
           onClick={() => setFilterSeverity('CRITICAL')}
-          className={`py-1.5 flex items-center justify-center gap-1 transition-colors ${
+          className={`py-1.5 flex items-center justify-center gap-1 transition-colors border-b-2 ${
             filterSeverity === 'CRITICAL'
-              ? 'bg-[#252a32] text-[#ffdad6] border-b-2 border-[#ef4444]'
-              : 'bg-[#171c23] text-[#ef4444] hover:bg-[#1b2027]'
+              ? 'bg-[#1e293b] text-[#fca5a5] border-[#ef4444]'
+              : 'text-[#ef4444] hover:bg-[#1e293b]/50 border-transparent'
           }`}
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-[#ef4444] animate-pulse"></span>
+          <span className="w-1.5 h-1.5 rounded-full bg-[#ef4444]"></span>
           CRIT ({criticalCount})
         </button>
         <button
           onClick={() => setFilterSeverity('URGENT')}
-          className={`py-1.5 transition-colors ${
+          className={`py-1.5 transition-colors border-b-2 ${
             filterSeverity === 'URGENT'
-              ? 'bg-[#252a32] text-[#dee2ec] border-b-2 border-[#ff9500]'
-              : 'bg-[#171c23] text-[#ad887e] hover:bg-[#1b2027]'
+              ? 'bg-[#1e293b] text-[#fde68a] border-[#f59e0b]'
+              : 'text-[#f59e0b] hover:bg-[#1e293b]/50 border-transparent'
           }`}
         >
           URG ({urgentCount})
@@ -150,10 +149,10 @@ export default function IncidentQueue({
         <button
           data-testid="filter-low"
           onClick={() => setFilterSeverity('LOW')}
-          className={`py-1.5 transition-colors ${
+          className={`py-1.5 transition-colors border-b-2 ${
             filterSeverity === 'LOW'
-              ? 'bg-[#252a32] text-[#dee2ec] border-b-2 border-[#4edea3]'
-              : 'bg-[#171c23] text-[#8b949e] hover:bg-[#1b2027]'
+              ? 'bg-[#1e293b] text-[#a7f3d0] border-[#10b981]'
+              : 'text-[#10b981] hover:bg-[#1e293b]/50 border-transparent'
           }`}
         >
           LOW ({lowCount})
@@ -161,22 +160,22 @@ export default function IncidentQueue({
       </div>
 
       {/* Search Input Bar */}
-      <div className="p-1.5 bg-[#171c23] border-b border-[#30353d] flex gap-1">
+      <div className="p-2 bg-[#111827] border-b border-[#334155] flex gap-1.5">
         <div className="relative flex-1">
-          <Search className="w-3.5 h-3.5 text-[#8b949e] absolute left-2 top-2" />
+          <Search className="w-3.5 h-3.5 text-[#64748b] absolute left-2.5 top-2.5" />
           <input
             data-testid="search-input"
             type="text"
-            placeholder="FILTER BY CALLSIGN, MSG, ID..."
+            placeholder="Search by callsign, message, ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#090f15] border border-[#30353d] text-[#dee2ec] font-mono text-xs pl-7 pr-2 py-1 focus:border-[#00e3fd] outline-none"
+            className="w-full bg-[#0b0f19] border border-[#334155] rounded text-[#f8fafc] text-xs pl-8 pr-2.5 py-1.5 focus:border-[#38bdf8] outline-none"
           />
         </div>
         {searchQuery && (
           <button
             onClick={() => setSearchQuery('')}
-            className="px-2 py-1 bg-[#252a32] text-[#dee2ec] font-mono text-[10px] border border-[#30353d]"
+            className="px-2.5 py-1 bg-[#1e293b] text-[#94a3b8] hover:text-white rounded text-xs border border-[#334155]"
           >
             CLEAR
           </button>
@@ -184,9 +183,9 @@ export default function IncidentQueue({
       </div>
 
       {/* Scrollable Incident Cards Stream */}
-      <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5">
+      <div className="flex-1 overflow-y-auto p-2 space-y-2">
         {filteredIncidents.length === 0 ? (
-          <div className="p-6 text-center text-[#8b949e] font-mono text-xs border border-dashed border-[#30353d] m-2">
+          <div className="p-6 text-center text-[#64748b] text-xs border border-dashed border-[#334155] rounded m-2">
             NO INCIDENTS MATCHING CRITERIA
           </div>
         ) : (
@@ -207,26 +206,26 @@ export default function IncidentQueue({
               <div
                 key={inc.uuid || inc.id || Math.random()}
                 onClick={() => onSelectIncident(inc)}
-                className={`relative p-2.5 transition-all cursor-pointer border ${
+                className={`relative p-3 rounded transition-all cursor-pointer border ${
                   isSelected
-                    ? 'bg-[#252a32] border-[#00e3fd] shadow-md'
-                    : 'bg-[#171c23] border-[#30353d] hover:border-[#484f58] hover:bg-[#1b2027]'
-                } ${isCritical ? 'border-l-4 border-l-[#ef4444]' : 'border-l-4 border-l-[#00e3fd]'}`}
+                    ? 'bg-[#1e293b] border-[#38bdf8] shadow'
+                    : 'bg-[#111827] border-[#334155] hover:border-[#475569] hover:bg-[#172033]'
+                } ${isCritical ? 'border-l-4 border-l-[#dc2626]' : 'border-l-4 border-l-[#2563eb]'}`}
               >
                 {/* Header: Priority Badge & Hop Badge */}
-                <div className="flex items-center justify-between gap-1 mb-1.5">
+                <div className="flex items-center justify-between gap-1 mb-2">
                   <div className="flex items-center gap-1.5">
                     <span
-                      className={`font-mono text-[10px] font-bold px-1.5 py-0.5 border flex items-center gap-1 ${
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded border flex items-center gap-1 ${
                         isCritical
-                          ? 'bg-[#93000a] text-white border-[#ef4444]'
+                          ? 'bg-[#450a0a] text-[#fecaca] border-[#dc2626]'
                           : sev >= 5
-                          ? 'bg-[#3b2d00] text-[#ffddb8] border-[#ff9500]'
-                          : 'bg-[#003824] text-[#6ffbbe] border-[#4edea3]'
+                          ? 'bg-[#451a03] text-[#fde68a] border-[#b45309]'
+                          : 'bg-[#064e3b] text-[#a7f3d0] border-[#059669]'
                       }`}
                     >
                       {isCritical && (
-                        <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span>
+                        <span className="w-1.5 h-1.5 bg-[#ef4444] rounded-full inline-block"></span>
                       )}
                       <span>
                         {isCritical ? 'CRITICAL P0' : sev >= 5 ? 'URGENT P1' : 'MONITORING P2'}
@@ -236,14 +235,14 @@ export default function IncidentQueue({
                     {/* Hop Count Badge */}
                     <span
                       data-testid="hop-badge"
-                      className="font-mono text-[10px] px-1.5 py-0.5 bg-[#090f15] text-[#9cf0ff] border border-[#30353d]"
+                      className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-[#0b0f19] text-[#94a3b8] border border-[#334155]"
                     >
                       {hopCount === 0 ? 'DIRECT RF' : `HOP: ${hopCount}`}
                     </span>
                   </div>
 
                   {/* Relative / Timestamp */}
-                  <span className="font-mono text-[10px] text-[#8b949e]">
+                  <span className="font-mono text-[10px] text-[#64748b]">
                     {inc.timestamp
                       ? new Date(inc.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                       : 'LIVE'}
@@ -251,55 +250,55 @@ export default function IncidentQueue({
                 </div>
 
                 {/* Emergency Type & Sender */}
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#dee2ec]">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-[#f8fafc]">
                     {getEmergencyIcon(inc.emergencyType)}
                     <span className="uppercase tracking-wide">
                       {inc.emergencyType || 'EMERGENCY BEACON'}
                     </span>
                   </div>
-                  <span className="font-mono text-[11px] text-[#00daf3] font-medium">
+                  <span className="font-mono text-xs text-[#38bdf8] font-medium">
                     {inc.senderName || inc.senderId || 'UNKNOWN NODE'}
                   </span>
                 </div>
 
                 {/* Distress Message */}
-                <p className="font-sans text-xs text-[#dee2ec] leading-relaxed mb-2 line-clamp-2">
+                <p className="text-xs text-[#cbd5e1] leading-relaxed mb-2.5 line-clamp-2">
                   {inc.message || 'Distress signal received without payload notes.'}
                 </p>
 
                 {/* Metadata Bento Bar: GPS (Honest!), Casualties, Duplicate */}
-                <div className="grid grid-cols-2 gap-1 bg-[#090f15] p-1.5 border border-[#30353d] font-mono text-[10px] mb-2">
+                <div className="grid grid-cols-2 gap-1.5 bg-[#0b0f19] p-2 rounded border border-[#334155] text-[11px] mb-2">
                   <div>
-                    <span className="text-[#8b949e] block text-[9px]">LOCATION:</span>
+                    <span className="text-[#64748b] block text-[9px] font-bold">LOCATION:</span>
                     {hasGps ? (
-                      <span className="text-[#dee2ec] font-semibold">
+                      <span className="text-[#e2e8f0] font-mono text-[10px] font-medium">
                         {inc.latitude.toFixed(4)}°, {inc.longitude.toFixed(4)}°
                       </span>
                     ) : (
-                      <span className="text-[#ff9500] font-bold flex items-center gap-0.5">
-                        <AlertTriangle className="w-2.5 h-2.5 text-[#ff9500]" />
+                      <span className="text-[#f59e0b] font-medium flex items-center gap-1 text-[10px]">
+                        <AlertTriangle className="w-2.5 h-2.5 text-[#f59e0b]" />
                         <span>LOCATION UNAVAILABLE</span>
                       </span>
                     )}
                   </div>
                   <div>
-                    <span className="text-[#8b949e] block text-[9px]">ASSIGNMENT:</span>
-                    <span className={inc.assignedTo ? 'text-[#4edea3]' : 'text-[#8b949e]'}>
+                    <span className="text-[#64748b] block text-[9px] font-bold">ASSIGNMENT:</span>
+                    <span className={`text-[10px] font-medium ${inc.assignedTo ? 'text-[#10b981]' : 'text-[#64748b]'}`}>
                       {inc.assignedTo || 'UNASSIGNED'}
                     </span>
                   </div>
                 </div>
 
                 {/* Footer Actions */}
-                <div className="flex items-center justify-between pt-1 border-t border-[#30353d]">
+                <div className="flex items-center justify-between pt-1.5 border-t border-[#334155]">
                   {inc.duplicate_count ? (
-                    <span className="font-mono text-[10px] text-[#ff9500] flex items-center gap-1">
-                      <Copy className="w-2.5 h-2.5" />
+                    <span className="text-[10px] text-[#f59e0b] flex items-center gap-1 font-medium">
+                      <Copy className="w-3 h-3" />
                       <span>{inc.duplicate_count} LINKED REPORTS</span>
                     </span>
                   ) : (
-                    <span className="font-mono text-[10px] text-[#8b949e]">
+                    <span className="font-mono text-[10px] text-[#64748b]">
                       ID: {(inc.uuid || inc.id || 'N/A').substring(0, 10)}...
                     </span>
                   )}
@@ -309,10 +308,10 @@ export default function IncidentQueue({
                       e.stopPropagation();
                       onOpenDispatch(inc);
                     }}
-                    className="bg-[#1b2027] hover:bg-[#ff5625] hover:text-[#090f15] text-[#9cf0ff] font-mono text-[10px] font-bold px-2 py-0.5 border border-[#30353d] transition-colors flex items-center gap-0.5"
+                    className="bg-[#1e293b] hover:bg-[#2563eb] text-[#f8fafc] text-[11px] font-semibold px-2.5 py-0.5 rounded border border-[#334155] hover:border-[#3b82f6] transition-colors flex items-center gap-1"
                   >
                     <span>DISPATCH</span>
-                    <ChevronRight className="w-3 h-3" />
+                    <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>

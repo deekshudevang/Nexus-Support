@@ -40,3 +40,4 @@ Because the physical Motorola Edge 50 Pro is disconnected:
 - Live on-device tokens/sec generation benchmark, NPU/GPU thermal throttle measurement, and RAM consumption during active Gemma inference are **BLOCKED** from physical execution.
 - In compliance with the **Zero-Fabrication Mandate**, simulated token generation numbers are rejected.
 - Physical inference benchmarks will run immediately upon physical device re-connection.
+

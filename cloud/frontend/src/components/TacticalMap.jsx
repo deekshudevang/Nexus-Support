@@ -19,7 +19,7 @@ const createSosMarker = (sev = 9) =>
   L.divIcon({
     className: 'custom-sos-marker',
     html: `<div class="marker-pin-sos ${sev >= 8 ? 'sos-pulsing' : ''}" style="background: ${
-      sev >= 8 ? '#ef4444' : '#ff9500'
+      sev >= 8 ? '#dc2626' : '#d97706'
     };">
             <span style="font-size: 10px; font-weight: 800; color: #fff;">SOS</span>
            </div>`,
@@ -31,9 +31,9 @@ const createNodeMarker = (role = 'RELAY') =>
   L.divIcon({
     className: 'custom-node-marker',
     html: `<div class="marker-pin-node" style="background: ${
-      role === 'GATEWAY' ? '#00e3fd' : '#4edea3'
+      role === 'GATEWAY' ? '#0284c7' : '#16a34a'
     };">
-            <span style="font-size: 9px; font-weight: 800; color: #090f15;">${role === 'GATEWAY' ? 'GW' : 'N'}</span>
+            <span style="font-size: 9px; font-weight: 800; color: #ffffff;">${role === 'GATEWAY' ? 'GW' : 'N'}</span>
            </div>`,
     iconSize: [24, 24],
     iconAnchor: [12, 12],
@@ -102,43 +102,43 @@ export default function TacticalMap({
       : [37.7749, -122.4194];
 
   return (
-    <main className="flex-1 relative flex flex-col bg-[#090f15] overflow-hidden select-none">
+    <main className="flex-1 relative flex flex-col bg-[#0b0f19] overflow-hidden select-none">
       {/* Top Floating Map Controls HUD */}
       <div className="absolute top-2 left-2 right-2 z-30 flex items-center justify-between pointer-events-none">
         {/* Layer Toggles */}
-        <div className="flex items-center gap-1 pointer-events-auto bg-[#090f15]/90 backdrop-blur-sm border border-[#30353d] p-1">
-          <span className="text-[10px] font-mono font-bold text-[#ffb5a0] px-1 border-r border-[#30353d]">
-            HUD LAYERS:
+        <div className="flex items-center gap-1 pointer-events-auto bg-[#111827]/95 backdrop-blur-sm border border-[#334155] rounded p-1 shadow">
+          <span className="text-[10px] font-sans font-semibold text-[#94a3b8] px-1.5 border-r border-[#334155]">
+            MAP LAYERS:
           </span>
           <button
             onClick={() => setActiveLayer('RF_MESH')}
-            className={`font-mono text-[10px] px-2 py-0.5 border ${
+            className={`font-sans text-[11px] font-medium px-2 py-0.5 rounded transition-colors ${
               activeLayer === 'RF_MESH'
-                ? 'bg-[#1b2027] text-[#00e3fd] border-[#00e3fd]'
-                : 'bg-[#171c23] text-[#8b949e] border-[#30353d]'
+                ? 'bg-[#2563eb] text-white'
+                : 'text-[#94a3b8] hover:text-white hover:bg-[#1e293b]'
             }`}
           >
-            RF MESH TOPOLOGY
+            RF MESH
           </button>
           <button
             onClick={() => setActiveLayer('THERMAL')}
-            className={`font-mono text-[10px] px-2 py-0.5 border ${
+            className={`font-sans text-[11px] font-medium px-2 py-0.5 rounded transition-colors ${
               activeLayer === 'THERMAL'
-                ? 'bg-[#1b2027] text-[#00e3fd] border-[#00e3fd]'
-                : 'bg-[#171c23] text-[#8b949e] border-[#30353d]'
+                ? 'bg-[#2563eb] text-white'
+                : 'text-[#94a3b8] hover:text-white hover:bg-[#1e293b]'
             }`}
           >
-            THERMAL FLIR
+            TERRAIN / TOPO
           </button>
           <button
             onClick={() => setActiveLayer('SAT')}
-            className={`font-mono text-[10px] px-2 py-0.5 border ${
+            className={`font-sans text-[11px] font-medium px-2 py-0.5 rounded transition-colors ${
               activeLayer === 'SAT'
-                ? 'bg-[#1b2027] text-[#00e3fd] border-[#00e3fd]'
-                : 'bg-[#171c23] text-[#8b949e] border-[#30353d]'
+                ? 'bg-[#2563eb] text-white'
+                : 'text-[#94a3b8] hover:text-white hover:bg-[#1e293b]'
             }`}
           >
-            SAT IMAGERY
+            SATELLITE
           </button>
         </div>
 
@@ -147,9 +147,9 @@ export default function TacticalMap({
           <div className="pointer-events-auto">
             <button
               onClick={() => setShowUnmappedDrawer(!showUnmappedDrawer)}
-              className="flex items-center gap-1.5 bg-[#541100] text-[#ffdad6] border border-[#ff5625] px-2.5 py-1 font-mono text-[10px] font-bold shadow-lg hover:bg-[#601400] transition-colors"
+              className="flex items-center gap-1.5 bg-[#7f1d1d] hover:bg-[#991b1b] text-white border border-[#dc2626] rounded px-3 py-1 text-xs font-semibold shadow transition-colors"
             >
-              <AlertTriangle className="w-3.5 h-3.5 text-[#ff5625] animate-pulse" />
+              <AlertTriangle className="w-3.5 h-3.5 text-[#fca5a5]" />
               <span>AWAITING GPS FIX ({unmappedIncidents.length})</span>
               {showUnmappedDrawer ? (
                 <ChevronUp className="w-3 h-3" />
@@ -163,20 +163,20 @@ export default function TacticalMap({
 
       {/* Unmapped Incidents Flyout Drawer (Zero-Fabrication) */}
       {showUnmappedDrawer && unmappedIncidents.length > 0 && (
-        <div className="absolute top-12 right-2 w-80 bg-[#171c23]/95 backdrop-blur-md border border-[#ff5625] p-2 z-40 shadow-2xl font-mono text-xs">
-          <div className="flex items-center justify-between border-b border-[#30353d] pb-1 mb-1.5">
-            <span className="font-bold text-[#ffdad6] text-[11px] flex items-center gap-1">
-              <AlertTriangle className="w-3.5 h-3.5 text-[#ff5625]" />
+        <div className="absolute top-12 right-2 w-80 bg-[#111827]/98 backdrop-blur-md border border-[#dc2626] rounded-lg p-3 z-40 shadow-2xl text-xs">
+          <div className="flex items-center justify-between border-b border-[#334155] pb-2 mb-2">
+            <span className="font-bold text-[#fecaca] text-xs flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4 text-[#ef4444]" />
               UNMAPPED INCIDENTS (NO GPS FIX)
             </span>
             <button
               onClick={() => setShowUnmappedDrawer(false)}
-              className="text-[#8b949e] hover:text-white text-[10px]"
+              className="text-[#94a3b8] hover:text-white text-xs font-semibold"
             >
               [CLOSE]
             </button>
           </div>
-          <p className="text-[10px] text-[#8b949e] mb-2">
+          <p className="text-[11px] text-[#94a3b8] mb-2 leading-relaxed">
             These nodes transmitted distress beacons without GPS coordinate locks. Coordinates are NOT fabricated.
           </p>
           <div className="max-h-48 overflow-y-auto space-y-1.5">
@@ -187,17 +187,17 @@ export default function TacticalMap({
                   onSelectIncident(inc);
                   setShowUnmappedDrawer(false);
                 }}
-                className="p-1.5 bg-[#090f15] border border-[#30353d] hover:border-[#ff5625] cursor-pointer"
+                className="p-2 bg-[#1e293b] border border-[#334155] hover:border-[#dc2626] rounded cursor-pointer transition-colors"
               >
-                <div className="flex justify-between items-center text-[10px]">
-                  <span className="text-[#ff5625] font-bold">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-[#ef4444] font-bold">
                     {inc.emergencyType || 'SOS'}
                   </span>
-                  <span className="text-[#8b949e]">
+                  <span className="text-[#94a3b8] font-mono text-[11px]">
                     {inc.senderName || inc.senderId || 'NODE'}
                   </span>
                 </div>
-                <p className="text-[#dee2ec] text-[11px] line-clamp-1 mt-0.5">
+                <p className="text-[#f8fafc] text-xs line-clamp-1 mt-1">
                   {inc.message || 'Distress message awaiting fix'}
                 </p>
               </div>

@@ -130,44 +130,44 @@ export default function DispatchPanel({
   return (
     <>
       {/* Right Column: Field Responders Telemetry */}
-      <aside className="w-80 md:w-88 xl:w-96 flex flex-col bg-[#090f15] border-l border-[#30353d] shrink-0 z-20 select-none">
+      <aside className="w-80 md:w-88 xl:w-96 flex flex-col bg-[#0b0f19] border-l border-[#334155] shrink-0 z-20 select-none">
         {/* Panel Header & Statistics */}
-        <div className="p-2.5 bg-[#171c23] border-b border-[#30353d]">
+        <div className="p-2.5 bg-[#111827] border-b border-[#334155]">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-[#00e3fd]" />
-              <h2 className="font-bold text-xs uppercase tracking-wider text-[#dee2ec]">
+              <Users className="w-4 h-4 text-sky-400" />
+              <h2 className="font-bold text-xs uppercase tracking-wider text-slate-100">
                 FIELD ASSET TELEMETRY
               </h2>
             </div>
-            <Radio className="w-3.5 h-3.5 text-[#4edea3] animate-pulse" />
+            <Radio className="w-3.5 h-3.5 text-emerald-400" />
           </div>
 
           {/* Quick Metrics */}
-          <div className="grid grid-cols-3 gap-1 bg-[#090f15] p-1 border border-[#30353d] text-center font-mono">
+          <div className="grid grid-cols-3 gap-1 bg-[#0b0f19] p-1.5 border border-[#334155] text-center font-mono rounded">
             <div>
-              <span className="text-[#4edea3] font-bold text-sm block">
+              <span className="text-emerald-400 font-bold text-sm block">
                 {deployedCount}
               </span>
-              <span className="text-[#8b949e] text-[9px] block">DEPLOYED</span>
+              <span className="text-slate-400 text-[9px] block">DEPLOYED</span>
             </div>
             <div>
-              <span className="text-[#00e3fd] font-bold text-sm block">
+              <span className="text-sky-400 font-bold text-sm block">
                 {inTransitCount}
               </span>
-              <span className="text-[#8b949e] text-[9px] block">IN TRANSIT</span>
+              <span className="text-slate-400 text-[9px] block">IN TRANSIT</span>
             </div>
             <div>
-              <span className="text-[#dee2ec] font-bold text-sm block">
+              <span className="text-slate-200 font-bold text-sm block">
                 {availableCount}
               </span>
-              <span className="text-[#8b949e] text-[9px] block">AVAILABLE</span>
+              <span className="text-slate-400 text-[9px] block">AVAILABLE</span>
             </div>
           </div>
         </div>
 
         {/* Responders Cards Stream */}
-        <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5">
+        <div className="flex-1 overflow-y-auto p-2 space-y-2">
           {displayResponders.map((resp) => {
             const isAvail = resp.status === 'AVAILABLE';
             const isOnScene = resp.status === 'ON_SCENE';
@@ -175,25 +175,25 @@ export default function DispatchPanel({
             return (
               <div
                 key={resp.id}
-                className="bg-[#171c23] border border-[#30353d] p-2 hover:border-[#484f58] transition-all"
+                className="bg-[#111827] border border-[#334155] rounded p-2.5 hover:border-slate-500 transition-colors"
               >
                 {/* Header: Callsign & Status */}
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center justify-between mb-1.5">
                   <div>
-                    <span className="font-bold text-xs text-[#dee2ec] block">
+                    <span className="font-bold text-xs text-slate-100 block">
                       {resp.callsign || resp.name}
                     </span>
-                    <span className="font-mono text-[10px] text-[#8b949e]">
+                    <span className="font-mono text-[10px] text-slate-400">
                       {resp.name} // {resp.team || 'SAR SQUAD'}
                     </span>
                   </div>
                   <span
-                    className={`font-mono text-[10px] font-bold px-1.5 py-0.5 border ${
+                    className={`font-mono text-[10px] font-bold px-1.5 py-0.5 rounded border ${
                       isOnScene
-                        ? 'bg-[#003824] text-[#6ffbbe] border-[#4edea3]'
+                        ? 'bg-emerald-950/60 text-emerald-400 border-emerald-600/50'
                         : isAvail
-                        ? 'bg-[#1b2027] text-[#00e3fd] border-[#00e3fd]'
-                        : 'bg-[#3b2d00] text-[#ffddb8] border-[#ff9500]'
+                        ? 'bg-sky-950/60 text-sky-400 border-sky-600/50'
+                        : 'bg-amber-950/60 text-amber-400 border-amber-600/50'
                     }`}
                   >
                     {resp.status}
@@ -201,38 +201,38 @@ export default function DispatchPanel({
                 </div>
 
                 {/* Vitals Telemetry Grid */}
-                <div className="grid grid-cols-2 gap-1 bg-[#090f15] p-1.5 border border-[#30353d] font-mono text-[10px] my-1.5">
+                <div className="grid grid-cols-2 gap-1 bg-[#0b0f19] p-2 border border-[#334155] rounded font-mono text-[10px] my-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-[#8b949e]">HR:</span>
-                    <span className="text-[#ef4444] font-bold flex items-center gap-0.5">
-                      <Heart className="w-2.5 h-2.5 text-[#ef4444]" />
+                    <span className="text-slate-400">HR:</span>
+                    <span className="text-red-400 font-bold flex items-center gap-0.5">
+                      <Heart className="w-2.5 h-2.5 text-red-500" />
                       {resp.heartRate || 78} BPM
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-[#8b949e]">O2:</span>
-                    <span className="text-[#00daf3] font-bold">
+                    <span className="text-slate-400">O2:</span>
+                    <span className="text-sky-400 font-bold">
                       {resp.o2Level || 98}%
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-[#8b949e]">BAT:</span>
-                    <span className="text-[#4edea3] font-bold">
+                    <span className="text-slate-400">BAT:</span>
+                    <span className="text-emerald-400 font-bold">
                       {resp.battery || 85}%
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-[#8b949e]">SIG:</span>
-                    <span className="text-[#9cf0ff]">
+                    <span className="text-slate-400">SIG:</span>
+                    <span className="text-slate-300">
                       {resp.rssi || -68} dBm
                     </span>
                   </div>
                 </div>
 
                 {/* Action footer */}
-                <div className="flex items-center justify-between text-[10px] font-mono pt-1 border-t border-[#30353d]">
-                  <span className="text-[#8b949e]">FREQ: 433.850 MHz</span>
-                  <span className="text-[#00e3fd] cursor-pointer hover:underline">
+                <div className="flex items-center justify-between text-[10px] font-mono pt-1.5 border-t border-[#334155]">
+                  <span className="text-slate-400">FREQ: 433.850 MHz</span>
+                  <span className="text-sky-400 cursor-pointer hover:underline">
                     PTT READY
                   </span>
                 </div>
@@ -245,50 +245,50 @@ export default function DispatchPanel({
       {/* Tactical Dispatch Modal Dialog */}
       {dispatchIncident && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 select-none">
-          <div className="w-full max-w-lg bg-[#171c23] border border-[#ff5625] shadow-2xl p-4 font-mono text-xs">
+          <div className="w-full max-w-lg bg-[#111827] border border-slate-700 rounded-lg shadow-2xl p-5 font-mono text-xs">
             {/* Modal Title */}
-            <div className="flex items-center justify-between border-b border-[#30353d] pb-2 mb-3">
+            <div className="flex items-center justify-between border-b border-[#334155] pb-3 mb-3">
               <div className="flex items-center gap-2">
-                <Send className="w-4 h-4 text-[#ff5625]" />
-                <h3 className="font-bold text-sm text-[#dee2ec] tracking-wider uppercase">
+                <Send className="w-4 h-4 text-red-500" />
+                <h3 className="font-bold text-sm text-slate-100 tracking-wider uppercase">
                   DISPATCH ASSIGNMENT // COMMAND OVERRIDE
                 </h3>
               </div>
               <button
                 onClick={onCloseDispatchModal}
-                className="text-[#8b949e] hover:text-white"
+                className="text-slate-400 hover:text-white"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Target Incident Context */}
-            <div className="bg-[#090f15] border border-[#30353d] p-2.5 mb-3">
+            <div className="bg-[#0b0f19] border border-[#334155] rounded p-3 mb-3">
               <div className="flex justify-between items-center mb-1">
-                <span className="text-[#ff5625] font-bold">
+                <span className="text-red-400 font-bold">
                   INCIDENT: {dispatchIncident.emergencyType || 'EMERGENCY BEACON'}
                 </span>
-                <span className="text-[#8b949e] text-[10px]">
+                <span className="text-slate-400 text-[10px]">
                   ID: {(dispatchIncident.uuid || dispatchIncident.id || 'N/A').substring(0, 16)}
                 </span>
               </div>
-              <p className="font-sans text-xs text-[#dee2ec] line-clamp-2">
+              <p className="font-sans text-xs text-slate-300 line-clamp-2">
                 {dispatchIncident.message || 'Distress signal received without payload notes.'}
               </p>
             </div>
 
             {/* Error / Conflict Banner */}
             {dispatchError && (
-              <div className="mb-3 p-2 bg-[#541100] border border-[#ff5625] text-[#ffdad6] text-xs flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-[#ff5625] shrink-0" />
+              <div className="mb-3 p-2.5 bg-red-950/70 border border-red-700 text-red-200 text-xs flex items-center gap-2 rounded">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
                 <span>{dispatchError}</span>
               </div>
             )}
 
             {/* Success Banner */}
             {dispatchSuccess && (
-              <div className="mb-3 p-2 bg-[#003824] border border-[#4edea3] text-[#6ffbbe] text-xs flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-[#4edea3] shrink-0" />
+              <div className="mb-3 p-2.5 bg-emerald-950/70 border border-emerald-700 text-emerald-200 text-xs flex items-center gap-2 rounded">
+                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span>{dispatchSuccess}</span>
               </div>
             )}
@@ -296,14 +296,14 @@ export default function DispatchPanel({
             {/* Unit Selection */}
             <div className="space-y-3 mb-4">
               <div>
-                <label className="block text-[#8b949e] text-[10px] uppercase mb-1">
+                <label className="block text-slate-400 text-[10px] uppercase mb-1">
                   SELECT FIELD UNIT / RESPONDER:
                 </label>
                 <select
                   data-testid="responder-select"
                   value={selectedResponderId}
                   onChange={(e) => setSelectedResponderId(e.target.value)}
-                  className="w-full bg-[#090f15] border border-[#30353d] text-[#dee2ec] font-mono text-xs px-2 py-1.5 focus:border-[#00e3fd] outline-none"
+                  className="w-full bg-[#0b0f19] border border-[#334155] rounded text-slate-200 font-mono text-xs px-2.5 py-2 focus:border-sky-500 outline-none"
                 >
                   <option value="">-- CHOOSE FIELD RESPONDER --</option>
                   {displayResponders.map((r) => (
@@ -315,13 +315,13 @@ export default function DispatchPanel({
               </div>
 
               <div>
-                <label className="block text-[#8b949e] text-[10px] uppercase mb-1">
+                <label className="block text-slate-400 text-[10px] uppercase mb-1">
                   TACTICAL MISSION ROLE:
                 </label>
                 <select
                   value={assignedRole}
                   onChange={(e) => setAssignedRole(e.target.value)}
-                  className="w-full bg-[#090f15] border border-[#30353d] text-[#dee2ec] font-mono text-xs px-2 py-1.5 focus:border-[#00e3fd] outline-none"
+                  className="w-full bg-[#0b0f19] border border-[#334155] rounded text-slate-200 font-mono text-xs px-2.5 py-2 focus:border-sky-500 outline-none"
                 >
                   <option value="LEAD">LEAD (Primary Incident Commander)</option>
                   <option value="MEDIC">MEDIC (Triage & Stabilization)</option>
@@ -332,7 +332,7 @@ export default function DispatchPanel({
               </div>
 
               <div>
-                <label className="block text-[#8b949e] text-[10px] uppercase mb-1">
+                <label className="block text-slate-400 text-[10px] uppercase mb-1">
                   OPERATIONAL DIRECTIVE & LOADOUT NOTES:
                 </label>
                 <textarea
@@ -340,17 +340,17 @@ export default function DispatchPanel({
                   value={operationalNotes}
                   onChange={(e) => setOperationalNotes(e.target.value)}
                   placeholder="Specify entry vector, radio channel, and equipment requirements..."
-                  className="w-full bg-[#090f15] border border-[#30353d] text-[#dee2ec] font-mono text-xs p-2 focus:border-[#00e3fd] outline-none"
+                  className="w-full bg-[#0b0f19] border border-[#334155] rounded text-slate-200 font-mono text-xs p-2.5 focus:border-sky-500 outline-none"
                 />
               </div>
             </div>
 
             {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#30353d]">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#334155]">
               <button
                 onClick={onCloseDispatchModal}
                 disabled={isSubmitting}
-                className="px-3 py-1.5 bg-[#1b2027] hover:bg-[#252a32] text-[#dee2ec] font-bold text-xs border border-[#30353d]"
+                className="px-3.5 py-1.5 bg-[#1e293b] hover:bg-slate-700 text-slate-200 font-bold text-xs border border-[#334155] rounded"
               >
                 CANCEL / STANDBY
               </button>
@@ -358,10 +358,10 @@ export default function DispatchPanel({
                 data-testid="confirm-dispatch-btn"
                 onClick={handleConfirmDispatch}
                 disabled={isSubmitting || !selectedResponderId}
-                className={`px-4 py-1.5 font-bold text-xs tracking-wider border flex items-center gap-1.5 ${
+                className={`px-4 py-1.5 font-bold text-xs tracking-wider rounded border flex items-center gap-1.5 ${
                   isSubmitting || !selectedResponderId
-                    ? 'bg-[#30353d] text-[#8b949e] border-[#30353d] cursor-not-allowed'
-                    : 'bg-[#ff5625] hover:bg-[#b12d00] text-[#090f15] border-[#ffb5a0]'
+                    ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'
+                    : 'bg-red-600 hover:bg-red-700 text-white border-red-500'
                 }`}
               >
                 <Send className="w-3.5 h-3.5" />

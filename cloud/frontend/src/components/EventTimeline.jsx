@@ -38,64 +38,64 @@ export default function EventTimeline({
   };
 
   return (
-    <div className="bg-[#090f15] border-t border-[#30353d] font-mono text-xs select-none">
+    <div className="bg-[#0b0f19] border-t border-[#334155] font-mono text-xs select-none">
       {/* Timeline Toggle Bar */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="px-3 py-1 bg-[#171c23] hover:bg-[#1b2027] cursor-pointer flex items-center justify-between border-b border-[#30353d]"
+        className="px-3 py-1.5 bg-[#111827] hover:bg-slate-800 cursor-pointer flex items-center justify-between border-b border-[#334155] transition-colors"
       >
         <div className="flex items-center gap-2">
-          <Activity className="w-3.5 h-3.5 text-[#00e3fd]" />
-          <span className="font-bold text-[11px] text-[#dee2ec] tracking-wider uppercase">
+          <Activity className="w-3.5 h-3.5 text-sky-400" />
+          <span className="font-bold text-[11px] text-slate-200 tracking-wider uppercase">
             REAL-TIME STREAM AUDIT TIMELINE ({events.length} EVENTS BUFFERED)
           </span>
           {events.length > 0 && (
-            <span className="bg-[#252a32] text-[#4edea3] text-[10px] px-1.5 py-0.5 border border-[#30353d]">
+            <span className="bg-[#1e293b] text-emerald-400 text-[10px] px-1.5 py-0.5 border border-[#334155] rounded">
               LATEST: #{events[events.length - 1].stream_seq || events[events.length - 1].seq || events.length}
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-[#8b949e]">
+          <span className="text-[10px] text-slate-400">
             {isExpanded ? '[COLLAPSE LOGS]' : '[EXPAND LOGS]'}
           </span>
           {isExpanded ? (
-            <ChevronDown className="w-3.5 h-3.5 text-[#8b949e]" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           ) : (
-            <ChevronUp className="w-3.5 h-3.5 text-[#8b949e]" />
+            <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
           )}
         </div>
       </div>
 
       {/* Expanded Timeline Drawer */}
       {isExpanded && (
-        <div className="p-3 bg-[#090f15] max-h-48 overflow-y-auto space-y-2">
+        <div className="p-3 bg-[#0b0f19] max-h-48 overflow-y-auto space-y-2">
           {/* Replay Controls */}
-          <div className="flex items-center justify-between bg-[#171c23] p-1.5 border border-[#30353d] text-[10px]">
+          <div className="flex items-center justify-between bg-[#111827] p-2 border border-[#334155] rounded text-[10px]">
             <div className="flex items-center gap-2">
-              <span className="text-[#8b949e]">REPLAY FROM STREAM_SEQ:</span>
+              <span className="text-slate-400">REPLAY FROM STREAM_SEQ:</span>
               <input
                 type="number"
                 value={replaySinceSeq}
                 onChange={(e) => setReplaySinceSeq(e.target.value)}
-                className="w-16 bg-[#090f15] border border-[#30353d] text-[#dee2ec] px-1.5 py-0.5 outline-none focus:border-[#00e3fd]"
+                className="w-16 bg-[#0b0f19] border border-[#334155] rounded text-slate-200 px-2 py-0.5 outline-none focus:border-sky-500"
               />
               <button
                 onClick={handleTriggerReplay}
                 disabled={isReplaying}
-                className="bg-[#252a32] hover:bg-[#30353d] text-[#00e3fd] px-2 py-0.5 border border-[#30353d] font-bold"
+                className="bg-[#1e293b] hover:bg-slate-700 text-sky-400 px-2.5 py-1 border border-[#334155] rounded font-bold"
               >
                 {isReplaying ? 'PULLING...' : 'TRIGGER REPLAY'}
               </button>
             </div>
             {replayError && (
-              <span className="text-[#ff5625] font-semibold">{replayError}</span>
+              <span className="text-red-400 font-semibold">{replayError}</span>
             )}
           </div>
 
           {/* Events List */}
           {events.length === 0 ? (
-            <div className="p-3 text-center text-[#8b949e] border border-dashed border-[#30353d]">
+            <div className="p-3 text-center text-slate-500 border border-dashed border-[#334155] rounded">
               NO STREAM EVENTS RECEIVED YET. WAITING FOR WEBSOCKET OUTBOX BURSTS...
             </div>
           ) : (
@@ -108,20 +108,20 @@ export default function EventTimeline({
                 return (
                   <div
                     key={ev.id || `${seq}-${idx}`}
-                    className="flex items-center justify-between p-1 bg-[#171c23] border border-[#30353d] text-[10px] hover:border-[#00e3fd]"
+                    className="flex items-center justify-between p-1.5 bg-[#111827] border border-[#334155] rounded text-[10px] hover:border-slate-500"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="text-[#4edea3] font-bold">#{seq}</span>
-                      <span className="bg-[#252a32] text-[#9cf0ff] px-1 border border-[#30353d]">
+                      <span className="text-emerald-400 font-bold">#{seq}</span>
+                      <span className="bg-[#1e293b] text-sky-300 px-1.5 py-0.5 border border-[#334155] rounded">
                         {type}
                       </span>
-                      <span className="text-[#dee2ec]">
+                      <span className="text-slate-300">
                         {typeof ev.payload === 'string'
                           ? ev.payload
                           : JSON.stringify(ev.payload || {}).substring(0, 60)}
                       </span>
                     </div>
-                    <span className="text-[#8b949e]">
+                    <span className="text-slate-400">
                       {ts ? new Date(ts).toLocaleTimeString() : 'JUST NOW'}
                     </span>
                   </div>

@@ -210,7 +210,7 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen w-screen bg-[#090f15] text-[#dee2ec] flex flex-col overflow-hidden select-none">
+    <div className="h-screen w-screen bg-[#0b0f19] text-[#f8fafc] flex flex-col overflow-hidden select-none">
       {/* 1. Top HUD & Emergency Broadcast Ticker */}
       <TopHUD
         wsStatus={wsStatus}

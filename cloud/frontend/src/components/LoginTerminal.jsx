@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldAlert, KeyRound, AlertTriangle, Terminal, Lock } from 'lucide-react';
+import { ShieldAlert, KeyRound, AlertTriangle, Lock } from 'lucide-react';
 
 export default function LoginTerminal({ onAuthenticate, authError, isAuthenticating }) {
   const [tokenInput, setTokenInput] = useState('');
@@ -11,32 +11,26 @@ export default function LoginTerminal({ onAuthenticate, authError, isAuthenticat
   };
 
   return (
-    <div className="h-screen w-screen bg-[#090f15] text-[#dee2ec] flex flex-col items-center justify-center p-4 font-mono select-none">
+    <div className="h-screen w-screen bg-[#0b0f19] text-[#f8fafc] flex flex-col items-center justify-center p-4 font-sans select-none">
       {/* Container Frame */}
-      <div className="w-full max-w-md bg-[#171c23] border-2 border-[#30353d] shadow-2xl p-6 relative">
-        {/* Corner Accents */}
-        <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-[#ff5625]"></div>
-        <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-[#ff5625]"></div>
-        <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-[#ff5625]"></div>
-        <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-[#ff5625]"></div>
-
+      <div className="w-full max-w-md bg-[#111827] border border-[#334155] rounded-lg shadow-xl p-6 relative">
         {/* Brand Banner */}
-        <div className="flex items-center gap-3 mb-4 border-b border-[#30353d] pb-3">
-          <div className="p-2 bg-[#541100] border border-[#ff5625]">
-            <ShieldAlert className="w-6 h-6 text-[#ff5625]" />
+        <div className="flex items-center gap-3 mb-4 border-b border-[#334155] pb-4">
+          <div className="p-2.5 bg-[#1e293b] border border-[#475569] rounded">
+            <ShieldAlert className="w-6 h-6 text-[#dc2626]" />
           </div>
           <div>
-            <h1 className="font-bold text-base text-[#dee2ec] tracking-wider uppercase">
+            <h1 className="font-bold text-base text-[#f8fafc] tracking-wide uppercase">
               MESHLINK COMMAND TERMINAL
             </h1>
-            <p className="text-[10px] text-[#00daf3]">
-              TACTICAL EMERGENCY RESPONDER INTERFACE
+            <p className="text-xs text-[#94a3b8] font-medium">
+              EMERGENCY OPERATIONS // DISPATCH CONSOLE
             </p>
           </div>
         </div>
 
         {/* Warning Prose */}
-        <p className="text-xs text-[#8b949e] mb-4 leading-relaxed font-sans">
+        <p className="text-xs text-[#94a3b8] mb-5 leading-relaxed">
           Access restricted to authorized incident dispatchers and disaster response coordinators. Enter operator security key to initialize live radar.
         </p>
 
@@ -44,12 +38,12 @@ export default function LoginTerminal({ onAuthenticate, authError, isAuthenticat
         {authError && (
           <div
             data-testid="auth-error"
-            className="mb-4 p-2.5 bg-[#541100] border border-[#ff5625] text-[#ffdad6] text-xs flex items-start gap-2"
+            className="mb-4 p-3 bg-[#450a0a] border border-[#dc2626] text-[#fecaca] text-xs rounded flex items-start gap-2.5"
           >
-            <AlertTriangle className="w-4 h-4 text-[#ff5625] shrink-0 mt-0.5" />
+            <AlertTriangle className="w-4 h-4 text-[#ef4444] shrink-0 mt-0.5" />
             <div className="space-y-0.5">
-              <span className="font-bold block">AUTHENTICATION REJECTED</span>
-              <span className="text-[11px] block">{authError}</span>
+              <span className="font-bold block uppercase tracking-wider">Authentication Rejected</span>
+              <span className="text-[11px] block text-[#fca5a5]">{authError}</span>
             </div>
           </div>
         )}
@@ -57,9 +51,9 @@ export default function LoginTerminal({ onAuthenticate, authError, isAuthenticat
         {/* Token Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-[11px] font-bold text-[#dee2ec] uppercase mb-1 flex items-center gap-1.5">
-              <KeyRound className="w-3.5 h-3.5 text-[#00e3fd]" />
-              <span>OPERATOR CREDENTIAL / TOKEN:</span>
+            <label className="block text-xs font-semibold text-[#cbd5e1] uppercase mb-1.5 flex items-center gap-1.5">
+              <KeyRound className="w-3.5 h-3.5 text-[#38bdf8]" />
+              <span>Operator Credential / Token</span>
             </label>
             <input
               data-testid="token-input"
@@ -68,7 +62,7 @@ export default function LoginTerminal({ onAuthenticate, authError, isAuthenticat
               value={tokenInput}
               onChange={(e) => setTokenInput(e.target.value)}
               placeholder="Enter operator token or password..."
-              className="w-full bg-[#090f15] border border-[#30353d] text-[#dee2ec] p-2 text-xs focus:border-[#00e3fd] outline-none"
+              className="w-full bg-[#0b0f19] border border-[#334155] rounded text-[#f8fafc] p-2.5 text-xs focus:border-[#38bdf8] focus:ring-1 focus:ring-[#38bdf8] outline-none transition-all font-mono"
             />
           </div>
 
@@ -76,14 +70,14 @@ export default function LoginTerminal({ onAuthenticate, authError, isAuthenticat
             data-testid="auth-submit"
             type="submit"
             disabled={isAuthenticating || !tokenInput.trim()}
-            className={`w-full py-2.5 font-bold text-xs uppercase tracking-wider border flex items-center justify-center gap-2 transition-all ${
+            className={`w-full py-2.5 rounded font-semibold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
               isAuthenticating || !tokenInput.trim()
-                ? 'bg-[#30353d] text-[#8b949e] border-[#30353d] cursor-not-allowed'
-                : 'bg-[#ff5625] hover:bg-[#b12d00] text-[#090f15] border-[#ffb5a0] shadow-lg'
+                ? 'bg-[#1e293b] text-[#64748b] border border-[#334155] cursor-not-allowed'
+                : 'bg-[#2563eb] hover:bg-[#1d4ed8] text-white border border-[#3b82f6] shadow'
             }`}
           >
             <Lock className="w-4 h-4" />
-            <span>{isAuthenticating ? 'VERIFYING CREDENTIALS...' : 'INITIALIZE COMMAND RADAR'}</span>
+            <span>{isAuthenticating ? 'VERIFYING CREDENTIALS...' : 'SIGN IN TO DISPATCH CONSOLE'}</span>
           </button>
         </form>
       </div>

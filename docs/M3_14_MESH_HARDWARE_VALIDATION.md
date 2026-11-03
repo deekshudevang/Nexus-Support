@@ -41,3 +41,4 @@ The core mesh transport protocol implementation (`:core:mesh`) was compiled and 
 ## 3. Pilot Deployment Gate
 
 Physical over-the-air field verification remains a required pre-requisite prior to live disaster deployment. Hardware nodes (e.g. Heltec V3 or LilyGO T-Beam) must be attached and configured with standard Meshtastic firmware before field teams enter unserved zones.
+

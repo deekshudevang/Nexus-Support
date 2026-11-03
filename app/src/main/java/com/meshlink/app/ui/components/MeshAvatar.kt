@@ -62,16 +62,16 @@ private fun extractInitials(name: String): String {
     }
 }
 
-// Deep, vibrant palette for SaaS aesthetic
+// Rugged, high-contrast tactical responder palette
 private val avatarPalette = listOf(
-    Color(0xFF2979FF), // Electric Blue
-    Color(0xFF8E24AA), // Vibrant Purple
-    Color(0xFF00B0FF), // Light Blue
-    Color(0xFF00E676), // Neon Green
-    Color(0xFFFF3D00), // Orange/Red
-    Color(0xFF651FFF), // Deep Purple
-    Color(0xFFF50057), // Pink
-    Color(0xFF00B8D4)  // Cyan
+    Color(0xFF2563EB), // Signal Blue
+    Color(0xFF0D9488), // Tactical Teal
+    Color(0xFF0284C7), // Sky Blue
+    Color(0xFF059669), // Field Emerald
+    Color(0xFFD97706), // Incident Amber
+    Color(0xFF4F46E5), // Command Indigo
+    Color(0xFFDC2626), // Emergency Red
+    Color(0xFF475569)  // Field Slate
 )
 
 private fun avatarColor(name: String): Color {
