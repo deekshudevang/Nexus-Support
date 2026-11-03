@@ -6,8 +6,8 @@
 |---|---|---|---|
 | **M3.15** | Repository and Architecture Audit | **AUTOMATED TESTED** | `docs/M3_15_ARCHITECTURE_AUDIT.md` (CI updated, baseline confirmed) |
 | **M3.16** | Production PostgreSQL & PostGIS | **AUTOMATED TESTED** | `docs/M3_16_POSTGRES_POSTGIS.md` (Invariant 9 verified, spatial migrations roundtrip tested) |
-| **M3.17** | Incident & Responder Management | **IN PROGRESS** | `cloud/backend/test_pg_p3_incidents.py`, `app/services/incident_service.py` |
-| **M3.18** | SOS Reliability & Delivery Guarantees | **NOT STARTED** | `cloud/backend/test_pg_p5_events.py`, idempotency & outbox fault injection |
+| **M3.17** | Incident & Responder Management | **AUTOMATED TESTED** | `docs/M3_17_INCIDENT_RESPONDER_LIFECYCLE.md` (7x7 matrix tested, RBAC & audit verified) |
+| **M3.18** | SOS Reliability & Delivery Guarantees | **IN PROGRESS** | `cloud/backend/test_pg_p5_events.py`, idempotency & outbox fault injection |
 | **M3.19** | BLE, Wi-Fi Direct & Meshtastic Reliability | **NOT STARTED** | `core/mesh`, simulated mesh routing & priority queue tests |
 | **M3.20** | Offline Gemma AI & Emergency RAG | **NOT STARTED** | `app/ai`, safety guard & non-blocking invariant tests |
 | **M3.21** | Web Tactical Command Center Integration | **NOT STARTED** | `cloud/frontend`, Vitest E2E workflow & real WSS integration |
@@ -26,7 +26,7 @@
 | **TASK-315-03** | M3.15 | CI Configuration & Dep Fixes | AUTOMATED TESTED | `.github/workflows/ci.yml`, `cloud/backend/requirements.txt` | `pytest cloud/backend` | 74 passed | Staged | None | GitHub Actions |
 | **TASK-316-01** | M3.16 | Fail-Fast SQLite Fallback Invariant | AUTOMATED TESTED | `app/core/config.py`, `app/core/database.py`, `main.py` | `test_pg_p16_postgres_postgis.py` | 6 passed | Staged | None | None |
 | **TASK-316-02** | M3.16 | PostGIS Geometry Migration & Spatial Index | AUTOMATED TESTED | `alembic/versions/3b9a1f28e05c_*`, `alembic/env.py` | `test_pg_p16_postgres_postgis.py` | Roundtrip passed | Staged | None | PostGIS |
-| **TASK-317-01** | M3.17 | State Machine & Illegal Transition Matrix | NOT STARTED | `app/services/incident_service.py`, `app/services/dispatch_service.py` | `test_state_machine.py` | Pending | Pending | DEF-03 | None |
+| **TASK-317-01** | M3.17 | State Machine & Illegal Transition Matrix | AUTOMATED TESTED | `cloud/backend/test_pg_p17_incident_responder_lifecycle.py` | `pytest test_pg_p17_*.py` | 5 passed | Staged | None | None |
 | **TASK-318-01** | M3.18 | Outbox Fault Injection & WebSocket Replay | NOT STARTED | `app/routers/events.py`, `app/services/outbox_publisher.py` | `test_fault_injection.py` | Pending | Pending | DEF-04 | None |
 | **TASK-319-01** | M3.19 | Simulated Mesh Priority & Invariant 7 Test | NOT STARTED | `core/mesh` | `testMeshPriority.kt` | Pending | Pending | DEF-05 | Hardware for L5 |
 | **TASK-320-01** | M3.20 | Non-Blocking AI Invariant 8 & Safety Guard | NOT STARTED | `app/ai` | `testAiPreemption.kt` | Pending | Pending | DEF-06 | NPU for L5 |
