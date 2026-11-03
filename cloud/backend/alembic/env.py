@@ -22,7 +22,9 @@ from app.core.config import DATABASE_URL
 # for 'autogenerate' support
 target_metadata = Base.metadata
 
-config.set_main_option("sqlalchemy.url", DATABASE_URL)
+configured_url = config.get_main_option("sqlalchemy.url")
+if not configured_url or configured_url == "sqlite:///./sos_mesh.db":
+    config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

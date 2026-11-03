@@ -1,9 +1,10 @@
+import os
 import sqlite3
 from contextlib import contextmanager
 from typing import Generator, Optional
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
-from app.core.config import DATABASE_URL, DATABASE_PATH
+from app.core.config import DATABASE_URL, DATABASE_PATH, ENVIRONMENT
 
 # Deterministic Alembic constraint naming convention
 convention = {
@@ -16,11 +17,20 @@ convention = {
 metadata = MetaData(naming_convention=convention)
 Base = declarative_base(metadata=metadata)
 
-connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
-    connect_args = {"check_same_thread": False, "timeout": 5.0}
-
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False, "timeout": 5.0}
+    )
+else:
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=int(os.getenv("DB_POOL_SIZE", "20")),
+        max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "10")),
+        pool_timeout=float(os.getenv("DB_POOL_TIMEOUT", "30.0")),
+        pool_pre_ping=True,
+        pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "1800")),
+    )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db_session() -> Generator[Session, None, None]:

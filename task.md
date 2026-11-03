@@ -5,8 +5,8 @@
 | Phase | Description | Status | Evidence / Report |
 |---|---|---|---|
 | **M3.15** | Repository and Architecture Audit | **AUTOMATED TESTED** | `docs/M3_15_ARCHITECTURE_AUDIT.md` (CI updated, baseline confirmed) |
-| **M3.16** | Production PostgreSQL & PostGIS | **IN PROGRESS** | `docs/M3_16_POSTGRES_POSTGIS.md` (Invariants 9 & spatial migrations) |
-| **M3.17** | Incident & Responder Management | **NOT STARTED** | `cloud/backend/test_pg_p3_incidents.py`, `app/services/incident_service.py` |
+| **M3.16** | Production PostgreSQL & PostGIS | **AUTOMATED TESTED** | `docs/M3_16_POSTGRES_POSTGIS.md` (Invariant 9 verified, spatial migrations roundtrip tested) |
+| **M3.17** | Incident & Responder Management | **IN PROGRESS** | `cloud/backend/test_pg_p3_incidents.py`, `app/services/incident_service.py` |
 | **M3.18** | SOS Reliability & Delivery Guarantees | **NOT STARTED** | `cloud/backend/test_pg_p5_events.py`, idempotency & outbox fault injection |
 | **M3.19** | BLE, Wi-Fi Direct & Meshtastic Reliability | **NOT STARTED** | `core/mesh`, simulated mesh routing & priority queue tests |
 | **M3.20** | Offline Gemma AI & Emergency RAG | **NOT STARTED** | `app/ai`, safety guard & non-blocking invariant tests |
@@ -24,8 +24,8 @@
 | **TASK-315-01** | M3.15 | Step 0 Baseline Verification | AUTOMATED TESTED | N/A | `pytest`, `npm test`, `./gradlew testDebugUnitTest` | 74 backend passed, 9 frontend passed, 142 Android tasks passed | `b085a38` | None | Clean baseline |
 | **TASK-315-02** | M3.15 | Full Architecture & Gap Audit | AUTOMATED TESTED | `docs/M3_15_ARCHITECTURE_AUDIT.md` | Doc validation & review | Requirements classified, risks registered | Staged | None | None |
 | **TASK-315-03** | M3.15 | CI Configuration & Dep Fixes | AUTOMATED TESTED | `.github/workflows/ci.yml`, `cloud/backend/requirements.txt` | `pytest cloud/backend` | 74 passed | Staged | None | GitHub Actions |
-| **TASK-316-01** | M3.16 | Fail-Fast SQLite Fallback Invariant | IN PROGRESS | `cloud/backend/app/core/config.py`, `cloud/backend/app/core/database.py` | `test_production_failfast.py` | Pending | Pending | RSK-01 | PostgreSQL |
-| **TASK-316-02** | M3.16 | PostGIS Geometry Migration & Spatial Index | NOT STARTED | `cloud/backend/alembic/versions/*`, `cloud/backend/app/models/*` | `test_postgis_spatial.py` | Pending | Pending | RSK-02 | PostGIS |
+| **TASK-316-01** | M3.16 | Fail-Fast SQLite Fallback Invariant | AUTOMATED TESTED | `app/core/config.py`, `app/core/database.py`, `main.py` | `test_pg_p16_postgres_postgis.py` | 6 passed | Staged | None | None |
+| **TASK-316-02** | M3.16 | PostGIS Geometry Migration & Spatial Index | AUTOMATED TESTED | `alembic/versions/3b9a1f28e05c_*`, `alembic/env.py` | `test_pg_p16_postgres_postgis.py` | Roundtrip passed | Staged | None | PostGIS |
 | **TASK-317-01** | M3.17 | State Machine & Illegal Transition Matrix | NOT STARTED | `app/services/incident_service.py`, `app/services/dispatch_service.py` | `test_state_machine.py` | Pending | Pending | DEF-03 | None |
 | **TASK-318-01** | M3.18 | Outbox Fault Injection & WebSocket Replay | NOT STARTED | `app/routers/events.py`, `app/services/outbox_publisher.py` | `test_fault_injection.py` | Pending | Pending | DEF-04 | None |
 | **TASK-319-01** | M3.19 | Simulated Mesh Priority & Invariant 7 Test | NOT STARTED | `core/mesh` | `testMeshPriority.kt` | Pending | Pending | DEF-05 | Hardware for L5 |

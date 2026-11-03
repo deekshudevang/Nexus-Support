@@ -30,6 +30,7 @@ logger = logging.getLogger("meshlink.backend")
 # ── Configuration & Environment ──────────────────────────────────────────────
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 DATABASE_PATH = os.getenv("DATABASE_PATH", "meshlink_sync.db")
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATABASE_PATH}")
 
 raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173")
 CORS_ORIGINS = [orig.strip() for orig in raw_origins.split(",") if orig.strip()]
@@ -50,8 +51,9 @@ def validate_production_configuration(
     gateway_keys: Set[str],
     operator_tokens: Set[str],
     allowed_origins: List[str],
+    database_url: Optional[str] = None,
 ) -> None:
-    """Fail closed when production would start with development credentials or origins."""
+    """Fail closed when production would start with development credentials, origins, or SQLite."""
     if environment.strip().lower() != "production":
         return
 
@@ -77,8 +79,27 @@ def validate_production_configuration(
             "Unsafe production configuration: set an explicit HTTPS CORS origin allow-list without localhost or wildcard origins."
         )
 
+    # Invariant 9: Production must never silently fall back to SQLite
+    if database_url is not None:
+        db_target = database_url.strip().lower()
+        if not db_target or db_target.startswith("sqlite") or ":memory:" in db_target:
+            raise RuntimeError(
+                "CRITICAL SAFETY INVARIANT 9 VIOLATION: Production environment must never run on SQLite. "
+                "A valid PostgreSQL connection URL is mandatory."
+            )
+        if not (db_target.startswith("postgresql://") or db_target.startswith("postgresql+psycopg2://") or db_target.startswith("postgresql+asyncpg://")):
+            raise RuntimeError(
+                f"CRITICAL SAFETY INVARIANT 9 VIOLATION: Invalid PostgreSQL database URL scheme for production: {db_target}"
+            )
 
-validate_production_configuration(ENVIRONMENT, GATEWAY_API_KEYS, OPERATOR_TOKENS, CORS_ORIGINS)
+
+validate_production_configuration(
+    ENVIRONMENT,
+    GATEWAY_API_KEYS,
+    OPERATOR_TOKENS,
+    CORS_ORIGINS,
+    DATABASE_URL
+)
 
 # Rate limiting settings (in-memory token bucket)
 RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "120"))

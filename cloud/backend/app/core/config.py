@@ -3,7 +3,23 @@ import secrets
 from typing import List
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./sos_mesh.db")
+
+def _resolve_database_url() -> str:
+    raw_url = os.getenv("DATABASE_URL", "").strip()
+    if ENVIRONMENT == "production":
+        if not raw_url or raw_url.startswith("sqlite") or ":memory:" in raw_url:
+            raise RuntimeError(
+                "CRITICAL SAFETY INVARIANT 9 VIOLATION: Production environment must never run on SQLite. "
+                "A valid PostgreSQL connection URL is mandatory."
+            )
+        if not (raw_url.startswith("postgresql://") or raw_url.startswith("postgresql+psycopg2://") or raw_url.startswith("postgresql+asyncpg://")):
+            raise RuntimeError(
+                f"CRITICAL SAFETY INVARIANT 9 VIOLATION: Invalid PostgreSQL database URL scheme for production: '{raw_url}'"
+            )
+        return raw_url
+    return raw_url or "sqlite:///./sos_mesh.db"
+
+DATABASE_URL = _resolve_database_url()
 DATABASE_PATH = os.getenv("DATABASE_PATH", "sos_mesh.db")
 
 # Strict Production Security Policy: Reject defaults in production
