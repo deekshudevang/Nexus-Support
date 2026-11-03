@@ -17,10 +17,11 @@ def _resolve_database_url() -> str:
                 f"CRITICAL SAFETY INVARIANT 9 VIOLATION: Invalid PostgreSQL database URL scheme for production: '{raw_url}'"
             )
         return raw_url
-    return raw_url or "sqlite:///./sos_mesh.db"
+    db_path = os.getenv("DATABASE_PATH", "meshlink_sync.db")
+    return raw_url or f"sqlite:///{db_path}"
 
+DATABASE_PATH = os.getenv("DATABASE_PATH", "meshlink_sync.db")
 DATABASE_URL = _resolve_database_url()
-DATABASE_PATH = os.getenv("DATABASE_PATH", "sos_mesh.db")
 
 # Strict Production Security Policy: Reject defaults in production
 PROD_INSECURE_VALUES = {"", "meshlink_gateway_dev_secret", "meshlink_op_dev_secret", "*"}

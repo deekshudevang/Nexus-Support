@@ -212,20 +212,36 @@ def init_db(db_path: Optional[str] = None):
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
+        email TEXT,
         password_hash TEXT NOT NULL,
         role TEXT NOT NULL,
+        status TEXT DEFAULT 'active',
         is_active BOOLEAN DEFAULT 1,
+        last_login INTEGER,
+        token_version INTEGER DEFAULT 1,
         created_at INTEGER NOT NULL
     );
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);")
 
+    # Column migrations if table already exists without newer schema fields
+    cursor = conn.execute("PRAGMA table_info(users);")
+    user_cols = [row[1] for row in cursor.fetchall()]
+    if "email" not in user_cols and len(user_cols) > 0:
+        conn.execute("ALTER TABLE users ADD COLUMN email TEXT;")
+    if "status" not in user_cols and len(user_cols) > 0:
+        conn.execute("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active';")
+    if "token_version" not in user_cols and len(user_cols) > 0:
+        conn.execute("ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 1;")
+    if "last_login" not in user_cols and len(user_cols) > 0:
+        conn.execute("ALTER TABLE users ADD COLUMN last_login INTEGER;")
+
     cursor = conn.execute("SELECT COUNT(*) FROM users;")
     if cursor.fetchone()[0] == 0:
         seed_hash = hash_password("op_token_valid_1")
         conn.execute(
-            "INSERT INTO users (username, password_hash, role, is_active, created_at) VALUES (?, ?, ?, ?, ?)",
-            ("admin", seed_hash, "operator", 1, int(time.time()))
+            "INSERT INTO users (username, email, password_hash, role, status, is_active, token_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("admin", "admin@rescuemesh.org", seed_hash, "operator", "active", 1, 1, int(time.time()))
         )
 
     conn.commit()

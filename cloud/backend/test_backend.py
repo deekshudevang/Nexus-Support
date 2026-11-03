@@ -19,16 +19,20 @@ def setup_isolated_db():
     temp_dir = tempfile.mkdtemp()
     test_db = os.path.join(temp_dir, "test_sync.db")
     import main
+    orig_db = main.DATABASE_PATH
     main._ip_request_history.clear()
     main.DATABASE_PATH = test_db
     init_db(test_db)
-    yield
-    main._ip_request_history.clear()
-    if os.path.exists(test_db):
-        try:
-            os.remove(test_db)
-        except Exception:
-            pass
+    try:
+        yield
+    finally:
+        main._ip_request_history.clear()
+        main.DATABASE_PATH = orig_db
+        if os.path.exists(test_db):
+            try:
+                os.remove(test_db)
+            except Exception:
+                pass
 
 @pytest.fixture
 def client():
