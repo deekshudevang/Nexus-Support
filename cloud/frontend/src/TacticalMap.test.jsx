@@ -23,9 +23,52 @@ describe('TacticalMap & DispatchPanel Enhanced Tests (Task 5 / IMP-HV-02 & IMP-H
     expect(screen.getByTestId('tile-layer').getAttribute('data-url')).toContain('arcgisonline.com');
 
     // Switch back to RF MESH
-    const rfBtn = screen.getByRole('button', { name: /RF MESH/i });
+    const rfBtn = screen.getByRole('button', { name: /^RF MESH$/i });
     fireEvent.click(rfBtn);
     expect(screen.getByTestId('tile-layer').getAttribute('data-url')).toContain('openstreetmap.org');
+  });
+
+  it('displays ONLINE TILES badge by default when online', () => {
+    render(<TacticalMap incidents={[]} nodes={[]} responders={[]} />);
+    const badge = screen.getByTestId('tile-source-badge');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent('ONLINE TILES');
+  });
+
+  it('renders LOCAL OFFLINE button and switches to offline tiles when localTileUrl is provided', () => {
+    render(
+      <TacticalMap
+        incidents={[]}
+        nodes={[]}
+        responders={[]}
+        localTileUrl="http://localhost:8080/tiles/{z}/{x}/{y}.png"
+      />
+    );
+
+    const localBtn = screen.getByRole('button', { name: /LOCAL OFFLINE/i });
+    expect(localBtn).toBeInTheDocument();
+
+    fireEvent.click(localBtn);
+    const tileLayer = screen.getByTestId('tile-layer');
+    expect(tileLayer.getAttribute('data-url')).toBe('http://localhost:8080/tiles/{z}/{x}/{y}.png');
+
+    const badge = screen.getByTestId('tile-source-badge');
+    expect(badge).toHaveTextContent('OFFLINE TILES');
+  });
+
+  it('displays NO MAP TILES badge and warning banner when browser goes offline without local tiles', () => {
+    render(<TacticalMap incidents={[]} nodes={[]} responders={[]} />);
+
+    fireEvent(window, new Event('offline'));
+
+    const badge = screen.getByTestId('tile-source-badge');
+    expect(badge).toHaveTextContent('NO MAP TILES');
+    expect(screen.getByTestId('no-tiles-warning')).toBeInTheDocument();
+
+    // Come back online
+    fireEvent(window, new Event('online'));
+    expect(badge).toHaveTextContent('ONLINE TILES');
+    expect(screen.queryByTestId('no-tiles-warning')).not.toBeInTheDocument();
   });
 
   it('plots real responders with valid GPS coordinates on the TacticalMap', () => {

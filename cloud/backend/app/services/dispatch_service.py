@@ -2,7 +2,10 @@
 
 import time
 import uuid
+import logging
 from typing import List, Optional
+
+logger = logging.getLogger("rescuemesh.dispatch")
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
@@ -208,6 +211,7 @@ def dispatch_responder(
         )
 
     db.refresh(assignment)
+    logger.info("DEMO FLOW: Assignment created for incident %s to responder %s (Assignment: %s)", incident_id, responder_id, asgn_id)
     process_outbox_batch(db)
     return assignment
 
@@ -304,5 +308,6 @@ def transition_assignment(
 
     db.commit()
     db.refresh(assignment)
+    logger.info("DEMO FLOW: Assignment %s transitioned to %s", assignment_id, target_status)
     process_outbox_batch(db)
     return assignment

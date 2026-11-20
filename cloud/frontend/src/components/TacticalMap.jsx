@@ -53,24 +53,27 @@ const createResponderMarker = (availability = 'AVAILABLE') => {
   });
 };
 
-const TILE_LAYERS = {
+const BASE_TILE_LAYERS = {
   RF_MESH: {
     name: 'RF MESH',
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 19,
+    isOffline: false,
   },
   THERMAL: {
     name: 'TERRAIN / TOPO',
     url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
     attribution: '&copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)',
     maxZoom: 17,
+    isOffline: false,
   },
   SAT: {
     name: 'SATELLITE',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Tiles &copy; Esri &mdash; Source: Esri, USGS, NOAA',
     maxZoom: 18,
+    isOffline: false,
   },
 };
 
@@ -96,9 +99,63 @@ export default function TacticalMap({
   selectedIncident,
   onSelectIncident,
   onOpenDispatch,
+  localTileUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_LOCAL_TILE_URL) || null,
 }) {
-  const [activeLayer, setActiveLayer] = useState('RF_MESH'); // 'RF_MESH' | 'THERMAL' | 'SAT'
+  const effectiveTileLayers = {
+    ...(localTileUrl
+      ? {
+          OFFLINE_LOCAL: {
+            name: 'LOCAL OFFLINE',
+            url: localTileUrl,
+            attribution: 'Local Offline Tile Server',
+            maxZoom: 18,
+            isOffline: true,
+          },
+        }
+      : {}),
+    ...BASE_TILE_LAYERS,
+  };
+
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean'
+      ? navigator.onLine
+      : true
+  );
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const [activeLayer, setActiveLayer] = useState(() => {
+    if (localTileUrl && !isOnline) {
+      return 'OFFLINE_LOCAL';
+    }
+    return 'RF_MESH';
+  });
   const [showUnmappedDrawer, setShowUnmappedDrawer] = useState(false);
+
+  const currentLayerObj = effectiveTileLayers[activeLayer] || effectiveTileLayers.RF_MESH;
+  const isCurrentLayerOffline = Boolean(currentLayerObj?.isOffline);
+
+  let tileBadgeText = 'ONLINE TILES';
+  let tileBadgeClass = 'text-[#10b981] border-[#10b981]/40 bg-[#10b981]/10';
+
+  if (isCurrentLayerOffline) {
+    tileBadgeText = 'OFFLINE TILES';
+    tileBadgeClass = 'text-[#38bdf8] border-[#38bdf8]/40 bg-[#38bdf8]/10';
+  } else if (!isOnline) {
+    tileBadgeText = 'NO MAP TILES';
+    tileBadgeClass = 'text-[#ef4444] border-[#ef4444]/40 bg-[#ef4444]/10';
+  }
 
   // Separate mapped and unmapped incidents (ZERO GPS FABRICATION)
   const mappedIncidents = incidents.filter(
@@ -160,6 +217,18 @@ export default function TacticalMap({
           <span className="text-[10px] font-sans font-semibold text-[#94a3b8] px-1.5 border-r border-[#334155]">
             MAP LAYERS:
           </span>
+          {localTileUrl && (
+            <button
+              onClick={() => setActiveLayer('OFFLINE_LOCAL')}
+              className={`font-sans text-[11px] font-medium px-2 py-0.5 rounded transition-colors ${
+                activeLayer === 'OFFLINE_LOCAL'
+                  ? 'bg-[#0284c7] text-white'
+                  : 'text-[#94a3b8] hover:text-white hover:bg-[#1e293b]'
+              }`}
+            >
+              LOCAL OFFLINE
+            </button>
+          )}
           <button
             onClick={() => setActiveLayer('RF_MESH')}
             className={`font-sans text-[11px] font-medium px-2 py-0.5 rounded transition-colors ${
@@ -190,6 +259,23 @@ export default function TacticalMap({
           >
             SATELLITE
           </button>
+        </div>
+
+        {/* Tile Source / Offline Status Badge */}
+        <div
+          data-testid="tile-source-badge"
+          className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-mono border backdrop-blur-sm shadow pointer-events-auto ${tileBadgeClass}`}
+        >
+          <span
+            className={`w-2 h-2 rounded-full ${
+              tileBadgeText === 'ONLINE TILES'
+                ? 'bg-[#10b981]'
+                : tileBadgeText === 'OFFLINE TILES'
+                ? 'bg-[#38bdf8]'
+                : 'bg-[#ef4444] animate-pulse'
+            }`}
+          />
+          <span className="font-semibold">{tileBadgeText}</span>
         </div>
 
         {/* Responders Count Badge */}
@@ -264,6 +350,16 @@ export default function TacticalMap({
 
       {/* Real Map Canvas via React-Leaflet */}
       <div className="w-full h-full relative tactical-map-container">
+        {tileBadgeText === 'NO MAP TILES' && (
+          <div
+            data-testid="no-tiles-warning"
+            className="absolute top-12 left-2 z-30 bg-[#7f1d1d]/90 border border-[#dc2626] text-white text-xs px-3 py-1.5 rounded shadow flex items-center gap-2 pointer-events-auto"
+          >
+            <AlertTriangle className="w-4 h-4 text-[#fca5a5]" />
+            <span>NO MAP TILES: Internet disconnected and no local tile server configured. Set VITE_LOCAL_TILE_URL for offline maps.</span>
+          </div>
+        )}
+
         <MapContainer
           center={targetCoords}
           zoom={13}
@@ -272,9 +368,9 @@ export default function TacticalMap({
         >
           <TileLayer
             key={activeLayer}
-            attribution={TILE_LAYERS[activeLayer]?.attribution || TILE_LAYERS.RF_MESH.attribution}
-            url={TILE_LAYERS[activeLayer]?.url || TILE_LAYERS.RF_MESH.url}
-            maxZoom={TILE_LAYERS[activeLayer]?.maxZoom || 19}
+            attribution={currentLayerObj?.attribution || BASE_TILE_LAYERS.RF_MESH.attribution}
+            url={currentLayerObj?.url || BASE_TILE_LAYERS.RF_MESH.url}
+            maxZoom={currentLayerObj?.maxZoom || 19}
           />
 
           <MapFlyController targetCoords={targetCoords} />

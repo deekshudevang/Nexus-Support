@@ -386,11 +386,41 @@ class AlertConnectionManager:
 alert_manager = AlertConnectionManager()
 
 # ── Health & Diagnostic Endpoints ────────────────────────────────────────────
+_cached_migration_head = None
+
+def get_migration_head() -> str:
+    global _cached_migration_head
+    if _cached_migration_head is None:
+        try:
+            from alembic.config import Config
+            from alembic.script import ScriptDirectory
+            ini_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "alembic.ini")
+            if os.path.exists(ini_path):
+                cfg = Config(ini_path)
+                script = ScriptDirectory.from_config(cfg)
+                _cached_migration_head = script.get_current_head()
+        except Exception:
+            _cached_migration_head = "unknown"
+    return _cached_migration_head or "unknown"
+
 @app.get("/health")
 def health():
+    db_connected = False
+    try:
+        from app.core.database import SessionLocal
+        from sqlalchemy import text
+        with SessionLocal() as session:
+            session.execute(text("SELECT 1"))
+            db_connected = True
+    except Exception:
+        db_connected = False
+
     return {
-        "status": "ok",
+        "status": "ok" if db_connected else "degraded",
+        "version": "1.0.0",
         "environment": ENVIRONMENT,
+        "database_connected": db_connected,
+        "migration_head": get_migration_head(),
         "timestamp": int(time.time()),
         "service": "MeshLink Gateway Backend"
     }
@@ -531,6 +561,7 @@ async def sync_sos(
         raise HTTPException(status_code=400, detail="Batch exceeds maximum allowed size of 500 packets")
 
     caller_org = x_organization_id or organization_id or "org-default"
+    dev_id = x_device_id or device_id or "unspecified"
 
     with get_db() as db:
         count = 0
@@ -599,6 +630,7 @@ async def sync_sos(
                         inc.longitude = p.longitude
 
                 count += 1
+                logger.info("DEMO FLOW: SOS ingested from sender %s (UUID: %s, type: %s, severity: %s)", p.senderId, p.uuid, p.emergencyType, p.severity)
                 receipts.append({"uuid": p.uuid, "status": "ACKNOWLEDGED", "synced": True})
 
             # Process any assignment status updates or ACKs piggybacked on sync
@@ -685,6 +717,9 @@ async def sync_sos(
                         "priority": inc.priority if inc else 3,
                         "offered_at": a.offered_at,
                     })
+
+                if downlink_list:
+                    logger.info("DEMO FLOW: Downlink delivered to device %s: %s active assignment(s)", dev_id, len(downlink_list))
 
             db.commit()
         except Exception as e:
@@ -775,6 +810,7 @@ def ack_downlink_assignment(
                 resp.availability = "AVAILABLE"
 
         db.commit()
+        logger.info("DEMO FLOW: Assignment %s status updated to %s by device %s", asgn.id, asgn.status, dev_id)
         return {
             "status": "success",
             "assignment_id": asgn.id,

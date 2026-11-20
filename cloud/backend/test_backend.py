@@ -88,9 +88,12 @@ def test_health_endpoint(client):
     response = client.get("/health")
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "ok"
+    assert data["status"] in ("ok", "healthy")
     assert "environment" in data
     assert "timestamp" in data
+    assert data.get("version") == "1.0.0"
+    assert data.get("database_connected") is True
+    assert data.get("migration_head") is not None
     # Ensure no secrets or sensitive info in health payload
     assert "key" not in data
     assert "token" not in data
