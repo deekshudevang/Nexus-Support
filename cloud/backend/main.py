@@ -39,9 +39,14 @@ CORS_ORIGINS = [orig.strip() for orig in raw_origins.split(",") if orig.strip()]
 # Credentials (comma-separated if multiple; set via env vars in production)
 raw_gw_keys = os.getenv("GATEWAY_API_KEYS", "meshlink_gw_dev_secret")
 GATEWAY_API_KEYS = {k.strip() for k in raw_gw_keys.split(",") if k.strip()}
+if ENVIRONMENT != "production":
+    GATEWAY_API_KEYS.add("meshlink_gw_dev_secret")
 
 raw_op_tokens = os.getenv("OPERATOR_TOKENS", "meshlink_op_dev_secret,op_token_valid_1,demo")
 OPERATOR_TOKENS = {k.strip() for k in raw_op_tokens.split(",") if k.strip()}
+if ENVIRONMENT != "production":
+    OPERATOR_TOKENS.add("meshlink_op_dev_secret")
+    OPERATOR_TOKENS.add("op_token_valid_1")
 
 raw_revoked = os.getenv("REVOKED_CREDENTIALS", "")
 REVOKED_CREDENTIALS = {k.strip() for k in raw_revoked.split(",") if k.strip()}
@@ -103,7 +108,7 @@ validate_production_configuration(
 )
 
 # Rate limiting settings (in-memory token bucket)
-RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "120"))
+RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "10000" if ENVIRONMENT != "production" else "120"))
 RATE_LIMIT_WINDOW_SEC = int(os.getenv("RATE_LIMIT_WINDOW_SEC", "60"))
 
 app = FastAPI(
@@ -164,105 +169,63 @@ async def rate_limit_middleware(request: Request, call_next):
     response = await call_next(request)
     return response
 
-# ── SQLite Database Setup & Connection Pool ──────────────────────────────────
+# ── Database Models & Unified Session Management ──────────────────────────────
+from app.core.database import SessionLocal, get_db_session, engine, Base
+from app.models.sos import SosPacketModel
+from app.models.node import NodeStatusModel
+from app.models.user import UserModel
+from app.models.incident import IncidentModel
+
+def _get_target_engine(target: Optional[str] = None):
+    if DATABASE_URL.startswith("postgresql"):
+        return engine
+    target_path = target or DATABASE_PATH
+    if target_path and target_path != "meshlink_sync.db":
+        from sqlalchemy import create_engine
+        from sqlalchemy.pool import NullPool
+        return create_engine(f"sqlite:///{target_path}", connect_args={"check_same_thread": False}, poolclass=NullPool)
+    return engine
+
 def init_db(db_path: Optional[str] = None):
-    target = db_path or DATABASE_PATH
-    conn = sqlite3.connect(target)
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA busy_timeout=5000;")
-    conn.execute("""
-    CREATE TABLE IF NOT EXISTS sos_packets (
-        uuid TEXT PRIMARY KEY,
-        senderId TEXT NOT NULL,
-        senderName TEXT NOT NULL,
-        emergencyType TEXT NOT NULL,
-        severity INTEGER NOT NULL,
-        latitude REAL,
-        longitude REAL,
-        gpsFixAvailable INTEGER DEFAULT 1,
-        message TEXT NOT NULL,
-        timestamp INTEGER NOT NULL,
-        status TEXT NOT NULL,
-        hopCount INTEGER DEFAULT 0
-    );
-    """)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_sos_packets_timestamp ON sos_packets(timestamp DESC);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_sos_packets_severity ON sos_packets(severity);")
-
-    # Column migration if table already exists without gpsFixAvailable
-    cursor = conn.execute("PRAGMA table_info(sos_packets);")
-    existing_cols = [row[1] for row in cursor.fetchall()]
-    if "gpsFixAvailable" not in existing_cols and len(existing_cols) > 0:
-        conn.execute("ALTER TABLE sos_packets ADD COLUMN gpsFixAvailable INTEGER DEFAULT 1;")
-
-    conn.execute("""
-    CREATE TABLE IF NOT EXISTS node_status (
-        deviceId TEXT PRIMARY KEY,
-        displayName TEXT NOT NULL,
-        role TEXT NOT NULL,
-        batteryLevel INTEGER NOT NULL,
-        needsHelp BOOLEAN NOT NULL,
-        latitude REAL NOT NULL,
-        longitude REAL NOT NULL,
-        timestamp INTEGER NOT NULL
-    );
-    """)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_node_status_timestamp ON node_status(timestamp DESC);")
-
-    conn.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        email TEXT,
-        password_hash TEXT NOT NULL,
-        role TEXT NOT NULL,
-        status TEXT DEFAULT 'active',
-        is_active BOOLEAN DEFAULT 1,
-        last_login INTEGER,
-        token_version INTEGER DEFAULT 1,
-        created_at INTEGER NOT NULL
-    );
-    """)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);")
-
-    # Column migrations if table already exists without newer schema fields
-    cursor = conn.execute("PRAGMA table_info(users);")
-    user_cols = [row[1] for row in cursor.fetchall()]
-    if "email" not in user_cols and len(user_cols) > 0:
-        conn.execute("ALTER TABLE users ADD COLUMN email TEXT;")
-    if "status" not in user_cols and len(user_cols) > 0:
-        conn.execute("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active';")
-    if "token_version" not in user_cols and len(user_cols) > 0:
-        conn.execute("ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 1;")
-    if "last_login" not in user_cols and len(user_cols) > 0:
-        conn.execute("ALTER TABLE users ADD COLUMN last_login INTEGER;")
-    if "organization_id" not in user_cols and len(user_cols) > 0:
-        conn.execute("ALTER TABLE users ADD COLUMN organization_id TEXT DEFAULT 'org-default';")
-
-    cursor = conn.execute("SELECT COUNT(*) FROM users;")
-    if cursor.fetchone()[0] == 0:
-        seed_hash = hash_password("op_token_valid_1")
-        conn.execute(
-            "INSERT INTO users (username, email, password_hash, role, status, is_active, token_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            ("admin", "admin@rescuemesh.org", seed_hash, "operator", "active", 1, 1, int(time.time()))
-        )
-
-    conn.commit()
-    conn.close()
+    target_engine = _get_target_engine(db_path)
+    Base.metadata.create_all(bind=target_engine)
+    from sqlalchemy.orm import sessionmaker
+    Session = sessionmaker(bind=target_engine)
+    with Session() as s:
+        if s.query(UserModel).count() == 0:
+            seed_hash = hash_password("op_token_valid_1")
+            s.add(UserModel(
+                username="admin",
+                email="admin@rescuemesh.org",
+                password_hash=seed_hash,
+                role="operator",
+                status="active",
+                is_active=True,
+                token_version=1,
+                created_at=int(time.time()),
+                organization_id="org-default",
+            ))
+            s.commit()
 
 init_db()
 
 @contextmanager
 def get_db(db_path: Optional[str] = None):
-    target = db_path or DATABASE_PATH
-    conn = sqlite3.connect(target, timeout=5.0)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA busy_timeout=5000;")
-    try:
-        yield conn
-    finally:
-        conn.close()
+    target_engine = _get_target_engine(db_path)
+    if target_engine is engine:
+        session = SessionLocal()
+        try:
+            yield session
+        finally:
+            session.close()
+    else:
+        from sqlalchemy.orm import sessionmaker
+        Session = sessionmaker(autocommit=False, autoflush=False, bind=target_engine)
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
 
 # ── Pydantic Request/Response Models ─────────────────────────────────────────
 class SosPacket(BaseModel):
@@ -456,30 +419,34 @@ class UserCreateRequest(BaseModel):
 
 @app.post("/api/auth/register")
 def register_user(req: UserCreateRequest, _: str = Depends(verify_operator_read)):
-    with get_db() as conn:
-        cursor = conn.execute("SELECT id FROM users WHERE username = ?", (req.username,))
-        if cursor.fetchone():
+    with get_db() as db:
+        existing = db.query(UserModel).filter(UserModel.username == req.username).first()
+        if existing:
             raise HTTPException(status_code=400, detail="Username already exists")
         hashed = hash_password(req.password)
-        conn.execute(
-            "INSERT INTO users (username, password_hash, role, is_active, created_at) VALUES (?, ?, ?, ?, ?)",
-            (req.username, hashed, req.role, 1, int(time.time()))
+        user = UserModel(
+            username=req.username,
+            password_hash=hashed,
+            role=req.role,
+            is_active=True,
+            created_at=int(time.time()),
+            organization_id="org-default",
         )
-        conn.commit()
+        db.add(user)
+        db.commit()
     return {"status": "success", "username": req.username, "role": req.role}
 
 @app.post("/api/auth/token")
 def operator_token_login(req: OperatorLoginRequest):
     # 1. First check against persistent users database
-    with get_db() as conn:
-        cursor = conn.execute("SELECT password_hash, role FROM users WHERE username = ? AND is_active = 1", (req.username,))
-        row = cursor.fetchone()
-        if row and verify_password(req.password, row["password_hash"]):
+    with get_db() as db:
+        user = db.query(UserModel).filter(UserModel.username == req.username, UserModel.is_active == True).first()
+        if user and verify_password(req.password, user.password_hash):
             token = next(iter(OPERATOR_TOKENS))
             return {
                 "access_token": token,
                 "token_type": "bearer",
-                "role": row["role"]
+                "role": user.role
             }
 
     # 2. Fallback check against configured bootstrap operator tokens
@@ -505,26 +472,77 @@ async def sync_sos(packets: List[SosPacket], _: str = Depends(verify_gateway_wri
     if len(packets) > 500:
         raise HTTPException(status_code=400, detail="Batch exceeds maximum allowed size of 500 packets")
 
-    with get_db() as conn:
+    with get_db() as db:
         count = 0
         receipts = []
         try:
             for p in packets:
-                has_fix = 1 if (p.gpsFixAvailable if p.gpsFixAvailable is not None else (p.latitude is not None and p.longitude is not None)) else 0
-                conn.execute("""
-                INSERT OR REPLACE INTO sos_packets 
-                (uuid, senderId, senderName, emergencyType, severity, latitude, longitude, gpsFixAvailable, message, timestamp, status, hopCount)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    p.uuid, p.senderId, p.senderName, p.emergencyType,
-                    p.severity, p.latitude, p.longitude, has_fix, p.message,
-                    p.timestamp, p.status, p.hopCount or 0
-                ))
+                has_fix = bool(p.gpsFixAvailable if p.gpsFixAvailable is not None else (p.latitude is not None and p.longitude is not None))
+                sos_entry = db.query(SosPacketModel).filter(SosPacketModel.uuid == p.uuid).first()
+                if not sos_entry:
+                    sos_entry = SosPacketModel(
+                        uuid=p.uuid,
+                        senderId=p.senderId,
+                        senderName=p.senderName,
+                        emergencyType=p.emergencyType,
+                        severity=p.severity,
+                        latitude=p.latitude,
+                        longitude=p.longitude,
+                        gpsFixAvailable=has_fix,
+                        message=p.message,
+                        timestamp=p.timestamp,
+                        status=p.status,
+                        hopCount=p.hopCount or 0,
+                    )
+                    db.add(sos_entry)
+                else:
+                    sos_entry.senderId = p.senderId
+                    sos_entry.senderName = p.senderName
+                    sos_entry.emergencyType = p.emergencyType
+                    sos_entry.severity = p.severity
+                    sos_entry.latitude = p.latitude
+                    sos_entry.longitude = p.longitude
+                    sos_entry.gpsFixAvailable = has_fix
+                    sos_entry.message = p.message
+                    sos_entry.timestamp = p.timestamp
+                    sos_entry.status = p.status
+                    sos_entry.hopCount = p.hopCount or 0
+
+                # Also mirror into IncidentModel so it appears in v1 incidents API
+                prio = max(1, min(5, (p.severity + 1) // 2)) if p.severity else 3
+                inc = db.query(IncidentModel).filter(IncidentModel.id == p.uuid).first()
+                if not inc:
+                    inc = IncidentModel(
+                        id=p.uuid,
+                        title=f"SOS: {p.emergencyType} from {p.senderName}",
+                        description=p.message,
+                        category=p.emergencyType.upper(),
+                        priority=prio,
+                        severity=p.severity,
+                        status="REPORTED" if p.status in ["PENDING", "ACTIVE"] else p.status,
+                        organization_id="org-default",
+                        source="MESH_SOS",
+                        reporter_name=p.senderName,
+                        reporter_contact=p.senderId,
+                        latitude=p.latitude if (p.latitude != 0.0 or p.longitude != 0.0) else None,
+                        longitude=p.longitude if (p.latitude != 0.0 or p.longitude != 0.0) else None,
+                        version=1,
+                        created_at=p.timestamp,
+                        updated_at=int(time.time()),
+                    )
+                    db.add(inc)
+                else:
+                    inc.updated_at = int(time.time())
+                    inc.severity = p.severity
+                    if p.latitude and (p.latitude != 0.0 or p.longitude != 0.0):
+                        inc.latitude = p.latitude
+                        inc.longitude = p.longitude
+
                 count += 1
                 receipts.append({"uuid": p.uuid, "status": "ACKNOWLEDGED", "synced": True})
-            conn.commit()
+            db.commit()
         except Exception as e:
-            conn.rollback()
+            db.rollback()
             logger.error("Failed to sync SOS packets: %s", str(e))
             raise HTTPException(status_code=500, detail="Database insertion error")
 
@@ -543,23 +561,35 @@ def sync_nodes(nodes: List[NodeStatus], _: str = Depends(verify_gateway_write)):
     if len(nodes) > 1000:
         raise HTTPException(status_code=400, detail="Batch exceeds maximum allowed size of 1000 nodes")
 
-    with get_db() as conn:
+    with get_db() as db:
         count = 0
         try:
             for n in nodes:
-                conn.execute("""
-                INSERT OR REPLACE INTO node_status
-                (deviceId, displayName, role, batteryLevel, needsHelp, latitude, longitude, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    n.deviceId, n.displayName, n.role,
-                    n.batteryLevel, 1 if n.needsHelp else 0,
-                    n.latitude, n.longitude, n.timestamp
-                ))
+                node_entry = db.query(NodeStatusModel).filter(NodeStatusModel.deviceId == n.deviceId).first()
+                if not node_entry:
+                    node_entry = NodeStatusModel(
+                        deviceId=n.deviceId,
+                        displayName=n.displayName,
+                        role=n.role,
+                        batteryLevel=n.batteryLevel,
+                        needsHelp=n.needsHelp,
+                        latitude=n.latitude,
+                        longitude=n.longitude,
+                        timestamp=n.timestamp,
+                    )
+                    db.add(node_entry)
+                else:
+                    node_entry.displayName = n.displayName
+                    node_entry.role = n.role
+                    node_entry.batteryLevel = n.batteryLevel
+                    node_entry.needsHelp = n.needsHelp
+                    node_entry.latitude = n.latitude
+                    node_entry.longitude = n.longitude
+                    node_entry.timestamp = n.timestamp
                 count += 1
-            conn.commit()
+            db.commit()
         except Exception as e:
-            conn.rollback()
+            db.rollback()
             logger.error("Failed to sync nodes: %s", str(e))
             raise HTTPException(status_code=500, detail="Database insertion error")
 
@@ -572,43 +602,48 @@ def get_sos(
     severity_min: Optional[int] = Query(None, ge=1, le=10),
     _: str = Depends(verify_operator_read)
 ):
-    with get_db() as conn:
+    with get_db() as db:
+        query = db.query(SosPacketModel)
         if severity_min is not None:
-            cursor = conn.execute(
-                "SELECT * FROM sos_packets WHERE severity >= ? ORDER BY timestamp DESC LIMIT ?",
-                (severity_min, limit)
-            )
-        else:
-            cursor = conn.execute(
-                "SELECT * FROM sos_packets ORDER BY timestamp DESC LIMIT ?",
-                (limit,)
-            )
-        rows = cursor.fetchall()
-        return [dict(ix) for ix in rows]
+            query = query.filter(SosPacketModel.severity >= severity_min)
+        rows = query.order_by(SosPacketModel.timestamp.desc()).limit(limit).all()
+        return [
+            {
+                "uuid": r.uuid,
+                "senderId": r.senderId,
+                "senderName": r.senderName,
+                "emergencyType": r.emergencyType,
+                "severity": r.severity,
+                "latitude": r.latitude,
+                "longitude": r.longitude,
+                "gpsFixAvailable": bool(r.gpsFixAvailable) if r.gpsFixAvailable is not None else True,
+                "message": r.message,
+                "timestamp": r.timestamp,
+                "status": r.status,
+                "hopCount": r.hopCount or 0,
+            }
+            for r in rows
+        ]
 
 @app.get("/api/nodes")
 def get_nodes(
     limit: int = Query(200, ge=1, le=1000),
     _: str = Depends(verify_operator_read)
 ):
-    with get_db() as conn:
-        cursor = conn.execute(
-            "SELECT * FROM node_status ORDER BY timestamp DESC LIMIT ?",
-            (limit,)
-        )
-        rows = cursor.fetchall()
+    with get_db() as db:
+        rows = db.query(NodeStatusModel).order_by(NodeStatusModel.timestamp.desc()).limit(limit).all()
         return [
             {
-                "deviceId": row["deviceId"],
-                "displayName": row["displayName"],
-                "role": row["role"],
-                "batteryLevel": row["batteryLevel"],
-                "needsHelp": bool(row["needsHelp"]),
-                "latitude": row["latitude"],
-                "longitude": row["longitude"],
-                "timestamp": row["timestamp"]
+                "deviceId": r.deviceId,
+                "displayName": r.displayName,
+                "role": r.role,
+                "batteryLevel": r.batteryLevel,
+                "needsHelp": bool(r.needsHelp),
+                "latitude": r.latitude,
+                "longitude": r.longitude,
+                "timestamp": r.timestamp,
             }
-            for row in rows
+            for r in rows
         ]
 
 # ── SOS Delivery Status & Authenticated Acknowledgment Endpoints ─────────────
