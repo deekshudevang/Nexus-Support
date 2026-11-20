@@ -14,8 +14,11 @@ object AssignmentNotificationHelper {
     private const val CHANNEL_NAME = "Tactical Emergency Assignments"
     private const val NOTIFICATION_ID_BASE = 8000
 
+    internal var sdkIntOverride: Int? = null
+    internal fun getSdkInt(): Int = sdkIntOverride ?: Build.VERSION.SDK_INT
+
     fun createNotificationChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (getSdkInt() >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
@@ -39,7 +42,7 @@ object AssignmentNotificationHelper {
         try {
             createNotificationChannel(context)
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (getSdkInt() >= Build.VERSION_CODES.TIRAMISU) {
                 if (androidx.core.content.ContextCompat.checkSelfPermission(
                         context,
                         android.Manifest.permission.POST_NOTIFICATIONS

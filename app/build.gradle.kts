@@ -21,6 +21,10 @@ android {
         testInstrumentationRunner = "com.meshlink.app.HiltTestRunner"
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -113,6 +117,8 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
     testImplementation("org.json:json:20210307")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation(libs.retrofit)
