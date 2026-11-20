@@ -5,7 +5,9 @@ import { vi } from 'vitest';
 // Mock Leaflet since jsdom doesn't support canvas/DOM measurements
 vi.mock('react-leaflet', () => ({
   MapContainer: ({ children }) => <div data-testid="map-container">{children}</div>,
-  TileLayer: () => <div data-testid="tile-layer" />,
+  TileLayer: ({ url, attribution }) => (
+    <div data-testid="tile-layer" data-url={url} data-attribution={attribution} />
+  ),
   Marker: ({ children, position }) => (
     <div data-testid="marker" data-position={JSON.stringify(position)}>
       {children}

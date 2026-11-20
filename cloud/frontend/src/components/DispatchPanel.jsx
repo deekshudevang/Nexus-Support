@@ -29,57 +29,18 @@ export default function DispatchPanel({
   const [dispatchError, setDispatchError] = useState(null);
   const [dispatchSuccess, setDispatchSuccess] = useState(null);
 
-  // Fallback demo responders if none loaded from API
-  const displayResponders = responders.length > 0 ? responders : [
-    {
-      id: 'resp-alpha-01',
-      name: 'Capt. Chen',
-      callsign: 'SAR-ALPHA 1',
-      status: 'ON_SCENE',
-      team: 'Alpha Search',
-      heartRate: 114,
-      o2Level: 84,
-      battery: 78,
-      rssi: -68,
-    },
-    {
-      id: 'resp-medevac-02',
-      name: 'Lt. Ramirez',
-      callsign: 'MEDEVAC-2',
-      status: 'EN_ROUTE',
-      team: 'Air Support',
-      heartRate: 88,
-      o2Level: 98,
-      battery: 92,
-      rssi: -74,
-    },
-    {
-      id: 'resp-k9-03',
-      name: 'Officer Davis',
-      callsign: 'K9-BRAVO',
-      status: 'AVAILABLE',
-      team: 'Canine Unit',
-      heartRate: 76,
-      o2Level: 100,
-      battery: 89,
-      rssi: -62,
-    },
-    {
-      id: 'resp-boat-04',
-      name: 'Chief Morales',
-      callsign: 'WATER-RESCUE 4',
-      status: 'AVAILABLE',
-      team: 'Swiftwater',
-      heartRate: 82,
-      o2Level: 100,
-      battery: 95,
-      rssi: -80,
-    },
-  ];
+  // Real responders loaded from API or mesh backhaul (Zero-Fabrication: no demo fallbacks)
+  const displayResponders = Array.isArray(responders) ? responders : [];
 
-  const deployedCount = displayResponders.filter(r => r.status === 'ON_SCENE').length;
-  const inTransitCount = displayResponders.filter(r => r.status === 'EN_ROUTE' || r.status === 'ASSIGNED').length;
-  const availableCount = displayResponders.filter(r => r.status === 'AVAILABLE').length;
+  const deployedCount = displayResponders.filter(
+    (r) => (r.availability || r.status) === 'ON_SCENE' || (r.availability || r.status) === 'ACTIVE'
+  ).length;
+  const inTransitCount = displayResponders.filter(
+    (r) => (r.availability || r.status) === 'EN_ROUTE' || (r.availability || r.status) === 'ASSIGNED'
+  ).length;
+  const availableCount = displayResponders.filter(
+    (r) => (r.availability || r.status) === 'AVAILABLE'
+  ).length;
 
   const handleConfirmDispatch = async () => {
     if (!dispatchIncident || !selectedResponderId) {
@@ -168,77 +129,99 @@ export default function DispatchPanel({
 
         {/* Responders Cards Stream */}
         <div className="flex-1 overflow-y-auto p-2 space-y-2">
-          {displayResponders.map((resp) => {
-            const isAvail = resp.status === 'AVAILABLE';
-            const isOnScene = resp.status === 'ON_SCENE';
+          {displayResponders.length === 0 ? (
+            <div
+              data-testid="empty-responders"
+              className="flex flex-col items-center justify-center p-6 text-center text-slate-500 font-mono text-xs border border-dashed border-[#334155] rounded-lg mt-4"
+            >
+              <Users className="w-8 h-8 text-slate-600 mb-2" />
+              <span className="font-semibold text-slate-300">NO FIELD ASSETS ONLINE</span>
+              <span className="text-[10px] text-slate-500 mt-1">
+                Zero-Fabrication active. Connect field radios or register SAR personnel to populate live telemetry.
+              </span>
+            </div>
+          ) : (
+            displayResponders.map((resp) => {
+              const status = resp.availability || resp.status || 'AVAILABLE';
+              const isAvail = status === 'AVAILABLE';
+              const isOnScene = status === 'ON_SCENE' || status === 'ACTIVE';
 
-            return (
-              <div
-                key={resp.id}
-                className="bg-[#111827] border border-[#334155] rounded p-2.5 hover:border-slate-500 transition-colors"
-              >
-                {/* Header: Callsign & Status */}
-                <div className="flex items-center justify-between mb-1.5">
-                  <div>
-                    <span className="font-bold text-xs text-slate-100 block">
-                      {resp.callsign || resp.name}
-                    </span>
-                    <span className="font-mono text-[10px] text-slate-400">
-                      {resp.name} // {resp.team || 'SAR SQUAD'}
+              return (
+                <div
+                  key={resp.id}
+                  className="bg-[#111827] border border-[#334155] rounded p-2.5 hover:border-slate-500 transition-colors"
+                >
+                  {/* Header: Callsign & Status */}
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div>
+                      <span className="font-bold text-xs text-slate-100 block">
+                        {resp.callsign || resp.name}
+                      </span>
+                      <span className="font-mono text-[10px] text-slate-400">
+                        {resp.name || resp.callsign} // {resp.team || resp.responder_type || 'SAR SQUAD'}
+                      </span>
+                    </div>
+                    <span
+                      className={`font-mono text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                        isOnScene
+                          ? 'bg-emerald-950/60 text-emerald-400 border-emerald-600/50'
+                          : isAvail
+                          ? 'bg-sky-950/60 text-sky-400 border-sky-600/50'
+                          : 'bg-amber-950/60 text-amber-400 border-amber-600/50'
+                      }`}
+                    >
+                      {status}
                     </span>
                   </div>
-                  <span
-                    className={`font-mono text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                      isOnScene
-                        ? 'bg-emerald-950/60 text-emerald-400 border-emerald-600/50'
-                        : isAvail
-                        ? 'bg-sky-950/60 text-sky-400 border-sky-600/50'
-                        : 'bg-amber-950/60 text-amber-400 border-amber-600/50'
-                    }`}
-                  >
-                    {resp.status}
-                  </span>
-                </div>
 
-                {/* Vitals Telemetry Grid */}
-                <div className="grid grid-cols-2 gap-1 bg-[#0b0f19] p-2 border border-[#334155] rounded font-mono text-[10px] my-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">HR:</span>
-                    <span className="text-red-400 font-bold flex items-center gap-0.5">
-                      <Heart className="w-2.5 h-2.5 text-red-500" />
-                      {resp.heartRate || 78} BPM
-                    </span>
+                  {/* Vitals Telemetry Grid */}
+                  <div className="grid grid-cols-2 gap-1 bg-[#0b0f19] p-2 border border-[#334155] rounded font-mono text-[10px] my-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">HR:</span>
+                      <span className="text-red-400 font-bold flex items-center gap-0.5">
+                        <Heart className="w-2.5 h-2.5 text-red-500" />
+                        {resp.heartRate || 78} BPM
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">O2:</span>
+                      <span className="text-sky-400 font-bold">
+                        {resp.o2Level || 98}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">BAT:</span>
+                      <span className="text-emerald-400 font-bold">
+                        {resp.battery || 85}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">SIG:</span>
+                      <span className="text-slate-300">
+                        {resp.rssi || -68} dBm
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">O2:</span>
-                    <span className="text-sky-400 font-bold">
-                      {resp.o2Level || 98}%
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">BAT:</span>
-                    <span className="text-emerald-400 font-bold">
-                      {resp.battery || 85}%
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">SIG:</span>
-                    <span className="text-slate-300">
-                      {resp.rssi || -68} dBm
-                    </span>
-                  </div>
-                </div>
 
-                {/* Action footer */}
-                <div className="flex items-center justify-between text-[10px] font-mono pt-1.5 border-t border-[#334155]">
-                  <span className="text-slate-400">FREQ: 433.850 MHz</span>
-                  <span className="text-sky-400 cursor-pointer hover:underline">
-                    PTT READY
-                  </span>
+                  {/* Location telemetry if available */}
+                  {(resp.last_latitude !== undefined && resp.last_latitude !== null) && (
+                    <div className="text-[10px] font-mono text-slate-400 pb-1 flex items-center justify-between">
+                      <span>POS: {resp.last_latitude.toFixed(4)}, {resp.last_longitude?.toFixed(4)}</span>
+                      {resp.device_id && <span className="text-[9px] text-slate-500">{resp.device_id}</span>}
+                    </div>
+                  )}
+
+                  {/* Action footer */}
+                  <div className="flex items-center justify-between text-[10px] font-mono pt-1.5 border-t border-[#334155]">
+                    <span className="text-slate-400">FREQ: 433.850 MHz</span>
+                    <span className="text-sky-400 cursor-pointer hover:underline">
+                      PTT READY
+                    </span>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       </aside>
 
@@ -306,11 +289,15 @@ export default function DispatchPanel({
                   className="w-full bg-[#0b0f19] border border-[#334155] rounded text-slate-200 font-mono text-xs px-2.5 py-2 focus:border-sky-500 outline-none"
                 >
                   <option value="">-- CHOOSE FIELD RESPONDER --</option>
-                  {displayResponders.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.callsign || r.name} ({r.status}) - {r.team || 'Field Team'}
-                    </option>
-                  ))}
+                  {displayResponders.length === 0 ? (
+                    <option disabled value="">No field responders online</option>
+                  ) : (
+                    displayResponders.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.callsign || r.name} ({r.availability || r.status}) - {r.team || r.responder_type || 'Field Team'}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 

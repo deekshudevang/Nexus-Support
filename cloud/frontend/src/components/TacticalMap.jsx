@@ -39,6 +39,41 @@ const createNodeMarker = (role = 'RELAY') =>
     iconAnchor: [12, 12],
   });
 
+const createResponderMarker = (availability = 'AVAILABLE') => {
+  const isAvail = availability === 'AVAILABLE';
+  const isAssigned = availability === 'ASSIGNED' || availability === 'ACTIVE';
+  const bg = isAvail ? '#10b981' : isAssigned ? '#f59e0b' : '#64748b';
+  return L.divIcon({
+    className: 'custom-responder-marker',
+    html: `<div class="marker-pin-responder" style="background: ${bg}; border: 2px solid #ffffff; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 8px ${bg}aa;">
+            <span style="font-size: 8px; font-weight: 800; color: #ffffff; line-height: 24px; text-align: center;">SAR</span>
+           </div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+};
+
+const TILE_LAYERS = {
+  RF_MESH: {
+    name: 'RF MESH',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  },
+  THERMAL: {
+    name: 'TERRAIN / TOPO',
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)',
+    maxZoom: 17,
+  },
+  SAT: {
+    name: 'SATELLITE',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, USGS, NOAA',
+    maxZoom: 18,
+  },
+};
+
 // Map Controller for smooth flyTo
 function MapFlyController({ targetCoords }) {
   const map = useMap();
@@ -87,6 +122,21 @@ export default function TacticalMap({
       !Number.isFinite(inc.longitude) ||
       (inc.latitude === 0 && inc.longitude === 0)
   );
+
+  // Separate mapped responders with valid coordinates (Zero GPS Fabrication)
+  const mappedResponders = (responders || []).filter((r) => {
+    const lat = r.last_latitude ?? r.latitude;
+    const lng = r.last_longitude ?? r.longitude;
+    return (
+      lat !== null &&
+      lat !== undefined &&
+      lng !== null &&
+      lng !== undefined &&
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      (lat !== 0 || lng !== 0)
+    );
+  });
 
   // Selected coords for flyTo
   const targetCoords =
@@ -140,6 +190,12 @@ export default function TacticalMap({
           >
             SATELLITE
           </button>
+        </div>
+
+        {/* Responders Count Badge */}
+        <div className="flex items-center gap-1.5 px-2 py-1 bg-[#111827]/95 backdrop-blur-sm border border-[#334155] rounded text-[11px] font-mono text-[#94a3b8] shadow pointer-events-auto">
+          <span className="w-2 h-2 rounded-full bg-[#10b981]"></span>
+          <span>FIELD UNITS: {mappedResponders.length}</span>
         </div>
 
         {/* Unmapped Incidents Alert Badge (Zero-Fabrication) */}
@@ -215,11 +271,48 @@ export default function TacticalMap({
           zoomControl={false}
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            key={activeLayer}
+            attribution={TILE_LAYERS[activeLayer]?.attribution || TILE_LAYERS.RF_MESH.attribution}
+            url={TILE_LAYERS[activeLayer]?.url || TILE_LAYERS.RF_MESH.url}
+            maxZoom={TILE_LAYERS[activeLayer]?.maxZoom || 19}
           />
 
           <MapFlyController targetCoords={targetCoords} />
+
+          {/* Plot Active Field Responders */}
+          {mappedResponders.map((resp) => {
+            const lat = resp.last_latitude ?? resp.latitude;
+            const lng = resp.last_longitude ?? resp.longitude;
+            const status = resp.availability || resp.status || 'AVAILABLE';
+            return (
+              <Marker
+                key={resp.id || resp.callsign}
+                position={[lat, lng]}
+                icon={createResponderMarker(status)}
+              >
+                <Popup>
+                  <div className="font-mono text-xs p-1 text-[#dee2ec] bg-[#171c23]">
+                    <div className="font-bold text-[#10b981] mb-1">
+                      {resp.callsign || resp.name || 'SAR RESPONDER'}
+                    </div>
+                    <div className="text-[10px] text-[#94a3b8]">
+                      Type: {resp.responder_type || 'SAR'} | Status: {status}
+                    </div>
+                    {resp.skills && resp.skills.length > 0 && (
+                      <div className="text-[10px] text-[#cbd5e1] mt-1">
+                        Skills: {Array.isArray(resp.skills) ? resp.skills.join(', ') : resp.skills}
+                      </div>
+                    )}
+                    {resp.device_id && (
+                      <div className="text-[9px] text-[#64748b] mt-0.5">
+                        Device: {resp.device_id}
+                      </div>
+                    )}
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
 
           {/* Plot Mapped SOS Incidents */}
           {mappedIncidents.map((inc) => (
