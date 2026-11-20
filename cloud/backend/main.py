@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import secrets
-import sqlite3
 import time
 from typing import Dict, List, Optional, Set
 from urllib.parse import urlparse
@@ -518,12 +517,18 @@ async def sync_sos(
     packets: List[SosPacket],
     _: str = Depends(verify_gateway_write),
     x_device_id: Optional[str] = Header(None),
+    x_organization_id: Optional[str] = Header(None),
     x_ack_assignment_ids: Optional[str] = Header(None),
+    x_assignment_updates: Optional[str] = Header(None),
     device_id: Optional[str] = Query(None),
+    organization_id: Optional[str] = Query(None),
     ack_assignment_ids: Optional[str] = Query(None),
+    assignment_updates: Optional[str] = Query(None),
 ):
     if len(packets) > 500:
         raise HTTPException(status_code=400, detail="Batch exceeds maximum allowed size of 500 packets")
+
+    caller_org = x_organization_id or organization_id or "org-default"
 
     with get_db() as db:
         count = 0
@@ -573,7 +578,7 @@ async def sync_sos(
                         priority=prio,
                         severity=p.severity,
                         status="REPORTED" if p.status in ["PENDING", "ACTIVE"] else p.status,
-                        organization_id="org-default",
+                        organization_id=caller_org,
                         source="MESH_SOS",
                         reporter_name=p.senderName,
                         reporter_contact=p.senderId,
@@ -594,15 +599,41 @@ async def sync_sos(
                 count += 1
                 receipts.append({"uuid": p.uuid, "status": "ACKNOWLEDGED", "synced": True})
 
-            # Process any assignment ACKs piggybacked on sync
-            raw_ack_ids = x_ack_assignment_ids or ack_assignment_ids
-            if raw_ack_ids:
-                ack_list = [i.strip() for i in raw_ack_ids.split(",") if i.strip()]
-                for ack_id in ack_list:
-                    asgn = db.query(AssignmentModel).filter(AssignmentModel.id == ack_id).first()
-                    if asgn and asgn.status == "DISPATCHED":
-                        asgn.status = "ACCEPTED"
-                        asgn.responded_at = int(time.time())
+            # Process any assignment status updates or ACKs piggybacked on sync
+            raw_updates = x_assignment_updates or assignment_updates or x_ack_assignment_ids or ack_assignment_ids
+            if raw_updates:
+                update_items = [i.strip() for i in raw_updates.split(",") if i.strip()]
+                now = int(time.time())
+                for item in update_items:
+                    if ":" in item:
+                        ack_id, target_status = item.split(":", 1)
+                        target_status = target_status.upper().strip()
+                    else:
+                        ack_id, target_status = item, "ACCEPTED"
+
+                    asgn = db.query(AssignmentModel).filter(
+                        AssignmentModel.id == ack_id,
+                        AssignmentModel.organization_id == caller_org
+                    ).first()
+                    if asgn:
+                        asgn.status = target_status
+                        if target_status in ("ACCEPTED", "DECLINED"):
+                            asgn.responded_at = now
+                        if target_status in ("COMPLETED", "CANCELLED"):
+                            asgn.completed_at = now
+
+                        # Update responder availability in tandem
+                        resp = db.query(ResponderModel).filter(
+                            ResponderModel.id == asgn.responder_id,
+                            ResponderModel.organization_id == caller_org
+                        ).first()
+                        if resp:
+                            if target_status in ("ACCEPTED", "EN_ROUTE"):
+                                resp.availability = "ASSIGNED"
+                            elif target_status == "ON_SCENE":
+                                resp.availability = "ACTIVE"
+                            elif target_status in ("COMPLETED", "DECLINED", "CANCELLED"):
+                                resp.availability = "AVAILABLE"
 
             # Query pending downlink assignments for syncing devices/responders
             relevant_ids = set()
@@ -614,32 +645,44 @@ async def sync_sos(
                 if p.senderId:
                     relevant_ids.add(p.senderId)
 
+            # Downlink Scoping: NEVER deliver downlinks to anonymous/unidentified syncing clients
             downlink_list = []
-            asgn_query = db.query(AssignmentModel).filter(AssignmentModel.status == "DISPATCHED")
             if relevant_ids:
                 responders = db.query(ResponderModel).filter(
+                    ResponderModel.organization_id == caller_org,
                     (ResponderModel.device_id.in_(relevant_ids)) | (ResponderModel.id.in_(relevant_ids))
                 ).all()
                 target_resp_ids = {r.id for r in responders}.union(relevant_ids)
-                asgn_query = asgn_query.filter(AssignmentModel.responder_id.in_(target_resp_ids))
-
-            pending_asgns = asgn_query.order_by(AssignmentModel.offered_at.desc()).limit(50).all()
-            for a in pending_asgns:
-                inc = db.query(IncidentModel).filter(IncidentModel.id == a.incident_id).first()
-                downlink_list.append({
-                    "id": a.id,
-                    "incident_id": a.incident_id,
-                    "responder_id": a.responder_id,
-                    "status": a.status,
-                    "role": "LEAD",
-                    "notes": inc.title if inc else "Emergency Dispatch",
-                    "description": inc.description if inc else "",
-                    "latitude": inc.latitude if inc else None,
-                    "longitude": inc.longitude if inc else None,
-                    "severity": inc.severity if inc else 5,
-                    "priority": inc.priority if inc else 3,
-                    "offered_at": a.offered_at,
-                })
+                pending_asgns = (
+                    db.query(AssignmentModel)
+                    .filter(
+                        AssignmentModel.organization_id == caller_org,
+                        AssignmentModel.status == "DISPATCHED",
+                        AssignmentModel.responder_id.in_(target_resp_ids)
+                    )
+                    .order_by(AssignmentModel.offered_at.desc())
+                    .limit(50)
+                    .all()
+                )
+                for a in pending_asgns:
+                    inc = db.query(IncidentModel).filter(
+                        IncidentModel.id == a.incident_id,
+                        IncidentModel.organization_id == caller_org
+                    ).first()
+                    downlink_list.append({
+                        "id": a.id,
+                        "incident_id": a.incident_id,
+                        "responder_id": a.responder_id,
+                        "status": a.status,
+                        "role": "LEAD",
+                        "notes": inc.title if inc else "Emergency Dispatch",
+                        "description": inc.description if inc else "",
+                        "latitude": inc.latitude if inc else None,
+                        "longitude": inc.longitude if inc else None,
+                        "severity": inc.severity if inc else 5,
+                        "priority": inc.priority if inc else 3,
+                        "offered_at": a.offered_at,
+                    })
 
             db.commit()
         except Exception as e:
@@ -661,23 +704,71 @@ class AssignmentAckRequest(BaseModel):
     assignment_id: Optional[str] = None
     status: str = "ACCEPTED"
     notes: Optional[str] = None
+    device_id: Optional[str] = None
+    responder_id: Optional[str] = None
 
 @app.post("/api/v1/sync/assignments/{assignment_id}/ack")
 @app.post("/api/sync/assignments/{assignment_id}/ack")
+@app.post("/api/v1/sync/assignments/{assignment_id}/status")
+@app.post("/api/sync/assignments/{assignment_id}/status")
 def ack_downlink_assignment(
     assignment_id: str,
     req: Optional[AssignmentAckRequest] = None,
+    x_device_id: Optional[str] = Header(None),
+    x_organization_id: Optional[str] = Header(None),
     _: str = Depends(verify_gateway_write)
 ):
     with get_db() as db:
         asgn = db.query(AssignmentModel).filter(AssignmentModel.id == assignment_id).first()
         if not asgn:
             raise HTTPException(status_code=404, detail="Assignment not found")
+
+        caller_org = x_organization_id or "org-default"
+        if asgn.organization_id != caller_org:
+            raise HTTPException(status_code=404, detail="Assignment not found")
+
+        # Device scoping check: verify device is authorized for this assignment
+        dev_id = x_device_id or (req.device_id if req else None)
+        if dev_id:
+            responder = db.query(ResponderModel).filter(
+                (ResponderModel.device_id == dev_id) | (ResponderModel.id == dev_id),
+                ResponderModel.organization_id == caller_org
+            ).first()
+            if responder and responder.id != asgn.responder_id:
+                raise HTTPException(status_code=403, detail="Device not authorized for this assignment")
+
         new_status = req.status.upper().strip() if req and req.status else "ACCEPTED"
+        allowed_statuses = {"DISPATCHED", "ACCEPTED", "DECLINED", "EN_ROUTE", "ON_SCENE", "COMPLETED", "CANCELLED"}
+        if new_status not in allowed_statuses:
+            raise HTTPException(status_code=400, detail=f"Invalid assignment status: {new_status}")
+
+        now = int(time.time())
         asgn.status = new_status
-        asgn.responded_at = int(time.time())
+        if new_status in ("ACCEPTED", "DECLINED"):
+            asgn.responded_at = now
+        if new_status in ("COMPLETED", "CANCELLED"):
+            asgn.completed_at = now
+
+        # Update responder availability
+        resp = db.query(ResponderModel).filter(
+            ResponderModel.id == asgn.responder_id,
+            ResponderModel.organization_id == caller_org
+        ).first()
+        if resp:
+            if new_status in ("ACCEPTED", "EN_ROUTE"):
+                resp.availability = "ASSIGNED"
+            elif new_status == "ON_SCENE":
+                resp.availability = "ACTIVE"
+            elif new_status in ("COMPLETED", "DECLINED", "CANCELLED"):
+                resp.availability = "AVAILABLE"
+
         db.commit()
-        return {"status": "success", "assignment_id": asgn.id, "assignment_status": asgn.status}
+        return {
+            "status": "success",
+            "assignment_id": asgn.id,
+            "assignment_status": asgn.status,
+            "responder_availability": resp.availability if resp else None
+        }
 
 @app.post("/api/sync/nodes")
 def sync_nodes(nodes: List[NodeStatus], _: str = Depends(verify_gateway_write)):
@@ -723,10 +814,13 @@ def sync_nodes(nodes: List[NodeStatus], _: str = Depends(verify_gateway_write)):
 @app.post("/api/sync/location")
 def sync_location_events(
     events: List[LocationEventIn],
+    x_organization_id: Optional[str] = Header(None),
     _: str = Depends(verify_sync_write)
 ):
     if len(events) > 5000:
         raise HTTPException(status_code=400, detail="Batch exceeds maximum allowed size of 5000 location events")
+
+    caller_org = x_organization_id or "org-default"
 
     with get_db() as db:
         count = 0
@@ -745,6 +839,7 @@ def sync_location_events(
                         signature=ev.signature or "",
                         public_key=ev.publicKey or "",
                         sync_status=1,
+                        organization_id=caller_org,
                     )
                     db.add(loc_record)
                 else:
@@ -753,8 +848,9 @@ def sync_location_events(
                     existing.accuracy = ev.accuracy or 0.0
                     existing.timestamp = ev.timestamp
 
-                # Telemetry convergence: update matching responder coordinates
+                # Telemetry convergence: update matching responder coordinates within same organization
                 responder = db.query(ResponderModel).filter(
+                    ResponderModel.organization_id == caller_org,
                     (ResponderModel.device_id == ev.peerId) | (ResponderModel.id == ev.peerId)
                 ).first()
                 if responder:
@@ -777,12 +873,15 @@ def sync_location_events(
 def fetch_location_events(
     sinceTimestamp: Optional[int] = Query(0),
     limit: int = Query(500, ge=1, le=5000),
+    x_organization_id: Optional[str] = Header(None),
     _: str = Depends(verify_sync_write)
 ):
+    caller_org = x_organization_id or "org-default"
     with get_db() as db:
-        query = db.query(LocationEventModel)
+        query = db.query(LocationEventModel).filter(LocationEventModel.organization_id == caller_org)
         if sinceTimestamp and sinceTimestamp > 0:
             query = query.filter(LocationEventModel.timestamp > sinceTimestamp)
+        records = query.order_by(LocationEventModel.timestamp.asc()).limit(limit).all()
         records = query.order_by(LocationEventModel.timestamp.asc()).limit(limit).all()
         return [
             {

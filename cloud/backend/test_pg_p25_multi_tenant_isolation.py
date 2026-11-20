@@ -288,3 +288,70 @@ def test_negative_tenant_spoofing_prevented(client, db):
     assert res.status_code == 201
     # Must belong to org-bravo, NOT the spoofed header
     assert res.json()["organization_id"] == "org-bravo"
+
+
+# ── TEST 6: Downlink and Location Sync Multi-Tenant Isolation ─────────────────
+def test_tenant_downlink_and_location_sync_isolation(client, db):
+    """Devices in Organization Alpha must never receive downlinks or location telemetry from Organization Bravo."""
+    unique = uuid.uuid4().hex[:8]
+    now = int(time.time())
+
+    resp_alpha = f"resp-mt-alpha-{unique}"
+    dev_alpha = f"dev-mt-alpha-{unique}"
+    asgn_alpha = f"asgn-mt-alpha-{unique}"
+
+    resp_bravo = f"resp-mt-bravo-{unique}"
+    dev_bravo = f"dev-mt-bravo-{unique}"
+    asgn_bravo = f"asgn-mt-bravo-{unique}"
+
+    db.add_all([
+        ResponderModel(id=resp_alpha, callsign="SAR-ALPHA", organization_id="org-alpha", device_id=dev_alpha, created_at=now),
+        ResponderModel(id=resp_bravo, callsign="SAR-BRAVO", organization_id="org-bravo", device_id=dev_bravo, created_at=now),
+        AssignmentModel(id=asgn_alpha, incident_id=f"inc-a-{unique}", responder_id=resp_alpha, status="DISPATCHED", organization_id="org-alpha", offered_at=now),
+        AssignmentModel(id=asgn_bravo, incident_id=f"inc-b-{unique}", responder_id=resp_bravo, status="DISPATCHED", organization_id="org-bravo", offered_at=now),
+    ])
+    db.commit()
+
+    # 1. Device Alpha syncs with X-Organization-Id: org-alpha
+    res_alpha = client.post(
+        "/api/v1/sync/sos",
+        headers={"X-Gateway-Key": "meshlink_gw_dev_secret", "X-Device-Id": dev_alpha, "X-Organization-Id": "org-alpha"},
+        json=[]
+    )
+    assert res_alpha.status_code == 200
+    downlinks_alpha = [d["id"] for d in res_alpha.json()["downlinks"]]
+    assert asgn_alpha in downlinks_alpha
+    assert asgn_bravo not in downlinks_alpha
+
+    # 2. Device Alpha attempts to update Assignment Bravo's status (cross-org IDOR attack)
+    attack_res = client.post(
+        f"/api/v1/sync/assignments/{asgn_bravo}/status",
+        headers={"X-Gateway-Key": "meshlink_gw_dev_secret", "X-Device-Id": dev_alpha, "X-Organization-Id": "org-alpha"},
+        json={"status": "ON_SCENE"}
+    )
+    assert attack_res.status_code == 404, "Cross-organization assignment update must return 404 Not Found"
+
+    # 3. Location sync isolation
+    loc_evt = f"loc-evt-{unique}"
+    client.post(
+        "/api/v1/sync/location",
+        headers={"X-Gateway-Key": "meshlink_gw_dev_secret", "X-Organization-Id": "org-alpha"},
+        json=[{
+            "eventId": loc_evt,
+            "peerId": dev_alpha,
+            "latitude": 38.0,
+            "longitude": -120.0,
+            "accuracy": 5.0,
+            "timestamp": now,
+        }]
+    )
+
+    # Org Bravo operator queries location sync: must NOT see Org Alpha's event
+    fetch_bravo = client.get(
+        "/api/v1/sync/location?sinceTimestamp=0",
+        headers={"X-Gateway-Key": "meshlink_gw_dev_secret", "X-Organization-Id": "org-bravo"}
+    )
+    assert fetch_bravo.status_code == 200
+    bravo_evt_ids = [e["eventId"] for e in fetch_bravo.json()]
+    assert loc_evt not in bravo_evt_ids
+
