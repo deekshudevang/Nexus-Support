@@ -285,6 +285,13 @@ class MigrationTest {
         // 12. Apply MIGRATION_13_14 (adds isVerified to known_devices)
         AppDatabase.MIGRATION_13_14.migrate(db)
 
+        // 13. Apply MIGRATION_14_15 (adds assignments table)
+        AppDatabase.MIGRATION_14_15.migrate(db)
+        db.execSQL(
+            "INSERT INTO assignments (id, incidentId, responderId, role, status, notes, description, priority, severity, offeredAt, synced) " +
+            "VALUES ('asgn_chain_1', 'inc_99', 'node_1', 'SAR', 'DISPATCHED', 'Deploy to ridge', 'Structure protection', 4, 8, 700000, 0)"
+        )
+
         // --- VERIFY DATA INTEGRITY OF ORIGINAL v1 / v2 DATA ---
         val msgCursor = db.query(
             "SELECT id, senderId, receiverId, senderName, routeHistory, status, delivered FROM messages WHERE id = 'msg_ancient_1'"
@@ -329,6 +336,56 @@ class MigrationTest {
         assertEquals("PENDING", sosCursor.getString(3))
         sosCursor.close()
 
+        val asgnCursor = db.query(
+            "SELECT id, incidentId, status, priority FROM assignments WHERE id = 'asgn_chain_1'"
+        )
+        asgnCursor.moveToFirst()
+        assertEquals("asgn_chain_1", asgnCursor.getString(0))
+        assertEquals("inc_99", asgnCursor.getString(1))
+        assertEquals("DISPATCHED", asgnCursor.getString(2))
+        assertEquals(4, asgnCursor.getInt(3))
+        asgnCursor.close()
+
+        db.close()
+    }
+
+    @Test
+    @Throws(IOException::class)
+    fun migrate14To15() {
+        helper.createDatabase(TEST_DB, 14).apply {
+            execSQL(
+                "INSERT INTO known_devices (deviceId, displayName, publicKey, lastSeen, isVerified) " +
+                "VALUES ('dev14', 'Relay Mast', X'0102', 1000, 1)"
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(
+            TEST_DB,
+            15,
+            true,
+            AppDatabase.MIGRATION_14_15
+        )
+
+        // Verify known_devices is intact
+        val devCursor = db.query("SELECT deviceId, isVerified FROM known_devices WHERE deviceId = 'dev14'")
+        devCursor.moveToFirst()
+        assertEquals("dev14", devCursor.getString(0))
+        assertEquals(1, devCursor.getInt(1))
+        devCursor.close()
+
+        // Verify assignments table exists and insert works
+        db.execSQL(
+            "INSERT INTO assignments (id, incidentId, responderId, role, status, notes, description, priority, severity, offeredAt, synced) " +
+            "VALUES ('asgn1', 'inc1', 'resp1', 'LEAD', 'DISPATCHED', 'Deploy immediately', 'Forest fire', 4, 8, 5000, 0)"
+        )
+        val asgnCursor = db.query("SELECT id, incidentId, status, priority FROM assignments WHERE id = 'asgn1'")
+        asgnCursor.moveToFirst()
+        assertEquals("asgn1", asgnCursor.getString(0))
+        assertEquals("inc1", asgnCursor.getString(1))
+        assertEquals("DISPATCHED", asgnCursor.getString(2))
+        assertEquals(4, asgnCursor.getInt(3))
+        asgnCursor.close()
         db.close()
     }
 

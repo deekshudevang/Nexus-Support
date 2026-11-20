@@ -10,7 +10,9 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkerParameters
+import com.meshlink.app.data.local.dao.AssignmentDao
 import com.meshlink.app.data.local.dao.SosPacketDao
+import com.meshlink.app.data.local.entity.AssignmentEntity
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
@@ -29,7 +31,8 @@ import java.util.concurrent.TimeUnit
 class GatewaySyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted workerParams: WorkerParameters,
-    private val sosDao: SosPacketDao
+    private val sosDao: SosPacketDao,
+    private val assignmentDao: AssignmentDao
 ) : CoroutineWorker(context, workerParams) {
 
     companion object {
@@ -71,8 +74,12 @@ class GatewaySyncWorker @AssistedInject constructor(
                 it.status != "DELIVERED" && it.status != "ACKNOWLEDGED"
             }
 
-            if (packetsToSync.isEmpty()) {
-                Timber.i("GatewaySyncWorker: No unsynced SOS packets to sync.")
+            // Check for locally unsynced assignment status changes (e.g. ACCEPTED)
+            val unsyncedAssignments = assignmentDao.getUnsyncedAssignments()
+            val ackAssignmentIds = unsyncedAssignments.filter { it.status == "ACCEPTED" }.map { it.id }
+
+            if (packetsToSync.isEmpty() && ackAssignmentIds.isEmpty()) {
+                Timber.i("GatewaySyncWorker: No unsynced SOS packets or assignment status updates.")
                 return@withContext Result.success()
             }
 
@@ -113,6 +120,9 @@ class GatewaySyncWorker @AssistedInject constructor(
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("X-Gateway-Key", gatewayKey)
             connection.setRequestProperty("Authorization", "Bearer $gatewayKey")
+            if (ackAssignmentIds.isNotEmpty()) {
+                connection.setRequestProperty("X-Ack-Assignment-Ids", ackAssignmentIds.joinToString(","))
+            }
             connection.connectTimeout = 15_000
             connection.readTimeout = 15_000
             connection.doOutput = true
@@ -148,11 +158,42 @@ class GatewaySyncWorker @AssistedInject constructor(
                         val downlinks = respObj.getJSONArray("downlinks")
                         for (i in 0 until downlinks.length()) {
                             val dl = downlinks.getJSONObject(i)
+                            val asgnId = dl.optString("id").takeIf { it.isNotBlank() } ?: dl.optString("assignment_id")
                             val incidentId = dl.optString("incident_id")
-                            val role = dl.optString("role")
+                            val role = dl.optString("role", "SAR")
                             val notes = dl.optString("notes")
-                            receivedDownlinks.add(dl)
-                            Timber.i("GatewaySyncWorker: Downlink assignment received for incident $incidentId [role: $role]: $notes")
+                            val description = dl.optString("description")
+                            val responderId = dl.optString("responder_id")
+                            val status = dl.optString("status", "DISPATCHED")
+                            val lat = if (dl.has("latitude") && !dl.isNull("latitude")) dl.optDouble("latitude") else null
+                            val lon = if (dl.has("longitude") && !dl.isNull("longitude")) dl.optDouble("longitude") else null
+                            val prio = dl.optInt("priority", 3)
+                            val sev = dl.optInt("severity", 5)
+                            val offered = dl.optLong("offered_at", System.currentTimeMillis())
+
+                            if (asgnId.isNotBlank() && incidentId.isNotBlank()) {
+                                val existing = assignmentDao.getById(asgnId)
+                                val currentStatus = existing?.status ?: status
+                                val entity = AssignmentEntity(
+                                    id = asgnId,
+                                    incidentId = incidentId,
+                                    responderId = responderId,
+                                    role = role,
+                                    status = currentStatus,
+                                    notes = notes,
+                                    description = description,
+                                    latitude = lat,
+                                    longitude = lon,
+                                    priority = prio,
+                                    severity = sev,
+                                    offeredAt = offered,
+                                    respondedAt = existing?.respondedAt,
+                                    synced = existing?.synced ?: false
+                                )
+                                assignmentDao.insertOrUpdate(entity)
+                                receivedDownlinks.add(dl)
+                                Timber.i("GatewaySyncWorker: Downlink assignment persisted for incident $incidentId [role: $role]: $notes")
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -170,7 +211,12 @@ class GatewaySyncWorker @AssistedInject constructor(
                     sosDao.updateStatus(uuid, "ACKNOWLEDGED")
                 }
 
-                Timber.i("GatewaySyncWorker: Successfully reconciled ${acknowledgedUuids.size} SOS packets")
+                // Mark acknowledged assignments as synced
+                for (ackId in ackAssignmentIds) {
+                    assignmentDao.markSynced(ackId)
+                }
+
+                Timber.i("GatewaySyncWorker: Successfully reconciled ${acknowledgedUuids.size} SOS packets and ${receivedDownlinks.size} downlinks")
                 Result.success()
             } else if (responseCode == 401 || responseCode == 403) {
                 Timber.e("GatewaySyncWorker: Authentication failure with gateway (HTTP $responseCode). Check X-Gateway-Key.")

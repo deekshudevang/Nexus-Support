@@ -5,6 +5,7 @@ import androidx.work.Data
 import androidx.work.ListenableWorker
 import androidx.work.NetworkType
 import androidx.work.WorkerParameters
+import com.meshlink.app.data.local.dao.AssignmentDao
 import com.meshlink.app.data.local.dao.SosPacketDao
 import com.meshlink.app.data.local.entity.SosPacketEntity
 import io.mockk.coEvery
@@ -22,17 +23,19 @@ class GatewaySyncWorkerTest {
     private val context: Context = mockk(relaxed = true)
     private val workerParams: WorkerParameters = mockk(relaxed = true)
     private val sosDao: SosPacketDao = mockk(relaxed = true)
+    private val assignmentDao: AssignmentDao = mockk(relaxed = true)
 
     @Before
     fun setup() {
         every { workerParams.inputData } returns Data.EMPTY
+        coEvery { assignmentDao.getUnsyncedAssignments() } returns emptyList()
     }
 
     @Test
     fun `doWork returns success immediately when no packets in database`() = runTest {
         coEvery { sosDao.getAllPacketsBlocking() } returns emptyList()
 
-        val worker = GatewaySyncWorker(context, workerParams, sosDao)
+        val worker = GatewaySyncWorker(context, workerParams, sosDao, assignmentDao)
         val result = worker.doWork()
 
         assertEquals(ListenableWorker.Result.success(), result)
@@ -69,7 +72,7 @@ class GatewaySyncWorkerTest {
         )
         coEvery { sosDao.getAllPacketsBlocking() } returns acknowledgedPackets
 
-        val worker = GatewaySyncWorker(context, workerParams, sosDao)
+        val worker = GatewaySyncWorker(context, workerParams, sosDao, assignmentDao)
         val result = worker.doWork()
 
         assertEquals(ListenableWorker.Result.success(), result)
@@ -100,7 +103,7 @@ class GatewaySyncWorkerTest {
             .build()
         every { workerParams.inputData } returns inputData
 
-        val worker = GatewaySyncWorker(context, workerParams, sosDao)
+        val worker = GatewaySyncWorker(context, workerParams, sosDao, assignmentDao)
         val result = worker.doWork()
 
         assertEquals(ListenableWorker.Result.retry(), result)

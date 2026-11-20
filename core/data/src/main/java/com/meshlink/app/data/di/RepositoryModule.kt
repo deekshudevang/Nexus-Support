@@ -41,4 +41,7 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindSosRepository(impl: com.meshlink.app.data.repository.SosRepositoryImpl): com.meshlink.app.domain.repository.SosRepository
+
+    @Binds
+    abstract fun bindAssignmentRepository(impl: com.meshlink.app.data.repository.AssignmentRepositoryImpl): com.meshlink.app.domain.repository.AssignmentRepository
 }

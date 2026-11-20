@@ -4,9 +4,11 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.meshlink.app.data.local.dao.AssignmentDao
 import com.meshlink.app.data.local.dao.DeviceDao
 import com.meshlink.app.data.local.dao.MessageDao
 import com.meshlink.app.data.local.dao.PendingMessageDao
+import com.meshlink.app.data.local.entity.AssignmentEntity
 import com.meshlink.app.data.local.entity.KnownDeviceEntity
 import com.meshlink.app.data.local.entity.LocationEventEntity
 import com.meshlink.app.data.local.entity.LocationSyncQueueEntity
@@ -23,9 +25,10 @@ import com.meshlink.app.data.local.entity.SosPacketEntity
         LocationEventEntity::class,
         LocationSyncQueueEntity::class,
         ProcessedEventEntity::class,
-        SosPacketEntity::class
+        SosPacketEntity::class,
+        AssignmentEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -36,6 +39,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun locationSyncQueueDao(): com.meshlink.app.data.local.dao.LocationSyncQueueDao
     abstract fun processedEventDao(): com.meshlink.app.data.local.dao.ProcessedEventDao
     abstract fun sosPacketDao(): com.meshlink.app.data.local.dao.SosPacketDao
+    abstract fun assignmentDao(): AssignmentDao
 
     companion object {
         /**
@@ -225,6 +229,36 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_13_14 = object : Migration(13, 14) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE known_devices ADD COLUMN isVerified INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v14 → v15: adds assignments table for server-to-device downlink dispatching
+         */
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS assignments (
+                        id           TEXT    NOT NULL PRIMARY KEY,
+                        incidentId   TEXT    NOT NULL,
+                        responderId  TEXT    NOT NULL DEFAULT '',
+                        role         TEXT    NOT NULL DEFAULT 'SAR',
+                        status       TEXT    NOT NULL DEFAULT 'DISPATCHED',
+                        notes        TEXT    NOT NULL DEFAULT '',
+                        description  TEXT    NOT NULL DEFAULT '',
+                        latitude     REAL,
+                        longitude    REAL,
+                        priority     INTEGER NOT NULL DEFAULT 3,
+                        severity     INTEGER NOT NULL DEFAULT 5,
+                        offeredAt    INTEGER NOT NULL DEFAULT 0,
+                        respondedAt  INTEGER,
+                        synced       INTEGER NOT NULL DEFAULT 0
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_assignments_incidentId ON assignments (incidentId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_assignments_status ON assignments (status)")
             }
         }
     }
