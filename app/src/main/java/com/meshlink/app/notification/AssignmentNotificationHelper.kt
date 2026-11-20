@@ -39,6 +39,17 @@ object AssignmentNotificationHelper {
         try {
             createNotificationChannel(context)
 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (androidx.core.content.ContextCompat.checkSelfPermission(
+                        context,
+                        android.Manifest.permission.POST_NOTIFICATIONS
+                    ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                ) {
+                    timber.log.Timber.w("POST_NOTIFICATIONS permission not granted. Skipping heads-up notification.")
+                    return
+                }
+            }
+
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 putExtra("NAVIGATE_TO", "assignments")

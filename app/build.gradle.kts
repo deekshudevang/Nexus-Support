@@ -114,6 +114,9 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation("org.json:json:20210307")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation(libs.retrofit)
+    testImplementation(libs.retrofit.converter.gson)
     testImplementation(libs.navigation.testing)
 
     // Testing — instrumented / Compose UI tests

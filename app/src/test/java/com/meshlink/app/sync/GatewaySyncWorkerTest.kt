@@ -122,5 +122,38 @@ class GatewaySyncWorkerTest {
         assertEquals("secret-key-123", spec.input.getString(GatewaySyncWorker.KEY_GATEWAY_KEY))
         assertTrue(spec.backoffDelayDuration > 0)
     }
+
+    @Test
+    fun `doWork synchronizes unsynced assignment status updates even when no SOS packets`() = runTest {
+        coEvery { sosDao.getAllPacketsBlocking() } returns emptyList()
+        val unsynced = listOf(
+            com.meshlink.app.data.local.entity.AssignmentEntity(
+                id = "asgn-route-1",
+                incidentId = "inc-1",
+                responderId = "resp-1",
+                status = "EN_ROUTE",
+                role = "LEAD",
+                notes = "En route to site",
+                description = "",
+                severity = 5,
+                priority = 3,
+                offeredAt = 1000L,
+                synced = false
+            )
+        )
+        coEvery { assignmentDao.getUnsyncedAssignments() } returns unsynced
+
+        // Point to unreachable test endpoint to verify network attempt is made
+        val inputData = Data.Builder()
+            .putString(GatewaySyncWorker.KEY_GATEWAY_URL, "http://127.0.0.1:54321/api/v1/sync/sos")
+            .build()
+        every { workerParams.inputData } returns inputData
+
+        val worker = GatewaySyncWorker(context, workerParams, sosDao, assignmentDao)
+        val result = worker.doWork()
+
+        // Verifies worker did not return early success; it engaged sync pipeline for assignment updates
+        assertEquals(ListenableWorker.Result.retry(), result)
+    }
 }
 

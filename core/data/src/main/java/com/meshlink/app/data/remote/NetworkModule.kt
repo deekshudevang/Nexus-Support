@@ -21,10 +21,10 @@ object NetworkModule {
     fun provideOkHttpClient(): OkHttpClient {
         return OkHttpClient.Builder()
             .addInterceptor { chain ->
-                if (BASE_URL == "https://api.meshlink.app/v1/") {
-                    throw IOException("Backend is not yet deployed. Meshlink is operating in offline-only mode.")
-                }
-                chain.proceed(chain.request())
+                val request = chain.request().newBuilder()
+                    .header("X-Gateway-Key", "meshlink_gw_dev_secret")
+                    .build()
+                chain.proceed(request)
             }
             .build()
     }

@@ -74,11 +74,12 @@ class GatewaySyncWorker @AssistedInject constructor(
                 it.status != "DELIVERED" && it.status != "ACKNOWLEDGED"
             }
 
-            // Check for locally unsynced assignment status changes (e.g. ACCEPTED)
+            // Check for locally unsynced assignment status changes
             val unsyncedAssignments = assignmentDao.getUnsyncedAssignments()
-            val ackAssignmentIds = unsyncedAssignments.filter { it.status == "ACCEPTED" }.map { it.id }
+            val ackAssignmentIds = unsyncedAssignments.map { it.id }
+            val assignmentUpdates = unsyncedAssignments.map { "${it.id}:${it.status}" }
 
-            if (packetsToSync.isEmpty() && ackAssignmentIds.isEmpty()) {
+            if (packetsToSync.isEmpty() && unsyncedAssignments.isEmpty()) {
                 Timber.i("GatewaySyncWorker: No unsynced SOS packets or assignment status updates.")
                 return@withContext Result.success()
             }
@@ -120,6 +121,9 @@ class GatewaySyncWorker @AssistedInject constructor(
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("X-Gateway-Key", gatewayKey)
             connection.setRequestProperty("Authorization", "Bearer $gatewayKey")
+            if (assignmentUpdates.isNotEmpty()) {
+                connection.setRequestProperty("X-Assignment-Updates", assignmentUpdates.joinToString(","))
+            }
             if (ackAssignmentIds.isNotEmpty()) {
                 connection.setRequestProperty("X-Ack-Assignment-Ids", ackAssignmentIds.joinToString(","))
             }
@@ -220,9 +224,9 @@ class GatewaySyncWorker @AssistedInject constructor(
                     sosDao.updateStatus(uuid, "ACKNOWLEDGED")
                 }
 
-                // Mark acknowledged assignments as synced
-                for (ackId in ackAssignmentIds) {
-                    assignmentDao.markSynced(ackId)
+                // Mark processed assignments as synced
+                for (asgn in unsyncedAssignments) {
+                    assignmentDao.markSynced(asgn.id)
                 }
 
                 Timber.i("GatewaySyncWorker: Successfully reconciled ${acknowledgedUuids.size} SOS packets and ${receivedDownlinks.size} downlinks")
