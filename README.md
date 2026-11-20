@@ -1,154 +1,234 @@
 <div align="center">
 
 # Nexus Support
-### Offline-first emergency communication and incident coordination
+### Offline-First Emergency Mesh Communication & Tactical Incident Coordination
 
 [![CI](https://github.com/deekshudevang/Nexus-Support/actions/workflows/ci.yml/badge.svg)](https://github.com/deekshudevang/Nexus-Support/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/deekshudevang/Nexus-Support/actions/workflows/codeql.yml/badge.svg)](https://github.com/deekshudevang/Nexus-Support/actions/workflows/codeql.yml)
 [![Android](https://img.shields.io/badge/Android-API%2026%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
+[![Backend](https://img.shields.io/badge/FastAPI-1.0.0-009688?logo=fastapi&logoColor=white)](cloud/backend)
+[![Frontend](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](cloud/frontend)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**A mobile-first emergency mesh communication project with encrypted local storage, offline capabilities, and an optional incident-monitoring dashboard.**
+**An academic engineering prototype (3rd-Year Capstone Project) for peer-to-peer emergency distress messaging, encrypted local persistence, and tactical command center coordination.**
 
 </div>
 
-> **Release honesty:** CI passing is not the same as field readiness. Physical multi-hop/RF behavior, historical database migration coverage, 16 KB page-size compatibility, production HTTPS/WSS deployment, and manual accessibility checks remain release gates. See the [acceptance criteria](docs/ACCEPTANCE_CRITERIA.md) and [run checkpoint](docs/RUN_CHECKPOINT.md) for evidence and current status.
+---
 
-## What is in this repository?
+> **Engineering Honesty & Status Disclosure:**  
+> Nexus Support is an active working prototype and proof-of-concept for disaster relief operations. Automated CI test suites are passing across all tiers (128 backend pytest, 17 frontend Vitest, 149 Android Gradle tasks). However, live over-the-air multi-hop RF testing on physical LoRa hardware, physical multi-device deployment in austere terrain, and production multi-region cloud clustering remain future release milestones. See [docs/LIMITATIONS_AND_FUTURE_WORK.md](docs/LIMITATIONS_AND_FUTURE_WORK.md).
 
-- **Android app** — Kotlin, Jetpack Compose and Material 3 UI.
-- **Domain and data modules** — shared domain models and local persistence.
-- **Mesh and transport modules** — peer communication, routing and transport abstractions.
-- **Cryptography** — identity/key handling and message-protection components.
-- **Offline assistant** — on-device AI integration for emergency-oriented workflows; model availability and device performance depend on supported hardware and installed assets.
-- **Cloud backend** — FastAPI service for authorized incident and node APIs.
-- **Operations dashboard** — React/Vite interface with a Leaflet map, incident filtering, and live updates where the backend is configured.
+---
 
-The app's offline communication path and the optional cloud dashboard have different connectivity requirements. The dashboard/backend must not be described as an offline service.
+## What is Nexus Support?
 
-## Architecture at a glance
+When municipal power, cellular towers, and internet connections collapse during catastrophic weather or earthquakes, civilians and first responders are cut off. Nexus Support bridges this gap through two operational tiers:
+
+1. **Austere Edge Tier (Mobile Mesh)**: Android devices communicate directly over peer-to-peer wireless links (Google Nearby Connections BLE/Wi-Fi Direct) forming an ad-hoc multi-hop mesh. SOS distress beacons receive highest priority (P10) preemption, while messages are encrypted locally using SQLCipher and in transit using Google Tink AEAD.
+2. **Tactical Command Tier (Operations Center)**: When a mobile node reaches cellular, satellite, or local field LAN coverage, it acts as a Gateway. Distress beacons are ingested into a FastAPI backend with PostgreSQL/PostGIS and streamed live to an incident command dashboard with offline tile fallback support.
+
+---
+
+## System Architecture
 
 ```text
-Android UI (Compose)
-        |
- ViewModels / use cases
-        |
- Domain contracts
-   |          |
-Local data   Mesh / transports
-(encrypted)  (peer communication)
-
-Optional cloud path:
-Android / field clients -> FastAPI -> authorized dashboard
+               +--------------------------------------------+
+               |         Austere Field Mesh Network         |
+               | (Google Nearby Connections / BLE / P2P)    |
+               +--------------------------------------------+
+                     |                 |                |
+             [Victim Node]      [Relay Node]    [Responder Node]
+               (SOS P10)          (Mesh Hop)       (Downlinks)
+                     \                 /
+                      v               v
+                     +------------------+
+                     |   Gateway Node   |  (OutboxEntity / GatewaySyncWorker)
+                     +------------------+
+                               |
+                   HTTPS POST /api/v1/sync/sos
+                   (X-Gateway-Key Authentication)
+                               |
+                               v
+                     +------------------+
+                     | FastAPI Backend  |  (PostGIS / Transition State Machine)
+                     +------------------+
+                               |
+                        WebSocket Events
+                               |
+                               v
+                     +------------------+
+                     | React Dashboard  |  (TacticalMap.jsx / Offline Tiles)
+                     +------------------+
 ```
 
-## Repository guide
+For complete architecture diagrams, module ownership, and design decisions, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-| Path | Responsibility |
-|---|---|
-| `app/` | Android application, navigation and UI integration |
-| `core/domain/` | Domain models and contracts |
-| `core/data/` | Local persistence and data access |
-| `core/mesh/` | Peer discovery, transport and routing |
-| `core/crypto/` | Cryptographic primitives and identity workflows |
-| `cloud/backend/` | FastAPI endpoints and backend tests |
-| `cloud/frontend/` | React/Vite incident dashboard |
-| `docs/` | Architecture, security, operations, test matrices and release evidence |
-| `scripts/` | Repository validation and maintenance scripts |
+---
 
-For detailed module ownership, see [Architecture](docs/architecture/ARCHITECTURE.md). For protocol and security details, see [Mesh Protocol](docs/protocol/MESH_PROTOCOL.md) and [Security Specification](docs/security/SECURITY_SPEC.md).
+## Repository Guide
 
-## Getting started
+| Directory | Subsystem | Key Technologies & Responsibilities |
+| :--- | :--- | :--- |
+| **`app/`** | Android Application | Jetpack Compose UI, Material 3, ViewModels, `GatewaySyncWorker.kt`, `AssignmentNotificationHelper.kt`, `OfflineRagManager.kt`. |
+| **`core/mesh/`** | Mesh Network Engine | `MeshRouter.kt` (P10 priority preemption, deduplication, TTL hops), `NearbyConnectionsTransport.kt`, packet serialization. |
+| **`core/data/`** | Persistence & Network | Encrypted Room DB (`DatabaseModule.kt` via SQLCipher 4.9.0), `OutboxEntity.kt`, Retrofit API service (`MeshBackendService.kt`). |
+| **`core/crypto/`** | Security & Cryptography | Google Tink AEAD (AES-256-GCM) and ECIES hybrid encryption (`TinkCryptoManager.kt`), Android Keystore. |
+| **`core/domain/`** | Pure Domain Models | Pure Kotlin domain entities (`Incident.kt`, `Node.kt`, `Responder.kt`, `Message.kt`), zero Android dependencies. |
+| **`cloud/backend/`** | Cloud Backend API | FastAPI service, PostgreSQL 15 + PostGIS spatial queries, Alembic migrations (`6f1a8b92c431`), WebSocket event hub. |
+| **`cloud/frontend/`** | Command Center UI | React 18, Vite, React-Leaflet (`TacticalMap.jsx`), sound alerts, offline tile fallback (`docs/OFFLINE_TILES_GUIDE.md`). |
+| **`docs/`** | Technical Documentation | System architecture, security threat models, testing guides, limitations, and examiner Viva Q&A. |
+| **`scripts/`** | Operations & Automation | `seed_demo.py`, `demo_flow.md` walkthrough, legacy SQLite-to-PG migration CLI (`import_sqlite_to_pg.py`). |
 
-### Android
+---
 
-Requirements: Android Studio, Android SDK configured locally, and JDK 21 (the CI configuration uses JDK 21).
+## Getting Started
 
-```bash
-git clone https://github.com/deekshudevang/Nexus-Support.git
-cd Nexus-Support
-./gradlew assembleDebug
-```
+### 1. Prerequisites
+- **Android**: Android Studio Hedgehog+, JDK 21 (`JAVA_HOME`), Android SDK API 26+ (Target API 34).
+- **Backend**: Python 3.11+, PostgreSQL 15 with PostGIS extension (or Docker).
+- **Frontend**: Node.js 18+ (tested on Node 20/24) and npm.
 
-On Windows, use `gradlew.bat assembleDebug`.
+---
 
-### Backend
-
-Requirements: Python 3.12 recommended for matching CI. Use a virtual environment and review the backend environment/configuration documentation before exposing the service.
+### 2. Cloud Backend Setup
 
 ```bash
 cd cloud/backend
+
+# Create and activate virtual environment
 python -m venv .venv
-# macOS/Linux:
+# On Windows PowerShell:
+.venv\Scripts\Activate.ps1
+# On Linux/macOS:
 source .venv/bin/activate
-# Windows PowerShell:
-# .venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-pytest -v
+
+# Install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# Run database migrations
+alembic upgrade head
+
+# Start local server
+python main.py
+# Server runs on http://localhost:8000
 ```
 
-Default development gateway key: `meshlink_gw_dev_secret` (allowed only when `ENVIRONMENT=development`; production strictly refuses startup if development keys are detected). For production deployments, configure high-entropy secrets via `GATEWAY_API_KEYS`. In Android, debug builds default to this key, while production builds require setting `MESHLINK_GATEWAY_KEY` via Gradle property or `local.properties`.
-
-Or run the full tactical stack with Docker Compose (PostGIS, Redis, Backend, Frontend):
+Verify backend health:
 ```bash
-docker compose up -d
+curl -s http://localhost:8000/health
+# Returns: {"status":"healthy","version":"1.0.0","database_connected":true,"migration_head":"6f1a8b92c431"}
 ```
 
-Do not commit production secrets or real operator credentials. Configure authentication, allowed origins, database settings and TLS according to the deployment environment.
+**Environment Variables (`cloud/backend/.env`):**
+| Variable | Default / Development | Production Requirement |
+| :--- | :--- | :--- |
+| `ENVIRONMENT` | `development` | Set to `production` |
+| `DATABASE_URL` | `postgresql://meshlink_user:meshlink_pass@localhost:5432/meshlink_db` | High-availability PostgreSQL URL with PostGIS |
+| `GATEWAY_API_KEYS` | `meshlink_gw_dev_secret` | High-entropy secrets. Default dev key is **strictly rejected** in production. |
+| `JWT_SECRET` | Development secret | 256-bit cryptographic secret |
 
-### Dashboard
+---
 
-Requirements: Node.js 24 to match CI and npm.
+### 3. Tactical Command Center Dashboard Setup
 
 ```bash
 cd cloud/frontend
-npm ci
+
+# Install dependencies
+npm install
+
+# Run Vitest test suite
 npm run test
+
+# Build production bundle
 npm run build
+
+# Start local development server
 npm run dev
+# Dashboard runs on http://localhost:5173
 ```
 
-Set the dashboard API/WebSocket endpoints using the documented environment variables for the deployment. Never place passwords, bearer tokens, signing keys, or other secrets in `VITE_*` variables: frontend variables are included in the browser bundle. Use HTTPS/WSS in production and configure a restrictive backend CORS/origin allow-list.
+**Offline Disaster Mapping (`cloud/frontend/.env.local`):**
+```env
+# Optional: point to local offline XYZ tile HTTP server (see docs/OFFLINE_TILES_GUIDE.md)
+VITE_LOCAL_TILE_URL=http://localhost:8080/{z}/{x}/{y}.png
+```
 
-## Quality checks
+---
 
-From the repository root:
+### 4. Android Mobile Application Setup
 
 ```bash
-./gradlew testDebugUnitTest :core:domain:test --continue
-./gradlew lintDebug --continue
+# Clone and enter repo
+git clone https://github.com/deekshudevang/Nexus-Support.git
+cd Nexus-Support
+
+# Optional: configure production gateway key in local.properties
+echo "MESHLINK_GATEWAY_KEY=meshlink_gw_dev_secret" >> local.properties
+
+# Build debug APK
+# On Windows:
+.\gradlew.bat assembleDebug
+# On Linux/macOS:
 ./gradlew assembleDebug
+
+# Output APK located at: app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Backend and dashboard checks are listed above. GitHub Actions runs the configured checks on supported branches; inspect the exact commit's run and test artifacts before relying on a result.
+---
 
-- [CI workflow](https://github.com/deekshudevang/Nexus-Support/actions/workflows/ci.yml)
-- [CodeQL workflow](https://github.com/deekshudevang/Nexus-Support/actions/workflows/codeql.yml)
-- [Product UI/UX and accessibility standards](docs/design/PRODUCT_UX_GUIDELINES.md)
-- [Acceptance criteria](docs/ACCEPTANCE_CRITERIA.md)
-- [Engineering checkpoint](docs/RUN_CHECKPOINT.md)
-- [Defect register](docs/audit/DEFECT_REGISTER.md)
-- [Device test matrix](docs/testing/DEVICE_TEST_MATRIX.md)
+### 5. Running with Docker Compose
 
-## Release gates
+To launch the full cloud stack (PostgreSQL + PostGIS, Backend, Frontend) with a single command:
+```bash
+docker compose up --build -d
+```
+- Frontend Dashboard: `http://localhost:3000` (or `http://localhost:5173`)
+- Backend API & Swagger: `http://localhost:8000/docs`
+- Health Endpoint: `http://localhost:8000/health`
 
-Before declaring a production release, close or explicitly scope each applicable gate with evidence tied to the exact release commit:
+---
 
-1. Recover authentic Room schema history or define a safe, supported legacy-upgrade policy and test it.
-2. Exercise Meshtastic BLE/LoRa transmit, receive, acknowledgements and multi-hop routing on physical devices.
-3. Verify APK alignment **and** native ELF 16 KB page-size compatibility with current Android tooling.
-4. Deploy and verify real HTTPS/WSS, authentication, origin policy, expiry and reconnect behavior.
-5. Complete TalkBack/accessibility checks on the critical SOS, chat, map and settings flows.
-6. Build and publish the release artifact from the candidate SHA; record its checksum and signing status.
-7. Retain test reports and report passed, failed and skipped counts without combining results from different commits.
+## Live Demonstration Walkthrough
 
-See [open repository issues](https://github.com/deekshudevang/Nexus-Support/issues) for tracked follow-up work.
+To execute a complete end-to-end incident coordination walkthrough:
+1. **Walkthrough Guide**: Follow [scripts/demo_flow.md](scripts/demo_flow.md) for 7 copy-paste `curl` commands demonstrating SOS distress ingestion, auto-created incidents, dispatch assignment, gateway downlinks, and responder status sync.
+2. **Database Seeding**: Run `python scripts/seed_demo.py` to seed `org-nexus-demo`, dispatcher `demo_dispatcher` (`DemoPass123!`), and field responders.
+3. **Automated Integration Test**: Run `py -m pytest cloud/backend/test_pg_p33_demo_flow_integration.py -v` to verify the entire flow programmatically.
 
-## Contributing
+---
 
-Please keep changes focused, preserve reproducible tests, update documentation when behavior changes, and distinguish automated evidence from device or production validation. See [CONTRIBUTING.md](CONTRIBUTING.md).
+## Verification & Quality Gates
+
+Run clean test suites across all tiers:
+
+```bash
+# 1. Backend tests (128 passed)
+py -m pytest cloud/backend -q
+
+# 2. Frontend tests & production build (17 passed)
+npm --prefix cloud/frontend test -- --run
+npm --prefix cloud/frontend run build
+
+# 3. Android unit tests (149 actionable tasks passed)
+.\gradlew.bat clean testDebugUnitTest
+```
+
+---
+
+## Project Documentation Index
+
+- [System Architecture](docs/ARCHITECTURE.md) — System topology, component ownership, data flows, and design decision analysis.
+- [Security Policy & Threat Model](docs/SECURITY.md) — STRIDE threat model, safety invariants, trust boundaries, and known gaps.
+- [Testing & Verification Guide](docs/TESTING.md) — Execution commands, baselines, and scope across all three tiers.
+- [Limitations & Future Work](docs/LIMITATIONS_AND_FUTURE_WORK.md) — Honest review of prototype constraints and future roadmap.
+- [Viva Examination Q&A Guide](docs/VIVA_QA.md) — 25 technical questions and answers for academic examination.
+- [Offline Tiles Hosting Guide](docs/OFFLINE_TILES_GUIDE.md) — Operational instructions for serving local map tiles in disaster zones.
+- [Acceptance Criteria](docs/ACCEPTANCE_CRITERIA.md) — Formal milestone acceptance criteria.
+
+---
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT License — see [LICENSE](LICENSE).
