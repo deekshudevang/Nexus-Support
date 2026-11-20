@@ -177,6 +177,7 @@ from app.models.user import UserModel
 from app.models.incident import IncidentModel
 from app.models.assignment import AssignmentModel
 from app.models.responder import ResponderModel
+from app.models.location_event import LocationEventModel
 
 def _get_target_engine(target: Optional[str] = None):
     if DATABASE_URL.startswith("postgresql"):
@@ -254,6 +255,18 @@ class NodeStatus(BaseModel):
     longitude: float = Field(..., ge=-180.0, le=180.0)
     timestamp: int
 
+class LocationEventIn(BaseModel):
+    eventId: str = Field(..., min_length=1, max_length=128)
+    peerId: str = Field(..., min_length=1, max_length=128)
+    latitude: float = Field(..., ge=-90.0, le=90.0)
+    longitude: float = Field(..., ge=-180.0, le=180.0)
+    accuracy: Optional[float] = Field(0.0)
+    timestamp: int
+    sequenceNumber: Optional[int] = Field(0)
+    signature: Optional[str] = Field("")
+    publicKey: Optional[str] = Field("")
+    syncStatus: Optional[int] = Field(0)
+
 class OperatorLoginRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=64)
     password: str = Field(..., min_length=1, max_length=128)
@@ -285,6 +298,37 @@ def verify_gateway_write(
             return cred
 
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid gateway credentials")
+
+def verify_sync_write(
+    authorization: Optional[str] = Header(None),
+    x_gateway_key: Optional[str] = Header(None),
+    x_operator_token: Optional[str] = Header(None),
+) -> str:
+    cred = _extract_credential(authorization, x_gateway_key or x_operator_token)
+    if not cred:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credentials required")
+
+    if cred in REVOKED_CREDENTIALS:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Credential has been revoked")
+
+    for valid_key in GATEWAY_API_KEYS:
+        if secrets.compare_digest(cred, valid_key):
+            return cred
+
+    for valid_token in OPERATOR_TOKENS:
+        if secrets.compare_digest(cred, valid_token):
+            return cred
+
+    # Allow signed JWT user sessions
+    if cred and cred.count(".") == 2:
+        try:
+            from app.core.rbac import decode_access_token
+            payload = decode_access_token(cred)
+            return payload.get("username", "jwt_user")
+        except Exception:
+            pass
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
 def verify_operator_read(
     authorization: Optional[str] = Header(None),
@@ -674,6 +718,88 @@ def sync_nodes(nodes: List[NodeStatus], _: str = Depends(verify_gateway_write)):
 
     return {"status": "success", "synced_count": count}
 
+# ── Location Synchronization Endpoints ───────────────────────────────────────
+@app.post("/api/v1/sync/location")
+@app.post("/api/sync/location")
+def sync_location_events(
+    events: List[LocationEventIn],
+    _: str = Depends(verify_sync_write)
+):
+    if len(events) > 5000:
+        raise HTTPException(status_code=400, detail="Batch exceeds maximum allowed size of 5000 location events")
+
+    with get_db() as db:
+        count = 0
+        try:
+            for ev in events:
+                existing = db.query(LocationEventModel).filter(LocationEventModel.event_id == ev.eventId).first()
+                if not existing:
+                    loc_record = LocationEventModel(
+                        event_id=ev.eventId,
+                        peer_id=ev.peerId,
+                        latitude=ev.latitude,
+                        longitude=ev.longitude,
+                        accuracy=ev.accuracy or 0.0,
+                        timestamp=ev.timestamp,
+                        sequence_number=ev.sequenceNumber or 0,
+                        signature=ev.signature or "",
+                        public_key=ev.publicKey or "",
+                        sync_status=1,
+                    )
+                    db.add(loc_record)
+                else:
+                    existing.latitude = ev.latitude
+                    existing.longitude = ev.longitude
+                    existing.accuracy = ev.accuracy or 0.0
+                    existing.timestamp = ev.timestamp
+
+                # Telemetry convergence: update matching responder coordinates
+                responder = db.query(ResponderModel).filter(
+                    (ResponderModel.device_id == ev.peerId) | (ResponderModel.id == ev.peerId)
+                ).first()
+                if responder:
+                    responder.last_latitude = ev.latitude
+                    responder.last_longitude = ev.longitude
+                    responder.location_accuracy_m = ev.accuracy or 0.0
+                    responder.last_location_at = ev.timestamp
+
+                count += 1
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.error("Failed to sync location events: %s", str(e))
+            raise HTTPException(status_code=500, detail="Database insertion error")
+
+    return {"success": True, "uploadedCount": count}
+
+@app.get("/api/v1/sync/location")
+@app.get("/api/sync/location")
+def fetch_location_events(
+    sinceTimestamp: Optional[int] = Query(0),
+    limit: int = Query(500, ge=1, le=5000),
+    _: str = Depends(verify_sync_write)
+):
+    with get_db() as db:
+        query = db.query(LocationEventModel)
+        if sinceTimestamp and sinceTimestamp > 0:
+            query = query.filter(LocationEventModel.timestamp > sinceTimestamp)
+        records = query.order_by(LocationEventModel.timestamp.asc()).limit(limit).all()
+        return [
+            {
+                "eventId": r.event_id,
+                "peerId": r.peer_id,
+                "latitude": r.latitude,
+                "longitude": r.longitude,
+                "accuracy": r.accuracy,
+                "timestamp": r.timestamp,
+                "sequenceNumber": r.sequence_number,
+                "signature": r.signature,
+                "publicKey": r.public_key,
+                "syncStatus": 1,
+            }
+            for r in records
+        ]
+
 # ── Operator Query Endpoints (READ ONLY) ─────────────────────────────────────
 @app.get("/api/sos")
 def get_sos(
@@ -867,14 +993,13 @@ async def websocket_alerts(
 
         # Replay backlog if requested via since_seq
         if since_seq is not None and since_seq >= 0:
-            from app.core.database import SessionLocal
             from app.models.stream_event import StreamEventModel
-            with SessionLocal() as db:
+            with get_db() as db:
                 historical = (
                     db.query(StreamEventModel)
                     .filter(StreamEventModel.stream_seq > since_seq)
                     .order_by(StreamEventModel.stream_seq.asc())
-                    .limit(500)
+                    .limit(5000)
                     .all()
                 )
                 max_s = since_seq

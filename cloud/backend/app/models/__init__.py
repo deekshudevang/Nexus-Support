@@ -13,6 +13,7 @@ from app.models.outbox_event import OutboxEventModel
 from app.models.stream_event import StreamEventModel
 from app.models.idempotency_key import IdempotencyKeyModel
 from app.models.device import DeviceModel
+from app.models.location_event import LocationEventModel
 
 __all__ = [
     "SosPacketModel",
@@ -30,4 +31,5 @@ __all__ = [
     "StreamEventModel",
     "IdempotencyKeyModel",
     "DeviceModel",
+    "LocationEventModel",
 ]
