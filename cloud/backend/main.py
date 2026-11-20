@@ -175,6 +175,8 @@ from app.models.sos import SosPacketModel
 from app.models.node import NodeStatusModel
 from app.models.user import UserModel
 from app.models.incident import IncidentModel
+from app.models.assignment import AssignmentModel
+from app.models.responder import ResponderModel
 
 def _get_target_engine(target: Optional[str] = None):
     if DATABASE_URL.startswith("postgresql"):
@@ -468,7 +470,14 @@ def issue_ws_ticket(_: str = Depends(verify_operator_read)):
 # ── Gateway Ingestion Endpoints (WRITE ONLY) ─────────────────────────────────
 @app.post("/api/sync/sos")
 @app.post("/api/v1/sync/sos")
-async def sync_sos(packets: List[SosPacket], _: str = Depends(verify_gateway_write)):
+async def sync_sos(
+    packets: List[SosPacket],
+    _: str = Depends(verify_gateway_write),
+    x_device_id: Optional[str] = Header(None),
+    x_ack_assignment_ids: Optional[str] = Header(None),
+    device_id: Optional[str] = Query(None),
+    ack_assignment_ids: Optional[str] = Query(None),
+):
     if len(packets) > 500:
         raise HTTPException(status_code=400, detail="Batch exceeds maximum allowed size of 500 packets")
 
@@ -540,6 +549,54 @@ async def sync_sos(packets: List[SosPacket], _: str = Depends(verify_gateway_wri
 
                 count += 1
                 receipts.append({"uuid": p.uuid, "status": "ACKNOWLEDGED", "synced": True})
+
+            # Process any assignment ACKs piggybacked on sync
+            raw_ack_ids = x_ack_assignment_ids or ack_assignment_ids
+            if raw_ack_ids:
+                ack_list = [i.strip() for i in raw_ack_ids.split(",") if i.strip()]
+                for ack_id in ack_list:
+                    asgn = db.query(AssignmentModel).filter(AssignmentModel.id == ack_id).first()
+                    if asgn and asgn.status == "DISPATCHED":
+                        asgn.status = "ACCEPTED"
+                        asgn.responded_at = int(time.time())
+
+            # Query pending downlink assignments for syncing devices/responders
+            relevant_ids = set()
+            if x_device_id:
+                relevant_ids.add(x_device_id)
+            if device_id:
+                relevant_ids.add(device_id)
+            for p in packets:
+                if p.senderId:
+                    relevant_ids.add(p.senderId)
+
+            downlink_list = []
+            asgn_query = db.query(AssignmentModel).filter(AssignmentModel.status == "DISPATCHED")
+            if relevant_ids:
+                responders = db.query(ResponderModel).filter(
+                    (ResponderModel.device_id.in_(relevant_ids)) | (ResponderModel.id.in_(relevant_ids))
+                ).all()
+                target_resp_ids = {r.id for r in responders}.union(relevant_ids)
+                asgn_query = asgn_query.filter(AssignmentModel.responder_id.in_(target_resp_ids))
+
+            pending_asgns = asgn_query.order_by(AssignmentModel.offered_at.desc()).limit(50).all()
+            for a in pending_asgns:
+                inc = db.query(IncidentModel).filter(IncidentModel.id == a.incident_id).first()
+                downlink_list.append({
+                    "id": a.id,
+                    "incident_id": a.incident_id,
+                    "responder_id": a.responder_id,
+                    "status": a.status,
+                    "role": "LEAD",
+                    "notes": inc.title if inc else "Emergency Dispatch",
+                    "description": inc.description if inc else "",
+                    "latitude": inc.latitude if inc else None,
+                    "longitude": inc.longitude if inc else None,
+                    "severity": inc.severity if inc else 5,
+                    "priority": inc.priority if inc else 3,
+                    "offered_at": a.offered_at,
+                })
+
             db.commit()
         except Exception as e:
             db.rollback()
@@ -554,7 +611,29 @@ async def sync_sos(packets: List[SosPacket], _: str = Depends(verify_gateway_wri
         if ws_subscribers == 0 or (p.severity and p.severity >= 4):
             await push_fallback_service.dispatch_push_fallback(p.model_dump())
 
-    return {"status": "success", "synced_count": count, "receipts": receipts, "downlinks": []}
+    return {"status": "success", "synced_count": count, "receipts": receipts, "downlinks": downlink_list}
+
+class AssignmentAckRequest(BaseModel):
+    assignment_id: Optional[str] = None
+    status: str = "ACCEPTED"
+    notes: Optional[str] = None
+
+@app.post("/api/v1/sync/assignments/{assignment_id}/ack")
+@app.post("/api/sync/assignments/{assignment_id}/ack")
+def ack_downlink_assignment(
+    assignment_id: str,
+    req: Optional[AssignmentAckRequest] = None,
+    _: str = Depends(verify_gateway_write)
+):
+    with get_db() as db:
+        asgn = db.query(AssignmentModel).filter(AssignmentModel.id == assignment_id).first()
+        if not asgn:
+            raise HTTPException(status_code=404, detail="Assignment not found")
+        new_status = req.status.upper().strip() if req and req.status else "ACCEPTED"
+        asgn.status = new_status
+        asgn.responded_at = int(time.time())
+        db.commit()
+        return {"status": "success", "assignment_id": asgn.id, "assignment_status": asgn.status}
 
 @app.post("/api/sync/nodes")
 def sync_nodes(nodes: List[NodeStatus], _: str = Depends(verify_gateway_write)):
