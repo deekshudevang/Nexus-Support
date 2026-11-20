@@ -86,6 +86,12 @@ sealed interface Screen {
         val route: String = "ai_assistant"
     }
 
+    /** Full-screen: Tactical assignments / field dispatch */
+    @Serializable
+    data object Assignments : Screen {
+        val route: String = "assignments"
+    }
+
     /** Full-screen: Individual chat with type-safe parameters */
     @Serializable
     data class Chat(

@@ -193,6 +193,15 @@ class GatewaySyncWorker @AssistedInject constructor(
                                 assignmentDao.insertOrUpdate(entity)
                                 receivedDownlinks.add(dl)
                                 Timber.i("GatewaySyncWorker: Downlink assignment persisted for incident $incidentId [role: $role]: $notes")
+
+                                if (existing == null && currentStatus == "DISPATCHED") {
+                                    com.meshlink.app.notification.AssignmentNotificationHelper.showAssignmentHeadsUpNotification(
+                                        context = applicationContext,
+                                        assignmentId = asgnId,
+                                        title = notes.ifBlank { "Incident #$incidentId" },
+                                        notes = description.ifBlank { "Role: $role | Priority $prio" }
+                                    )
+                                }
                             }
                         }
                     }

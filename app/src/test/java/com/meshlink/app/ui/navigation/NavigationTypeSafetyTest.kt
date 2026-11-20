@@ -113,7 +113,8 @@ class NavigationTypeSafetyTest {
             Screen.MapDownload,
             Screen.EmergencyGuide,
             Screen.NodeDashboard,
-            Screen.AiAssistant
+            Screen.AiAssistant,
+            Screen.Assignments
         )
 
         val routes = allScreens.map { screen ->
@@ -131,6 +132,7 @@ class NavigationTypeSafetyTest {
                 is Screen.EmergencyGuide -> screen.route
                 is Screen.NodeDashboard -> screen.route
                 is Screen.AiAssistant -> screen.route
+                is Screen.Assignments -> screen.route
                 is Screen.Chat -> "chat"
             }
         }

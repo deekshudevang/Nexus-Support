@@ -1,5 +1,6 @@
 package com.meshlink.app.ui.home
 
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.Info
 import com.meshlink.app.ui.components.EmptyStateView
 import com.meshlink.app.ui.components.NexusCard
@@ -53,6 +54,7 @@ fun HomeScreen(
     onConversationClick: (deviceId: String, deviceName: String) -> Unit,
     onSettingsClick: () -> Unit = {},
     onBroadcastClick: () -> Unit = {},
+    onAssignmentsClick: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val conversations by viewModel.conversations.collectAsStateWithLifecycle()
@@ -98,6 +100,7 @@ fun HomeScreen(
                 ) 
                 Divider()
             }
+            item { AssignmentsBannerButton(onClick = onAssignmentsClick) }
             item { BroadcastToAllButton(onClick = onBroadcastClick) }
             item { SectionLabel("ACTIVE CHANNELS") }
 
@@ -383,6 +386,45 @@ private fun NetworkStatusSection(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AssignmentsBannerButton(onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 6.dp)
+            .bounceClick(onClick = onClick)
+            .clip(RoundedCornerShape(8.dp)),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Assignment,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "FIELD DISPATCHES",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Review emergency incident orders & update field status",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                )
             }
         }
     }

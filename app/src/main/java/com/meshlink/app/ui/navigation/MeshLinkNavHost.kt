@@ -8,6 +8,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navDeepLink
 import com.meshlink.app.ai.AiAssistantScreen
+import com.meshlink.app.ui.assignments.AssignmentsScreen
 import com.meshlink.app.ui.broadcast.BroadcastScreen
 import com.meshlink.app.ui.chat.ChatScreen
 import com.meshlink.app.ui.chat.ChatViewModel
@@ -44,6 +45,9 @@ fun MeshLinkNavHost(
                 },
                 onBroadcastClick = {
                     navController.navigate(Screen.Broadcast)
+                },
+                onAssignmentsClick = {
+                    navController.navigate(Screen.Assignments)
                 }
             )
         }
@@ -135,6 +139,12 @@ fun MeshLinkNavHost(
                     }
                 },
                 onNavigateToSettings = { navController.navigate(Screen.Settings) }
+            )
+        }
+
+        composable<Screen.Assignments> {
+            AssignmentsScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
