@@ -36,7 +36,7 @@ class GatewaySyncWorker @AssistedInject constructor(
         const val KEY_GATEWAY_URL = "key_gateway_url"
         const val KEY_GATEWAY_KEY = "key_gateway_key"
         const val DEFAULT_GATEWAY_URL = "http://10.0.2.2:8000/api/v1/sync/sos"
-        const val DEFAULT_GATEWAY_KEY = "meshlink_gateway_dev_secret"
+        const val DEFAULT_GATEWAY_KEY = "meshlink_gw_dev_secret"
 
         fun buildWorkRequest(
             gatewayUrl: String? = null,

@@ -88,6 +88,13 @@ python -m pip install -r requirements.txt
 pytest -v
 ```
 
+Default development gateway key: `meshlink_gw_dev_secret` (configured in `cloud/backend/.env.example` and matched by `GatewaySyncWorker.kt`).
+
+Or run the full tactical stack with Docker Compose (PostGIS, Redis, Backend, Frontend):
+```bash
+docker compose up -d
+```
+
 Do not commit production secrets or real operator credentials. Configure authentication, allowed origins, database settings and TLS according to the deployment environment.
 
 ### Dashboard
