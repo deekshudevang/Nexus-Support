@@ -219,3 +219,89 @@ def test_in_band_assignment_status_updates_via_sync_sos(client, db, gw_headers):
 
     resp = db.query(ResponderModel).filter(ResponderModel.id == resp_id).first()
     assert resp.availability == "ACTIVE"
+
+
+def test_assignment_status_invalid_transition_returns_409(client, db, gw_headers):
+    unique = uuid.uuid4().hex[:8]
+    now = int(time.time())
+    asgn_id = f"asgn-trans-{unique}"
+    resp_id = f"resp-trans-{unique}"
+
+    db.add_all([
+        ResponderModel(id=resp_id, callsign="SAR-TRANS", organization_id="org-default", availability="AVAILABLE", created_at=now),
+        AssignmentModel(id=asgn_id, incident_id=f"inc-tr-{unique}", responder_id=resp_id, status="DISPATCHED", organization_id="org-default", offered_at=now),
+    ])
+    db.commit()
+
+    # 1. Attempt invalid transition: DISPATCHED -> COMPLETED (must be accepted first)
+    res_bad = client.post(
+        f"/api/v1/sync/assignments/{asgn_id}/status",
+        headers=gw_headers,
+        json={"status": "COMPLETED"}
+    )
+    assert res_bad.status_code == 409
+    assert "Illegal assignment transition" in res_bad.text
+
+    # 2. Complete the valid flow to COMPLETED
+    client.post(f"/api/v1/sync/assignments/{asgn_id}/status", headers=gw_headers, json={"status": "ACCEPTED"})
+    client.post(f"/api/v1/sync/assignments/{asgn_id}/status", headers=gw_headers, json={"status": "EN_ROUTE"})
+    client.post(f"/api/v1/sync/assignments/{asgn_id}/status", headers=gw_headers, json={"status": "ON_SCENE"})
+    res_ok = client.post(f"/api/v1/sync/assignments/{asgn_id}/status", headers=gw_headers, json={"status": "COMPLETED"})
+    assert res_ok.status_code == 200
+
+    # 3. Attempt transition out of terminal state: COMPLETED -> ACCEPTED
+    res_terminal = client.post(
+        f"/api/v1/sync/assignments/{asgn_id}/status",
+        headers=gw_headers,
+        json={"status": "ACCEPTED"}
+    )
+    assert res_terminal.status_code == 409
+    assert "Illegal assignment transition" in res_terminal.text
+
+
+def test_assignment_status_wrong_organization_returns_404(client, db, gw_headers):
+    unique = uuid.uuid4().hex[:8]
+    now = int(time.time())
+    asgn_id = f"asgn-org-{unique}"
+    resp_id = f"resp-org-{unique}"
+
+    db.add_all([
+        ResponderModel(id=resp_id, callsign="SAR-ORG-A", organization_id="org-alpha", availability="ASSIGNED", created_at=now),
+        AssignmentModel(id=asgn_id, incident_id=f"inc-oa-{unique}", responder_id=resp_id, status="DISPATCHED", organization_id="org-alpha", offered_at=now),
+    ])
+    db.commit()
+
+    # Request from different org
+    res = client.post(
+        f"/api/v1/sync/assignments/{asgn_id}/status",
+        headers={**gw_headers, "X-Organization-Id": "org-bravo"},
+        json={"status": "ACCEPTED"}
+    )
+    assert res.status_code == 404
+
+
+def test_assignment_status_wrong_device_returns_403(client, db, gw_headers):
+    unique = uuid.uuid4().hex[:8]
+    now = int(time.time())
+    asgn_id = f"asgn-dev-{unique}"
+    resp_a = f"resp-a-{unique}"
+    resp_b = f"resp-b-{unique}"
+    dev_a = f"device-a-{unique}"
+    dev_b = f"device-b-{unique}"
+
+    db.add_all([
+        ResponderModel(id=resp_a, callsign="SAR-A", organization_id="org-default", device_id=dev_a, availability="ASSIGNED", created_at=now),
+        ResponderModel(id=resp_b, callsign="SAR-B", organization_id="org-default", device_id=dev_b, availability="AVAILABLE", created_at=now),
+        AssignmentModel(id=asgn_id, incident_id=f"inc-da-{unique}", responder_id=resp_a, status="DISPATCHED", organization_id="org-default", offered_at=now),
+    ])
+    db.commit()
+
+    # Device B attempts to update Assignment for Responder A
+    res = client.post(
+        f"/api/v1/sync/assignments/{asgn_id}/status",
+        headers={**gw_headers, "X-Device-Id": dev_b},
+        json={"status": "ACCEPTED"}
+    )
+    assert res.status_code == 403
+    assert "Device not authorized" in res.text
+

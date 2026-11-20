@@ -20,6 +20,9 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
+import com.meshlink.app.data.remote.MeshBackendService
+import com.meshlink.app.data.remote.AssignmentStatusUpdateRequest
+import javax.inject.Provider
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
@@ -32,8 +35,22 @@ class GatewaySyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted workerParams: WorkerParameters,
     private val sosDao: SosPacketDao,
-    private val assignmentDao: AssignmentDao
+    private val assignmentDao: AssignmentDao,
+    private val backendServiceProvider: Provider<MeshBackendService>
 ) : CoroutineWorker(context, workerParams) {
+
+    constructor(
+        context: Context,
+        workerParams: WorkerParameters,
+        sosDao: SosPacketDao,
+        assignmentDao: AssignmentDao
+    ) : this(
+        context,
+        workerParams,
+        sosDao,
+        assignmentDao,
+        Provider { null }
+    )
 
     companion object {
         const val KEY_GATEWAY_URL = "key_gateway_url"
@@ -68,21 +85,43 @@ class GatewaySyncWorker @AssistedInject constructor(
         try {
             Timber.i("GatewaySyncWorker started: Attempting to sync SOS packets with gateway at $gatewayUrl")
 
-            // Retrieve all SOS packets from the local Room database that need sync
+            // 1. Synchronize pending assignment status updates via dedicated REST endpoint
+            val unsyncedAssignments = assignmentDao.getUnsyncedAssignments()
+            if (unsyncedAssignments.isNotEmpty()) {
+                val backendService = try { backendServiceProvider.get() } catch (e: Exception) { null }
+                if (backendService != null) {
+                    for (asgn in unsyncedAssignments) {
+                        try {
+                            val resp = backendService.updateAssignmentStatus(
+                                assignmentId = asgn.id,
+                                req = AssignmentStatusUpdateRequest(
+                                    status = asgn.status,
+                                    device_id = asgn.responderId
+                                )
+                            )
+                            if (resp.status == "success" || resp.assignment_status == asgn.status) {
+                                assignmentDao.markSynced(asgn.id)
+                                Timber.i("GatewaySyncWorker: Successfully synced status ${asgn.status} for assignment ${asgn.id}")
+                            }
+                        } catch (e: Exception) {
+                            Timber.w(e, "GatewaySyncWorker: Failed to sync status for assignment ${asgn.id}; will retry next cycle")
+                        }
+                    }
+                }
+            }
+
+            // 2. Retrieve all SOS packets from the local Room database that need sync
             val allPackets = sosDao.getAllPacketsBlocking()
             val packetsToSync = allPackets.filter {
                 it.status != "DELIVERED" && it.status != "ACKNOWLEDGED"
             }
 
-            // Check for locally unsynced assignment status changes
-            val unsyncedAssignments = assignmentDao.getUnsyncedAssignments()
-            val ackAssignmentIds = unsyncedAssignments.map { it.id }
-            val assignmentUpdates = unsyncedAssignments.map { "${it.id}:${it.status}" }
-
-            if (packetsToSync.isEmpty() && unsyncedAssignments.isEmpty()) {
-                Timber.i("GatewaySyncWorker: No unsynced SOS packets or assignment status updates.")
+            if (packetsToSync.isEmpty()) {
+                Timber.i("GatewaySyncWorker: No unsynced SOS packets remaining.")
                 return@withContext Result.success()
             }
+
+            val ackAssignmentIds = unsyncedAssignments.map { it.id }
 
             // Create JSON Array payload
             val jsonArray = JSONArray()
@@ -121,9 +160,6 @@ class GatewaySyncWorker @AssistedInject constructor(
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("X-Gateway-Key", gatewayKey)
             connection.setRequestProperty("Authorization", "Bearer $gatewayKey")
-            if (assignmentUpdates.isNotEmpty()) {
-                connection.setRequestProperty("X-Assignment-Updates", assignmentUpdates.joinToString(","))
-            }
             if (ackAssignmentIds.isNotEmpty()) {
                 connection.setRequestProperty("X-Ack-Assignment-Ids", ackAssignmentIds.joinToString(","))
             }
@@ -222,11 +258,6 @@ class GatewaySyncWorker @AssistedInject constructor(
 
                 for (uuid in acknowledgedUuids) {
                     sosDao.updateStatus(uuid, "ACKNOWLEDGED")
-                }
-
-                // Mark processed assignments as synced
-                for (asgn in unsyncedAssignments) {
-                    assignmentDao.markSynced(asgn.id)
                 }
 
                 Timber.i("GatewaySyncWorker: Successfully reconciled ${acknowledgedUuids.size} SOS packets and ${receivedDownlinks.size} downlinks")

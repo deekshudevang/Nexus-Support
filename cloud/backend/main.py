@@ -28,7 +28,8 @@ logging.basicConfig(
 logger = logging.getLogger("meshlink.backend")
 
 # ── Configuration & Environment ──────────────────────────────────────────────
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+ENVIRONMENT = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "development"
+IS_DEV = ENVIRONMENT.strip().lower() == "development"
 DATABASE_PATH = os.getenv("DATABASE_PATH", "meshlink_sync.db")
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATABASE_PATH}")
 
@@ -36,14 +37,15 @@ raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:
 CORS_ORIGINS = [orig.strip() for orig in raw_origins.split(",") if orig.strip()]
 
 # Credentials (comma-separated if multiple; set via env vars in production)
-raw_gw_keys = os.getenv("GATEWAY_API_KEYS", "meshlink_gw_dev_secret")
+# Dev default allowed only when ENV/ENVIRONMENT == development
+raw_gw_keys = os.getenv("GATEWAY_API_KEYS", "meshlink_gw_dev_secret" if IS_DEV else "")
 GATEWAY_API_KEYS = {k.strip() for k in raw_gw_keys.split(",") if k.strip()}
-if ENVIRONMENT != "production":
+if IS_DEV:
     GATEWAY_API_KEYS.add("meshlink_gw_dev_secret")
 
-raw_op_tokens = os.getenv("OPERATOR_TOKENS", "meshlink_op_dev_secret,op_token_valid_1,demo")
+raw_op_tokens = os.getenv("OPERATOR_TOKENS", "meshlink_op_dev_secret,op_token_valid_1,demo" if IS_DEV else "")
 OPERATOR_TOKENS = {k.strip() for k in raw_op_tokens.split(",") if k.strip()}
-if ENVIRONMENT != "production":
+if IS_DEV:
     OPERATOR_TOKENS.add("meshlink_op_dev_secret")
     OPERATOR_TOKENS.add("op_token_valid_1")
 
@@ -737,10 +739,20 @@ def ack_downlink_assignment(
             if responder and responder.id != asgn.responder_id:
                 raise HTTPException(status_code=403, detail="Device not authorized for this assignment")
 
+        current_status = asgn.status.upper().strip()
         new_status = req.status.upper().strip() if req and req.status else "ACCEPTED"
         allowed_statuses = {"DISPATCHED", "ACCEPTED", "DECLINED", "EN_ROUTE", "ON_SCENE", "COMPLETED", "CANCELLED"}
         if new_status not in allowed_statuses:
             raise HTTPException(status_code=400, detail=f"Invalid assignment status: {new_status}")
+
+        if new_status != current_status:
+            from app.services.dispatch_service import ALLOWED_ASSIGNMENT_TRANSITIONS
+            valid_targets = ALLOWED_ASSIGNMENT_TRANSITIONS.get(current_status, set())
+            if new_status not in valid_targets:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Illegal assignment transition from '{current_status}' to '{new_status}'"
+                )
 
         now = int(time.time())
         asgn.status = new_status
