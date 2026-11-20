@@ -34,7 +34,14 @@ class CloudSyncWorkerTest {
         mockWebServer = MockWebServer()
         mockWebServer.start()
 
-        val okHttpClient = OkHttpClient.Builder().build()
+        val okHttpClient = OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .header("X-Gateway-Key", "meshlink_gw_dev_secret")
+                    .build()
+                chain.proceed(request)
+            }
+            .build()
         backendService = Retrofit.Builder()
             .baseUrl(mockWebServer.url("/"))
             .client(okHttpClient)

@@ -73,6 +73,16 @@ def test_development_configuration_keeps_local_defaults_available():
     )
 
 
+def test_production_refuses_dev_gateway_key():
+    with pytest.raises(RuntimeError, match="Unsafe production configuration"):
+        validate_production_configuration(
+            environment="production",
+            gateway_keys={"meshlink_gw_dev_secret"},
+            operator_tokens={"valid-production-token-12345"},
+            allowed_origins=["https://command.nexus.example.com"]
+        )
+
+
 # ── Health Endpoint ──────────────────────────────────────────────────────────
 def test_health_endpoint(client):
     response = client.get("/health")

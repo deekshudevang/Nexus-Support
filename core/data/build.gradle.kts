@@ -1,9 +1,19 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.hilt)
 }
+
+val localProps = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProps.load(it) }
+}
+val gatewayDevKey: String = (project.findProperty("MESHLINK_GATEWAY_KEY") as? String)
+    ?: localProps.getProperty("meshlink.gateway.key", "meshlink_gw_dev_secret")
 
 android {
     namespace = "com.meshlink.app.data"
@@ -12,6 +22,15 @@ android {
     defaultConfig {
         minSdk = 26
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            buildConfigField("String", "GATEWAY_KEY", "\"${project.findProperty("MESHLINK_GATEWAY_KEY") ?: ""}\"")
+        }
+        debug {
+            buildConfigField("String", "GATEWAY_KEY", "\"$gatewayDevKey\"")
+        }
     }
 
     testOptions {

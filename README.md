@@ -88,7 +88,7 @@ python -m pip install -r requirements.txt
 pytest -v
 ```
 
-Default development gateway key: `meshlink_gw_dev_secret` (configured in `cloud/backend/.env.example` and matched by `GatewaySyncWorker.kt`).
+Default development gateway key: `meshlink_gw_dev_secret` (allowed only when `ENVIRONMENT=development`; production strictly refuses startup if development keys are detected). For production deployments, configure high-entropy secrets via `GATEWAY_API_KEYS`. In Android, debug builds default to this key, while production builds require setting `MESHLINK_GATEWAY_KEY` via Gradle property or `local.properties`.
 
 Or run the full tactical stack with Docker Compose (PostGIS, Redis, Backend, Frontend):
 ```bash
