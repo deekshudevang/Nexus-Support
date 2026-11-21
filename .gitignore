@@ -112,3 +112,15 @@ hf_token*
 # Stray dumps & tools
 temp_head.kt
 .qodo/
+
+# TeX / LaTeX auxiliary build artifacts
+*.aux
+*.lof
+*.lot
+*.out
+*.toc
+*.synctex.gz
+*.bak
+*.fls
+*.fdb_latexmk
+
