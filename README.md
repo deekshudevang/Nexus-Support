@@ -77,6 +77,8 @@ For complete architecture diagrams, module ownership, and design decisions, see 
 | **`cloud/backend/`** | Cloud Backend API | FastAPI service, PostgreSQL 15 + PostGIS spatial queries, Alembic migrations (`6f1a8b92c431`), WebSocket event hub. |
 | **`cloud/frontend/`** | Command Center UI | React 18, Vite, React-Leaflet (`TacticalMap.jsx`), sound alerts, offline tile fallback (`docs/OFFLINE_TILES_GUIDE.md`). |
 | **`docs/`** | Technical Documentation | System architecture, security threat models, testing guides, limitations, and examiner Viva Q&A. |
+| **`docs/audit/`** | Engineering Audits | Evidence-driven repository audits (`COMPLETE_REPOSITORY_AUDIT.md`) and defect tracking (`DEFECT_REGISTER.md`). |
+| **`docs/design/`** | UI/UX & Design System | Android command platform redesign specs (`ANDROID_UX_AUDIT.md`), screen inventory, and accessibility tokens. |
 | **`scripts/`** | Operations & Automation | `seed_demo.py`, `demo_flow.md` walkthrough, legacy SQLite-to-PG migration CLI (`import_sqlite_to_pg.py`). |
 
 ---

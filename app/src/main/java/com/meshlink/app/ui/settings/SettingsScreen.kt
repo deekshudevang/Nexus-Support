@@ -20,6 +20,7 @@ fun SettingsScreen(
     onBackClick: () -> Unit,
     onDiagnosticsClick: () -> Unit,
     onDebugDashboardClick: () -> Unit = {},
+    onAdminDashboardClick: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val useMeshtastic by viewModel.useMeshtastic.collectAsState()
@@ -362,6 +363,16 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold
             )
+
+            Button(
+                onClick = onAdminDashboardClick,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+            ) {
+                Text("Tactical Administration Panel", fontWeight = FontWeight.Bold)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             Button(
                 onClick = onDiagnosticsClick,
