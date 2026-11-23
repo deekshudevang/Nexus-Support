@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.WifiTethering
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,6 +56,7 @@ fun HomeScreen(
     onSettingsClick: () -> Unit = {},
     onBroadcastClick: () -> Unit = {},
     onAssignmentsClick: () -> Unit = {},
+    onAdminClick: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val conversations by viewModel.conversations.collectAsStateWithLifecycle()
@@ -72,7 +74,8 @@ fun HomeScreen(
             scanStrategy = scanStrategy,
             networkState = networkState,
             onToggleScan = { viewModel.toggleScanning() },
-            onSettingsClick = onSettingsClick
+            onSettingsClick = onSettingsClick,
+            onAdminClick = onAdminClick
         )
 
         LazyColumn(modifier = Modifier.weight(1f)) {
@@ -144,7 +147,8 @@ private fun ChatListHeader(
     scanStrategy: com.meshlink.app.domain.model.ScanStrategy,
     networkState: MeshNetworkState,
     onToggleScan: () -> Unit,
-    onSettingsClick: () -> Unit
+    onSettingsClick: () -> Unit,
+    onAdminClick: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier
@@ -187,6 +191,14 @@ private fun ChatListHeader(
                 onCheckedChange = { onToggleScan() },
                 modifier = Modifier.padding(end = 8.dp)
             )
+            IconButton(onClick = onAdminClick) {
+                Icon(
+                    Icons.Default.Security,
+                    contentDescription = "Tactical Administration",
+                    tint     = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
             IconButton(onClick = onSettingsClick) {
                 Icon(
                     Icons.Default.Edit,

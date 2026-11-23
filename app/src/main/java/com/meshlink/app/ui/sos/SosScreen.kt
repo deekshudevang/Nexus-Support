@@ -108,6 +108,7 @@ fun SosScreen(
                             SosViewModel.SosDeliveryState.PEER_ACKNOWLEDGED -> "DELIVERY CONFIRMED: PEER ACK RECEIVED"
                             SosViewModel.SosDeliveryState.DELIVERED -> "RELAYED TO MESH PEER"
                             SosViewModel.SosDeliveryState.TRANSMITTING -> "BROADCASTING BEACON (AWAITING PEER ACK)"
+                            SosViewModel.SosDeliveryState.QUEUED_OFFLINE -> "STORED IN OUTBOX (NO DIRECT PEERS — ADVERTISING)"
                             SosViewModel.SosDeliveryState.PENDING -> "ENQUEUED: PENDING DISPATCH"
                             SosViewModel.SosDeliveryState.FAILED -> "TRANSMISSION FAILED (ALL RETRIES EXHAUSTED)"
                             SosViewModel.SosDeliveryState.EXPIRED -> "SIGNAL EXPIRED"
@@ -116,6 +117,7 @@ fun SosScreen(
                         color = when (deliveryStatus) {
                             SosViewModel.SosDeliveryState.PEER_ACKNOWLEDGED,
                             SosViewModel.SosDeliveryState.DELIVERED -> Color(0xFF4CAF50)
+                            SosViewModel.SosDeliveryState.QUEUED_OFFLINE -> Color(0xFFF59E0B)
                             SosViewModel.SosDeliveryState.FAILED,
                             SosViewModel.SosDeliveryState.EXPIRED -> errorColor
                             else -> errorColor.copy(alpha = 0.85f)

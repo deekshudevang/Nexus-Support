@@ -52,6 +52,12 @@ if IS_DEV:
 raw_revoked = os.getenv("REVOKED_CREDENTIALS", "")
 REVOKED_CREDENTIALS = {k.strip() for k in raw_revoked.split(",") if k.strip()}
 
+if IS_DEV:
+    logger.warning("====================================================================")
+    logger.warning("SECURITY NOTICE: FastAPI running in DEVELOPMENT mode with dev secrets.")
+    logger.warning("Production deployment requires ENVIRONMENT=production and non-dev credentials.")
+    logger.warning("====================================================================")
+
 
 def validate_production_configuration(
     environment: str,

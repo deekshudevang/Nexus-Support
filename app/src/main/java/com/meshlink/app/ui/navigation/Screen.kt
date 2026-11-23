@@ -104,4 +104,10 @@ sealed interface Screen {
                 Chat(deviceId = deviceId, deviceName = deviceName)
         }
     }
+
+    /** Full-screen: Admin dashboard and system monitoring */
+    @Serializable
+    data object Admin : Screen {
+        val route: String = "admin_dashboard"
+    }
 }

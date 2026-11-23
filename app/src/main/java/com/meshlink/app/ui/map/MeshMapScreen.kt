@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Warning
 import kotlin.math.roundToInt
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -68,6 +69,11 @@ fun MeshMapScreen(
         config.osmdroidTileCache = File(context.cacheDir, "osmdroid_tiles")
     }
 
+    val hasOfflineMap = remember {
+        val mapDir = File(context.filesDir, "offline_maps")
+        mapDir.listFiles { _, name -> name.endsWith(".map") }?.isNotEmpty() == true
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -93,6 +99,42 @@ fun MeshMapScreen(
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
+            if (!hasOfflineMap) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "OFFLINE MAP DATA NOT INSTALLED",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Text(
+                                text = "Terrain renders as coordinate grid. Download regional map pack for full offline topography.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
+                            )
+                        }
+                        TextButton(onClick = onNavigateToDownloads) {
+                            Text("DOWNLOAD", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
