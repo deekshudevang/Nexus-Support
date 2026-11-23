@@ -22,6 +22,7 @@ import com.meshlink.app.ui.map.MapDownloadScreen
 import com.meshlink.app.ui.map.MeshMapScreen
 import com.meshlink.app.ui.medical.MedicalProfileScreen
 import com.meshlink.app.ui.settings.SettingsScreen
+import com.meshlink.app.ui.admin.AdminDashboardScreen
 import com.meshlink.app.ui.sos.SosScreen
 import com.meshlink.app.ui.sos.SosViewModel
 
@@ -48,6 +49,9 @@ fun MeshLinkNavHost(
                 },
                 onAssignmentsClick = {
                     navController.navigate(Screen.Assignments)
+                },
+                onAdminClick = {
+                    navController.navigate(Screen.Admin)
                 }
             )
         }
@@ -94,7 +98,8 @@ fun MeshLinkNavHost(
             SettingsScreen(
                 onBackClick = { navController.popBackStack() },
                 onDiagnosticsClick = { navController.navigate(Screen.Diagnostics) },
-                onDebugDashboardClick = { navController.navigate(Screen.DebugDashboard) }
+                onDebugDashboardClick = { navController.navigate(Screen.DebugDashboard) },
+                onAdminDashboardClick = { navController.navigate(Screen.Admin) }
             )
         }
 
@@ -139,6 +144,12 @@ fun MeshLinkNavHost(
                     }
                 },
                 onNavigateToSettings = { navController.navigate(Screen.Settings) }
+            )
+        }
+
+        composable<Screen.Admin> {
+            AdminDashboardScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
