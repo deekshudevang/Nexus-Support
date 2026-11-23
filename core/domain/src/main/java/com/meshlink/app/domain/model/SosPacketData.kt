@@ -28,6 +28,7 @@ data class SosPacketData(
 
     enum class SosStatus {
         PENDING,
+        QUEUED_OFFLINE,
         SENT,
         DELIVERED,
         ACKNOWLEDGED,
@@ -42,6 +43,7 @@ data class SosPacketData(
                 if (value.isNullOrBlank()) return PENDING
                 return when (value.uppercase().trim()) {
                     "PENDING" -> PENDING
+                    "QUEUED", "QUEUED_OFFLINE" -> QUEUED_OFFLINE
                     "SENT", "TRANSMITTING" -> SENT
                     "DELIVERED" -> DELIVERED
                     "ACKNOWLEDGED", "RESPONDED", "PEER_ACKNOWLEDGED" -> ACKNOWLEDGED

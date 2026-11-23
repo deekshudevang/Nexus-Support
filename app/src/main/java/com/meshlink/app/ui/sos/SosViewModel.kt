@@ -59,6 +59,7 @@ class SosViewModel @Inject constructor(
     enum class SosDeliveryState {
         IDLE,
         PENDING,
+        QUEUED_OFFLINE,
         TRANSMITTING,
         DELIVERED,
         PEER_ACKNOWLEDGED,
@@ -107,11 +108,15 @@ class SosViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val active = sosRepository.getActiveLocalSos()
-                if (active != null && (active.status == SosPacketData.SosStatus.PENDING || active.status == SosPacketData.SosStatus.SENT)) {
+                if (active != null && (active.status == SosPacketData.SosStatus.PENDING || active.status == SosPacketData.SosStatus.SENT || active.status == SosPacketData.SosStatus.QUEUED_OFFLINE)) {
                     Timber.i("SosViewModel: Recovered active unacknowledged SOS from durable storage: uuid=${active.uuid}")
                     activeSosMessageId = active.uuid
                     _isBroadcasting.value = true
-                    _deliveryStatus.value = if (active.status == SosPacketData.SosStatus.SENT) SosDeliveryState.TRANSMITTING else SosDeliveryState.PENDING
+                    _deliveryStatus.value = when (active.status) {
+                        SosPacketData.SosStatus.SENT -> SosDeliveryState.TRANSMITTING
+                        SosPacketData.SosStatus.QUEUED_OFFLINE -> SosDeliveryState.QUEUED_OFFLINE
+                        else -> SosDeliveryState.PENDING
+                    }
                     startRetryLoop(active)
                 }
             } catch (t: Throwable) {
@@ -283,13 +288,21 @@ class SosViewModel @Inject constructor(
 
             while (_isBroadcasting.value && attempt < MAX_RETRY_ATTEMPTS) {
                 attempt++
+                val connectedPeers = nearbyRepository.getConnectedPeers()
+                val hasPeers = connectedPeers.isNotEmpty()
                 try {
-                    _deliveryStatus.value = SosDeliveryState.TRANSMITTING
-                    sosRepository.updateSosStatus(packetData.uuid, SosPacketData.SosStatus.SENT)
+                    if (hasPeers) {
+                        _deliveryStatus.value = SosDeliveryState.TRANSMITTING
+                        sosRepository.updateSosStatus(packetData.uuid, SosPacketData.SosStatus.SENT)
+                    } else {
+                        // Truth in delivery: No connected peers in direct range; beacon is enqueued locally and advertised via BLE
+                        _deliveryStatus.value = SosDeliveryState.QUEUED_OFFLINE
+                        sosRepository.updateSosStatus(packetData.uuid, SosPacketData.SosStatus.QUEUED_OFFLINE)
+                    }
 
                     // Send via Nearby Mesh and BLE beacon advertising
                     nearbyRepository.sendSos(packetData.toJson())
-                    Timber.d("SosViewModel: broadcast attempt $attempt succeeded for ${packetData.uuid}")
+                    Timber.d("SosViewModel: broadcast attempt $attempt (hasPeers=$hasPeers) for ${packetData.uuid}")
                 } catch (t: Throwable) {
                     Timber.e(t, "SosViewModel: broadcast attempt $attempt failed for ${packetData.uuid}")
                 }
@@ -306,8 +319,8 @@ class SosViewModel @Inject constructor(
                 delayMs = (delayMs * BACKOFF_MULTIPLIER).toLong().coerceAtMost(MAX_BACKOFF_MS)
             }
 
-            // If retry exhausted and still transmitting without ACK
-            if (_isBroadcasting.value && _deliveryStatus.value == SosDeliveryState.TRANSMITTING && attempt >= MAX_RETRY_ATTEMPTS) {
+            // If retry exhausted and still transmitting/queued without ACK
+            if (_isBroadcasting.value && (_deliveryStatus.value == SosDeliveryState.TRANSMITTING || _deliveryStatus.value == SosDeliveryState.QUEUED_OFFLINE) && attempt >= MAX_RETRY_ATTEMPTS) {
                 Timber.w("SosViewModel: Max retry attempts ($MAX_RETRY_ATTEMPTS) exhausted for ${packetData.uuid}")
                 _deliveryStatus.value = SosDeliveryState.FAILED
                 sosRepository.updateSosStatus(packetData.uuid, SosPacketData.SosStatus.FAILED)

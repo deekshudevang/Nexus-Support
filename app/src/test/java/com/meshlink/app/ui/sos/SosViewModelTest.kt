@@ -55,6 +55,7 @@ class SosViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         every { nearbyRepository.incomingPackets } returns incomingPacketsFlow
+        every { nearbyRepository.getConnectedPeers() } returns mapOf("ep1" to "peer-node-1")
         coEvery { locationTracker.getCurrentLocation(any()) } returns null
         coEvery { sosRepository.getActiveLocalSos() } returns null
         coEvery { sosRepository.enqueueSos(any()) } returns true
@@ -447,5 +448,22 @@ class SosViewModelTest {
         // Must remain IDLE, not transition to PEER_ACKNOWLEDGED
         assertEquals(SosViewModel.SosDeliveryState.IDLE, viewModel.deliveryStatus.value)
         coVerify(exactly = 0) { sosRepository.acknowledgeSos(any()) }
+    }
+
+    @Test
+    fun test_sos_queued_offline_when_no_peers_connected() = testScope.runTest {
+        // Given no connected peers in direct RF range
+        every { nearbyRepository.getConnectedPeers() } returns emptyMap()
+
+        // When user triggers SOS
+        viewModel.toggleSos()
+        testScheduler.runCurrent()
+
+        // Then state is truthfully represented as QUEUED_OFFLINE (not SENT)
+        assertTrue(viewModel.isBroadcasting.value)
+        assertEquals(SosViewModel.SosDeliveryState.QUEUED_OFFLINE, viewModel.deliveryStatus.value)
+        coVerify(atLeast = 1) {
+            sosRepository.updateSosStatus(any(), SosPacketData.SosStatus.QUEUED_OFFLINE)
+        }
     }
 }
