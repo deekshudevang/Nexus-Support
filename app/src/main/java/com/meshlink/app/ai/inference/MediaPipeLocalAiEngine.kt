@@ -46,6 +46,18 @@ class MediaPipeLocalAiEngine @Inject constructor(
                 val startTime = System.currentTimeMillis()
                 AiLogger.i("Initializing MediaPipe LlmInference runtime with model at ${modelFile.name}")
 
+                // Pre-flight memory headroom check:
+                // Gemma 3 INT4 requires ~1.5GB native heap. Fail safe with AiError.LowMemory
+                // if device is critically constrained to protect emergency mesh operations.
+                val actManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+                val memInfo = android.app.ActivityManager.MemoryInfo()
+                actManager?.getMemoryInfo(memInfo)
+                val availMb = memInfo.availMem / (1024 * 1024)
+                if (memInfo.lowMemory || (availMb in 1..1199)) {
+                    AiLogger.w("Pre-flight check: insufficient available RAM for Gemma 3 LLM: ${availMb}MB, lowMemory=${memInfo.lowMemory}")
+                    return@withContext AiResult.Failure(AiError.LowMemory)
+                }
+
                 val options = LlmInference.LlmInferenceOptions.builder()
                     .setModelPath(modelFile.absolutePath)
                     .setMaxTokens(2048)
