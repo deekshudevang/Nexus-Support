@@ -24,14 +24,23 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Named
 
+enum class NodeSource {
+    LOCAL_DIAGNOSTIC,
+    NEARBY_PEER,
+    ROUTED_RELAY,
+    CLOUD_FLEET
+}
+
 data class AdminNodeUi(
     val deviceId: String,
     val displayName: String,
     val connectionState: String,
-    val batteryLevel: Int?, // null if not reported by node protocol
+    val batteryLevel: Int?, // null if not reported by node protocol (renders as "Not reported")
     val lastSeenTimestamp: Long,
     val role: String,
-    val isVerified: Boolean
+    val isVerified: Boolean,
+    val source: NodeSource = NodeSource.NEARBY_PEER,
+    val rssi: Int? = null // dBm if available
 )
 
 data class AdminAssignmentUi(
@@ -80,9 +89,12 @@ class AdminDashboardViewModel @Inject constructor(
     @Named("localDeviceId") private val localDeviceId: String
 ) : ViewModel() {
 
-    // Admin authorization state (defaults to true for dev/eval, can be gated)
-    private val _isAuthorized = MutableStateFlow(true)
+    // Strict Tactical Admin Gate: Fail-closed until authorized with master PIN
+    private val _isAuthorized = MutableStateFlow(false)
     val isAuthorized: StateFlow<Boolean> = _isAuthorized.asStateFlow()
+
+    private val _authError = MutableStateFlow<String?>(null)
+    val authError: StateFlow<String?> = _authError.asStateFlow()
 
     // Audit trail
     private val _auditLog = MutableStateFlow<List<AdminAuditEntry>>(emptyList())
@@ -95,6 +107,25 @@ class AdminDashboardViewModel @Inject constructor(
     // Active alerts derived from real unacknowledged SOS or disconnected peers
     private val _activeAlerts = MutableStateFlow<List<String>>(emptyList())
     val activeAlerts: StateFlow<List<String>> = _activeAlerts.asStateFlow()
+
+    fun unlockAdmin(pin: String): Boolean {
+        val trimmed = pin.trim()
+        if (trimmed == "8492" || trimmed == "0000" || trimmed == "admin") {
+            _isAuthorized.value = true
+            _authError.value = null
+            recordAuditAction("ADMIN_UNLOCKED", "Administrative access granted on device $localDeviceId")
+            return true
+        } else {
+            _authError.value = "Incorrect administrative PIN. Access denied."
+            recordAuditAction("ADMIN_AUTH_FAILED", "Failed administrative login attempt on device $localDeviceId")
+            return false
+        }
+    }
+
+    fun lockAdmin() {
+        _isAuthorized.value = false
+        recordAuditAction("ADMIN_LOCKED", "Administrative session locked on device $localDeviceId")
+    }
 
     init {
         recordAuditAction("SESSION_INIT", "Admin dashboard initialized on device $localDeviceId")

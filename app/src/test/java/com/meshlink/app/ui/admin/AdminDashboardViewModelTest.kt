@@ -178,4 +178,33 @@ class AdminDashboardViewModelTest {
         advanceUntilIdle()
         coVerify { settingsRepo.setBatteryOptimization(false) }
     }
+
+    @Test
+    fun test_adminAuthorization_lockedByDefault_and_requiresMasterPin() = runTest(testDispatcher) {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        // 1. Initial state must be locked (fail-closed security)
+        assertFalse("Admin panel must be locked by default", vm.isAuthorized.value)
+        assertNull(vm.authError.value)
+
+        // 2. Reject incorrect PIN
+        val wrongAttempt = vm.unlockAdmin("1234")
+        assertFalse(wrongAttempt)
+        assertFalse(vm.isAuthorized.value)
+        assertNotNull(vm.authError.value)
+        assertTrue(vm.auditLog.value.any { it.action == "ADMIN_AUTH_FAILED" })
+
+        // 3. Grant access with valid Tactical Master PIN
+        val successAttempt = vm.unlockAdmin("8492")
+        assertTrue(successAttempt)
+        assertTrue(vm.isAuthorized.value)
+        assertNull(vm.authError.value)
+        assertTrue(vm.auditLog.value.any { it.action == "ADMIN_UNLOCKED" })
+
+        // 4. Lock admin session
+        vm.lockAdmin()
+        assertFalse(vm.isAuthorized.value)
+        assertTrue(vm.auditLog.value.any { it.action == "ADMIN_LOCKED" })
+    }
 }
