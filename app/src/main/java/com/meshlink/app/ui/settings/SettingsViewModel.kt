@@ -1,9 +1,21 @@
 package com.meshlink.app.ui.settings
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.meshlink.app.data.BuildConfig as DataBuildConfig
+import com.meshlink.app.data.local.dao.SosPacketDao
+import com.meshlink.app.data.remote.MeshBackendService
+import com.meshlink.app.domain.model.SyncTelemetry
 import com.meshlink.app.domain.repository.NearbyRepository
+import com.meshlink.app.domain.repository.SettingsRepository
 import com.meshlink.app.location.LocationTracker
+import com.meshlink.app.sync.GatewaySyncWorker
+import com.meshlink.app.worker.CloudSyncWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,11 +28,20 @@ import kotlinx.coroutines.launch
 
 import com.meshlink.app.ai.domain.ModelAssetManager
 
-import com.meshlink.app.domain.repository.SettingsRepository
 import com.meshlink.app.mesh.battery.AdaptiveScanController
 import com.meshlink.app.mesh.battery.BatteryMonitor
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
+import retrofit2.HttpException
+import java.io.IOException
+import javax.net.ssl.SSLException
+
+sealed interface ConnectionTestState {
+    data object Idle : ConnectionTestState
+    data object Testing : ConnectionTestState
+    data class Success(val summary: String) : ConnectionTestState
+    data class Error(val message: String) : ConnectionTestState
+}
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -30,7 +51,10 @@ class SettingsViewModel @Inject constructor(
     val modelAssetManager: ModelAssetManager,
     private val settingsRepository: SettingsRepository,
     private val adaptiveScanController: AdaptiveScanController,
-    private val batteryMonitor: BatteryMonitor
+    private val batteryMonitor: BatteryMonitor,
+    private val backendService: MeshBackendService,
+    private val sosPacketDao: SosPacketDao,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     val useNearby: StateFlow<Boolean> = settingsRepository.useNearby
@@ -44,6 +68,21 @@ class SettingsViewModel @Inject constructor(
 
     val crashReportingOptIn: StateFlow<Boolean> = settingsRepository.crashReportingOptIn
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val backendBaseUrl: StateFlow<String> = settingsRepository.backendBaseUrl
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DataBuildConfig.BACKEND_BASE_URL)
+
+    val gatewayKey: StateFlow<String> = settingsRepository.gatewayKey
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DataBuildConfig.GATEWAY_KEY)
+
+    val syncTelemetry: StateFlow<SyncTelemetry> = settingsRepository.syncTelemetry
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SyncTelemetry())
+
+    val pendingSosCount: StateFlow<Int> = sosPacketDao.getPendingCloudSyncCountFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    private val _connectionTestState = MutableStateFlow<ConnectionTestState>(ConnectionTestState.Idle)
+    val connectionTestState: StateFlow<ConnectionTestState> = _connectionTestState.asStateFlow()
 
     val isAiEnabled: StateFlow<Boolean> = aiCoordinator.isAiEnabled
     val aiState: StateFlow<AiCapabilityState> = aiCoordinator.state
@@ -214,6 +253,58 @@ class SettingsViewModel @Inject constructor(
     fun setCrashReportingOptIn(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setCrashReportingOptIn(enabled)
+        }
+    }
+
+    fun saveAndTestConnection(urlInput: String, gatewayKeyInput: String) {
+        viewModelScope.launch {
+            _connectionTestState.value = ConnectionTestState.Testing
+            try {
+                settingsRepository.setBackendBaseUrl(urlInput)
+                settingsRepository.setGatewayKey(gatewayKeyInput)
+            } catch (e: Exception) {
+                _connectionTestState.value = ConnectionTestState.Error(e.message ?: "Invalid backend configuration")
+                return@launch
+            }
+
+            try {
+                val health = backendService.checkHealth()
+                val readyResp = backendService.checkReadiness()
+                val dbStatus = if (health.database_connected) "DB OK" else "DB Degraded"
+                val head = health.migration_head ?: "unknown"
+                if (readyResp.isSuccessful) {
+                    val lag = readyResp.body()?.outbox_lag ?: 0
+                    _connectionTestState.value = ConnectionTestState.Success(
+                        "Connected (${health.environment ?: "unknown"}) • $dbStatus • Head $head • Outbox lag: $lag"
+                    )
+                } else {
+                    _connectionTestState.value = ConnectionTestState.Error(
+                        "Health OK (${health.status}), readiness returned HTTP ${readyResp.code()}"
+                    )
+                }
+            } catch (e: HttpException) {
+                _connectionTestState.value = ConnectionTestState.Error("HTTP ${e.code()}: ${e.message()}")
+            } catch (e: SSLException) {
+                _connectionTestState.value = ConnectionTestState.Error("TLS error: ${e.message}")
+            } catch (e: IOException) {
+                _connectionTestState.value = ConnectionTestState.Error("Unreachable: ${e.message ?: e::class.java.simpleName}")
+            } catch (e: Exception) {
+                _connectionTestState.value = ConnectionTestState.Error(e.message ?: "Connection test failed")
+            }
+        }
+    }
+
+    fun triggerManualSync() {
+        try {
+            val wm = WorkManager.getInstance(context)
+            wm.enqueueUniqueWork(
+                GatewaySyncWorker.WORK_NAME_IMMEDIATE,
+                ExistingWorkPolicy.REPLACE,
+                GatewaySyncWorker.buildWorkRequest(pullDownlinks = true)
+            )
+            wm.enqueue(OneTimeWorkRequestBuilder<CloudSyncWorker>().build())
+        } catch (t: Throwable) {
+            _connectionTestState.value = ConnectionTestState.Error("Could not schedule sync: ${t.message}")
         }
     }
 }

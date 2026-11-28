@@ -25,6 +25,9 @@ from main import validate_production_configuration
 from app.core.config import _resolve_database_url
 from app.core.database import Base, SessionLocal, engine
 from app.models.incident import IncidentModel
+from app.models.location_event import LocationEventModel
+from app.models.node import NodeStatusModel
+from app.models.responder import ResponderModel
 from app.models.sos import SosPacketModel
 
 
@@ -213,3 +216,24 @@ def test_spatial_coordinates_constraints_and_queries():
         session.commit()
     finally:
         session.close()
+
+
+# ── TEST 7: Epoch Millisecond Timestamps Compile to BIGINT on PostgreSQL ────
+def test_epoch_ms_columns_compile_to_postgresql_bigint():
+    """Prevent 32-bit integer overflow when Android sends System.currentTimeMillis()."""
+    from sqlalchemy.dialects import postgresql
+
+    pg = postgresql.dialect()
+    checked = [
+        SosPacketModel.__table__.c.timestamp,
+        NodeStatusModel.__table__.c.timestamp,
+        LocationEventModel.__table__.c.timestamp,
+        IncidentModel.__table__.c.created_at,
+        IncidentModel.__table__.c.updated_at,
+        IncidentModel.__table__.c.resolved_at,
+        ResponderModel.__table__.c.last_location_at,
+        ResponderModel.__table__.c.created_at,
+    ]
+    for col in checked:
+        pg_type = col.type.compile(dialect=pg).upper()
+        assert "BIGINT" in pg_type, f"{col.table.name}.{col.name} must compile to BIGINT on PostgreSQL, got {pg_type}"

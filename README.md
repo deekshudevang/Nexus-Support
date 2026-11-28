@@ -16,7 +16,7 @@
 ---
 
 > **Engineering Honesty & Status Disclosure:**  
-> Nexus Support is an active working prototype and proof-of-concept for disaster relief operations. Automated CI test suites are passing across all tiers (128 backend pytest, 17 frontend Vitest, 149 Android Gradle tasks). However, live over-the-air multi-hop RF testing on physical LoRa hardware, physical multi-device deployment in austere terrain, and production multi-region cloud clustering remain future release milestones. See [docs/LIMITATIONS_AND_FUTURE_WORK.md](docs/LIMITATIONS_AND_FUTURE_WORK.md).
+> Nexus Support is an active working prototype and proof-of-concept for disaster relief operations. Automated CI test suites are passing across all tiers (131 backend pytest, 19 frontend Vitest, Android Gradle unit tests & R8 release build), verified with Docker Compose PostgreSQL/PostGIS (`8a2c4f91d3b0`), Playwright web console E2E, and single-device Android emulator + physical phone LAN connectivity runs. However, live multi-device (2+ phones) over-the-air multi-hop RF testing, physical LoRa radio hardware validation, and production multi-region cloud clustering remain hardware/ops milestones. See [docs/LIMITATIONS_AND_FUTURE_WORK.md](docs/LIMITATIONS_AND_FUTURE_WORK.md) and [docs/evidence/PHONE_TEST_CHECKLIST.md](docs/evidence/PHONE_TEST_CHECKLIST.md).
 
 ---
 
@@ -74,7 +74,7 @@ For complete architecture diagrams, module ownership, and design decisions, see 
 | **`core/data/`** | Persistence & Network | Encrypted Room DB (`DatabaseModule.kt` via SQLCipher 4.9.0), `OutboxEntity.kt`, Retrofit API service (`MeshBackendService.kt`). |
 | **`core/crypto/`** | Security & Cryptography | Google Tink AEAD (AES-256-GCM) and ECIES hybrid encryption (`TinkCryptoManager.kt`), Android Keystore. |
 | **`core/domain/`** | Pure Domain Models | Pure Kotlin domain entities (`Incident.kt`, `Node.kt`, `Responder.kt`, `Message.kt`), zero Android dependencies. |
-| **`cloud/backend/`** | Cloud Backend API | FastAPI service, PostgreSQL 15 + PostGIS spatial queries, Alembic migrations (`6f1a8b92c431`), WebSocket event hub. |
+| **`cloud/backend/`** | Cloud Backend API | FastAPI service, PostgreSQL 16 + PostGIS 3.4 spatial queries, Alembic migrations (`8a2c4f91d3b0`), WebSocket event hub. |
 | **`cloud/frontend/`** | Command Center UI | React 18, Vite, React-Leaflet (`TacticalMap.jsx`), sound alerts, offline tile fallback (`docs/OFFLINE_TILES_GUIDE.md`). |
 | **`docs/`** | Technical Documentation | System architecture, security threat models, testing guides, limitations, and examiner Viva Q&A. |
 | **`scripts/`** | Operations & Automation | `seed_demo.py`, `demo_flow.md` walkthrough, legacy SQLite-to-PG migration CLI (`import_sqlite_to_pg.py`). |
@@ -117,7 +117,7 @@ python main.py
 Verify backend health:
 ```bash
 curl -s http://localhost:8000/health
-# Returns: {"status":"healthy","version":"1.0.0","database_connected":true,"migration_head":"6f1a8b92c431"}
+# Returns: {"status":"ok","version":"1.0.0","database_connected":true,"migration_head":"8a2c4f91d3b0",...}
 ```
 
 **Environment Variables (`cloud/backend/.env`):**
@@ -141,8 +141,8 @@ npm install
 # Run Vitest test suite
 npm run test
 
-# Build production bundle
-npm run build
+# Build production bundle (requires explicit VITE_API_URL and VITE_WS_URL)
+VITE_API_URL=https://api.example.com VITE_WS_URL=wss://api.example.com npm run build
 
 # Start local development server
 npm run dev
@@ -204,15 +204,15 @@ To execute a complete end-to-end incident coordination walkthrough:
 Run clean test suites across all tiers:
 
 ```bash
-# 1. Backend tests (128 passed)
+# 1. Backend tests (129 passed)
 py -m pytest cloud/backend -q
 
-# 2. Frontend tests & production build (17 passed)
+# 2. Frontend tests & production build (19 passed; VITE_API_URL & VITE_WS_URL required for prod build)
 npm --prefix cloud/frontend test -- --run
-npm --prefix cloud/frontend run build
+VITE_API_URL=https://api.example.com VITE_WS_URL=wss://api.example.com npm --prefix cloud/frontend run build
 
-# 3. Android unit tests (149 actionable tasks passed)
-.\gradlew.bat clean testDebugUnitTest
+# 3. Android unit tests (clean build + unit tests across all modules)
+.\gradlew.bat testDebugUnitTest
 ```
 
 ---

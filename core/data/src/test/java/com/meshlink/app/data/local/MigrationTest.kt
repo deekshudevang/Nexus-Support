@@ -389,6 +389,33 @@ class MigrationTest {
         db.close()
     }
 
+    @Test
+    @Throws(IOException::class)
+    fun migrate15To16() {
+        helper.createDatabase(TEST_DB, 15).apply {
+            execSQL(
+                "INSERT INTO sos_packets (uuid, senderId, senderName, emergencyType, severity, latitude, longitude, message, timestamp, hopCount, status) " +
+                "VALUES ('sos15', 'node15', 'Alice', 'MEDICAL', 5, 37.77, -122.41, 'Help', 1700000000, 1, 'ACKNOWLEDGED')"
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(
+            TEST_DB,
+            16,
+            true,
+            AppDatabase.MIGRATION_15_16
+        )
+
+        val cursor = db.query("SELECT uuid, status, cloudSynced FROM sos_packets WHERE uuid = 'sos15'")
+        cursor.moveToFirst()
+        assertEquals("sos15", cursor.getString(0))
+        assertEquals("ACKNOWLEDGED", cursor.getString(1))
+        assertEquals(0, cursor.getInt(2))
+        cursor.close()
+        db.close()
+    }
+
     /**
      * Verifies ADR-0007 failure-recovery policy: in production configuration
      * (where fallbackToDestructiveMigration is disabled), missing migrations

@@ -122,7 +122,7 @@ export default function EventTimeline({
                       </span>
                     </div>
                     <span className="text-slate-400">
-                      {ts ? new Date(ts).toLocaleTimeString() : 'JUST NOW'}
+                      {ts ? new Date(ts > 1e12 ? ts : ts * 1000).toLocaleTimeString() : 'JUST NOW'}
                     </span>
                   </div>
                 );

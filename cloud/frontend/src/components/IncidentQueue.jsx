@@ -87,7 +87,7 @@ export default function IncidentQueue({
   }, [incidents]);
 
   return (
-    <aside className="w-80 md:w-88 xl:w-96 flex flex-col bg-[#0b0f19] border-r border-[#334155] shrink-0 z-20 select-none">
+    <aside className="w-full md:w-88 xl:w-96 flex flex-col bg-[#0b0f19] border-r border-[#334155] shrink-0 z-20 select-none">
       {/* Panel Header */}
       <div className="p-2.5 bg-[#111827] border-b border-[#334155] flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -244,7 +244,7 @@ export default function IncidentQueue({
                   {/* Relative / Timestamp */}
                   <span className="font-mono text-[10px] text-[#64748b]">
                     {inc.timestamp
-                      ? new Date(inc.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      ? new Date(inc.timestamp > 1e12 ? inc.timestamp : inc.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                       : 'LIVE'}
                   </span>
                 </div>

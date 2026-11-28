@@ -29,12 +29,15 @@ export default function App() {
 
   const [selectedIncident, setSelectedIncident] = useState(null);
   const [dispatchIncident, setDispatchIncident] = useState(null);
+  const [mobileTab, setMobileTab] = useState('QUEUE'); // 'QUEUE' | 'MAP' | 'DISPATCH'
 
   const [wsStatus, setWsStatus] = useState('CLOSED'); // 'CLOSED' | 'CONNECTING' | 'OPEN'
+  const [wsRetryInfo, setWsRetryInfo] = useState(null); // { attempt, delayMs, error }
   const [soundEnabled, setSoundEnabled] = useState(true);
 
   const wsRef = useRef(null);
   const reconnectTimerRef = useRef(null);
+  const reconnectAttemptRef = useRef(0);
 
   // 1. Initial Authentication Handler
   const handleAuthenticate = async (enteredToken) => {
@@ -42,15 +45,18 @@ export default function App() {
     setAuthError(null);
 
     try {
-      // Validate token via fetchSosPackets or operator login
-      const packets = await fetchSosPackets(enteredToken).catch(async (err) => {
-        // Fallback: try operator login
+      let resolvedToken = enteredToken;
+      let packets;
+      try {
+        packets = await fetchSosPackets(enteredToken);
+      } catch (_err) {
         const loginRes = await loginOperator(enteredToken);
-        return await fetchSosPackets(loginRes.access_token);
-      });
+        resolvedToken = loginRes.access_token || loginRes.token || enteredToken;
+        packets = await fetchSosPackets(resolvedToken);
+      }
 
-      sessionStorage.setItem('meshlink_op_token', enteredToken);
-      setToken(enteredToken);
+      sessionStorage.setItem('meshlink_op_token', resolvedToken);
+      setToken(resolvedToken);
       setIncidents(Array.isArray(packets) ? packets : []);
       requestNotificationPermission();
     } catch (err) {
@@ -124,6 +130,8 @@ export default function App() {
 
         socket.onopen = () => {
           if (!isMounted) return;
+          reconnectAttemptRef.current = 0;
+          setWsRetryInfo(null);
           setWsStatus('OPEN');
         };
 
@@ -132,8 +140,13 @@ export default function App() {
           try {
             const data = JSON.parse(event.data);
 
-            // Handle SOS packet / Incident payload
-            if (data.type === 'NEW_SOS' || data.emergencyType || data.severity) {
+            // Handle live SOS packet / Incident payload (backend emits "sos_alert")
+            if (
+              data.type === 'sos_alert' ||
+              data.type === 'NEW_SOS' ||
+              data.emergencyType ||
+              data.severity
+            ) {
               const packet = data.packet || data;
               setIncidents((prev) => {
                 const id = packet.uuid || packet.id;
@@ -158,8 +171,9 @@ export default function App() {
               );
             }
 
-            // Append to stream audit timeline
-            setStreamEvents((prev) => [...prev, data]);
+            if (data.type !== 'pong' && data.type !== 'authenticated') {
+              setStreamEvents((prev) => [...prev, data]);
+            }
           } catch (err) {
             console.error('Failed to parse WebSocket message:', err);
           }
@@ -168,8 +182,12 @@ export default function App() {
         socket.onclose = () => {
           if (!isMounted) return;
           setWsStatus('CLOSED');
-          // Auto-reconnect after 3 seconds
-          reconnectTimerRef.current = setTimeout(connectWebSocket, 3000);
+          const attempt = reconnectAttemptRef.current + 1;
+          reconnectAttemptRef.current = attempt;
+          const baseDelay = Math.min(30000, 1000 * Math.pow(2, attempt - 1));
+          const delayMs = baseDelay + Math.floor(Math.random() * 500);
+          setWsRetryInfo({ attempt, delayMs, error: null });
+          reconnectTimerRef.current = setTimeout(connectWebSocket, delayMs);
         };
 
         socket.onerror = () => {
@@ -180,7 +198,17 @@ export default function App() {
       } catch (err) {
         if (!isMounted) return;
         setWsStatus('CLOSED');
-        reconnectTimerRef.current = setTimeout(connectWebSocket, 4000);
+        if (err.status === 401 || err.status === 403) {
+          setWsRetryInfo({ attempt: reconnectAttemptRef.current, delayMs: null, error: 'Session rejected (HTTP ' + err.status + ')' });
+          setAuthError('Operator session expired or revoked. Please sign in again.');
+          return;
+        }
+        const attempt = reconnectAttemptRef.current + 1;
+        reconnectAttemptRef.current = attempt;
+        const baseDelay = Math.min(30000, 1000 * Math.pow(2, attempt - 1));
+        const delayMs = baseDelay + Math.floor(Math.random() * 500);
+        setWsRetryInfo({ attempt, delayMs, error: err.message || 'Gateway unreachable' });
+        reconnectTimerRef.current = setTimeout(connectWebSocket, delayMs);
       }
     };
 
@@ -214,6 +242,7 @@ export default function App() {
       {/* 1. Top HUD & Emergency Broadcast Ticker */}
       <TopHUD
         wsStatus={wsStatus}
+        wsRetryInfo={wsRetryInfo}
         soundEnabled={soundEnabled}
         setSoundEnabled={setSoundEnabled}
         onLogout={handleLogout}
@@ -222,36 +251,67 @@ export default function App() {
         totalNodesCount={nodes.length}
       />
 
+      {/* Mobile Workspace View Switcher (< 768px) */}
+      <nav
+        aria-label="Mobile workspace view"
+        className="md:hidden grid grid-cols-3 bg-[#111827] border-b border-[#334155] shrink-0 text-xs font-semibold"
+      >
+        {[
+          { id: 'QUEUE', label: `QUEUE (${incidents.length})` },
+          { id: 'MAP', label: 'RADAR MAP' },
+          { id: 'DISPATCH', label: `ASSETS (${responders.length})` },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            data-testid={`mobile-tab-${tab.id.toLowerCase()}`}
+            onClick={() => setMobileTab(tab.id)}
+            className={`min-h-[44px] px-2 border-b-2 transition-colors ${
+              mobileTab === tab.id
+                ? 'bg-[#1e293b] text-[#f8fafc] border-[#38bdf8]'
+                : 'text-[#94a3b8] border-transparent'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+
       {/* 2. Main 3-Column Tactical Bento Workspace */}
       <div className="flex-1 flex overflow-hidden w-full relative">
         {/* Left Column: Incident Priority Queue */}
-        <IncidentQueue
-          incidents={incidents}
-          selectedIncident={selectedIncident}
-          onSelectIncident={(inc) => setSelectedIncident(inc)}
-          onOpenDispatch={(inc) => setDispatchIncident(inc)}
-        />
+        <div className={`${mobileTab === 'QUEUE' ? 'flex w-full h-full' : 'hidden'} md:contents`}>
+          <IncidentQueue
+            incidents={incidents}
+            selectedIncident={selectedIncident}
+            onSelectIncident={(inc) => setSelectedIncident(inc)}
+            onOpenDispatch={(inc) => setDispatchIncident(inc)}
+          />
+        </div>
 
         {/* Center Canvas: Tactical Radar Map with Zero GPS Fabrication */}
-        <TacticalMap
-          incidents={incidents}
-          nodes={nodes}
-          responders={responders}
-          selectedIncident={selectedIncident}
-          onSelectIncident={(inc) => setSelectedIncident(inc)}
-          onOpenDispatch={(inc) => setDispatchIncident(inc)}
-        />
+        <div className={`${mobileTab === 'MAP' ? 'flex flex-1 w-full h-full' : 'hidden'} md:contents`}>
+          <TacticalMap
+            incidents={incidents}
+            nodes={nodes}
+            responders={responders}
+            selectedIncident={selectedIncident}
+            onSelectIncident={(inc) => setSelectedIncident(inc)}
+            onOpenDispatch={(inc) => setDispatchIncident(inc)}
+          />
+        </div>
 
         {/* Right Column: Live Responder Telemetry & Dispatch Panel */}
-        <DispatchPanel
-          responders={responders}
-          dispatchIncident={dispatchIncident}
-          onCloseDispatchModal={() => setDispatchIncident(null)}
-          onAssignmentSuccess={() => {
-            refreshTacticalState();
-          }}
-          token={token}
-        />
+        <div className={`${mobileTab === 'DISPATCH' ? 'flex w-full h-full' : 'hidden'} md:contents`}>
+          <DispatchPanel
+            responders={responders}
+            dispatchIncident={dispatchIncident}
+            onCloseDispatchModal={() => setDispatchIncident(null)}
+            onAssignmentSuccess={() => {
+              refreshTacticalState();
+            }}
+            token={token}
+          />
+        </div>
       </div>
 
       {/* 3. Bottom Real-time Stream Audit Timeline & Replay */}

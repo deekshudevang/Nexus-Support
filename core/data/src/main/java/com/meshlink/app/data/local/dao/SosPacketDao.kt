@@ -52,4 +52,10 @@ interface SosPacketDao {
 
     @Query("SELECT COUNT(*) FROM sos_packets WHERE status = 'PENDING' OR status = 'RELAYED'")
     fun getActiveCount(): Flow<Int>
+
+    @Query("UPDATE sos_packets SET cloudSynced = 1 WHERE uuid = :uuid")
+    suspend fun markCloudSynced(uuid: String)
+
+    @Query("SELECT COUNT(*) FROM sos_packets WHERE cloudSynced = 0 AND status != 'DELIVERED' AND status != 'CANCELLED' AND status != 'EXPIRED'")
+    fun getPendingCloudSyncCountFlow(): Flow<Int>
 }

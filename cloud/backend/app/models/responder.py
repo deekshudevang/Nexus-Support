@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, ForeignKey, JSON, Index
+from sqlalchemy import Column, BigInteger, String, Integer, Float, ForeignKey, JSON, Index
 from app.core.database import Base
 
 class ResponderModel(Base):
@@ -15,9 +15,9 @@ class ResponderModel(Base):
     last_latitude = Column(Float, nullable=True)
     last_longitude = Column(Float, nullable=True)
     location_accuracy_m = Column(Float, nullable=True)
-    last_location_at = Column(Integer, nullable=True)
+    last_location_at = Column(BigInteger().with_variant(Integer, "sqlite"), nullable=True)
     device_id = Column(String(128), nullable=True, index=True)
-    created_at = Column(Integer, nullable=False)
+    created_at = Column(BigInteger().with_variant(Integer, "sqlite"), nullable=False)
 
     __table_args__ = (
         Index("ix_responders_availability_type", availability, responder_type),

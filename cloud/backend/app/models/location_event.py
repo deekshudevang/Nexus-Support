@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, Index
+from sqlalchemy import Column, BigInteger, String, Integer, Float, Index
 from app.core.database import Base
 
 class LocationEventModel(Base):
@@ -9,7 +9,7 @@ class LocationEventModel(Base):
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     accuracy = Column(Float, nullable=False, default=0.0)
-    timestamp = Column(Integer, nullable=False, index=True)
+    timestamp = Column(BigInteger().with_variant(Integer, "sqlite"), nullable=False, index=True)
     sequence_number = Column(Integer, nullable=False, default=0)
     signature = Column(String(512), nullable=True, default="")
     public_key = Column(String(512), nullable=True, default="")

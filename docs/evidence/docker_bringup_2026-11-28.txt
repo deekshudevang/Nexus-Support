@@ -1,0 +1,111 @@
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose ps
+NAME                  IMAGE                                                                     COMMAND                  SERVICE    CREATED              STATUS                        PORTS
+rescuemesh-backend    nexussupport-backend                                                      "sh -c 'alembic upgr…"   backend    27 seconds ago       Up 26 seconds (healthy)       0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+rescuemesh-frontend   sha256:15f9ed6d3096c6015e2d0f4c8f44b0b09b5d37089cc02dbbc0b22df50ab4cd71   "/docker-entrypoint.…"   frontend   About a minute ago   Up 20 seconds (healthy)       0.0.0.0:5173->80/tcp, [::]:5173->80/tcp
+rescuemesh-postgres   postgis/postgis:16-3.4-alpine                                             "docker-entrypoint.s…"   db         About a minute ago   Up About a minute (healthy)   0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+rescuemesh-redis      redis:7-alpine                                                            "docker-entrypoint.s…"   redis      About a minute ago   Up About a minute (healthy)   0.0.0.0:6379->6379/tcp, [::]:6379->6379/tcp
+EXIT=0
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T db psql -U rescuemesh -d rescuemesh -c SELECT postgis_version();
+postgis_version            
+---------------------------------------
+ 3.4 USE_GEOS=1 USE_PROJ=1 USE_STATS=1
+(1 row)
+EXIT=0
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T backend alembic current
+6f1a8b92c431 (head)
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+EXIT=0
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T backend alembic downgrade base
+
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade 6f1a8b92c431 -> 5d8e2a10b42f, add location events table
+INFO  [alembic.runtime.migration] Running downgrade 5d8e2a10b42f -> 3b9a1f28e05c, add multi tenant organization isolation
+INFO  [alembic.runtime.migration] Running downgrade 3b9a1f28e05c -> 1366b03464eb, add postgis and spatial indexes
+INFO  [alembic.runtime.migration] Running downgrade 1366b03464eb -> 7f9227a7fd69, add incident operations and command center entities
+INFO  [alembic.runtime.migration] Running downgrade 7f9227a7fd69 -> , create initial rescuemesh tables
+EXIT=0
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T backend alembic upgrade head
+
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 7f9227a7fd69, create initial rescuemesh tables
+INFO  [alembic.runtime.migration] Running upgrade 7f9227a7fd69 -> 1366b03464eb, add incident operations and command center entities
+INFO  [alembic.runtime.migration] Running upgrade 1366b03464eb -> 3b9a1f28e05c, add postgis and spatial indexes
+INFO  [alembic.runtime.migration] Running upgrade 3b9a1f28e05c -> 5d8e2a10b42f, add multi tenant organization isolation
+INFO  [alembic.runtime.migration] Running upgrade 5d8e2a10b42f -> 6f1a8b92c431, add location events table
+EXIT=0
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T backend alembic current
+6f1a8b92c431 (head)
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+EXIT=0
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T db pg_dump -U rescuemesh -Fc rescuemesh -f /tmp/rescuemesh_drill.dump
+
+EXIT=0
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T db psql -U rescuemesh -d postgres -c DROP DATABASE IF EXISTS rescuemesh_restore_test; CREATE DATABASE rescuemesh_restore_test;
+
+ERROR:  DROP DATABASE cannot run inside a transaction block
+EXIT=1
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T db pg_restore -U rescuemesh -d rescuemesh_restore_test /tmp/rescuemesh_drill.dump
+
+pg_restore: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  database "rescuemesh_restore_test" does not exist
+EXIT=1
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T db psql -U rescuemesh -d rescuemesh_restore_test -c SELECT count(*) AS table_count FROM information_schema.tables WHERE table_schema = 'public';
+
+psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  database "rescuemesh_restore_test" does not exist
+EXIT=2
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T db psql -U rescuemesh -d postgres -c DROP DATABASE IF EXISTS rescuemesh_restore_test;
+DROP DATABASE
+NOTICE:  database "rescuemesh_restore_test" does not exist, skipping
+EXIT=0
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T db rm -f /tmp/rescuemesh_drill.dump
+
+EXIT=0
+
+GET http://127.0.0.1:8000/health -> HTTP 200 {"status":"ok","version":"1.0.0","environment":"development","database_connected":true,"migration_head":"6f1a8b92c431","timestamp":1795843404,"service":"MeshLink Gateway Backend"}
+GET http://127.0.0.1:8000/health/ready -> HTTP 200 {"status":"READY","database":"OK","database_engine":"postgresql","outbox_lag":0,"environment":"development","timestamp":1795843404,"service":"MeshLink Gateway Backend"}
+GET http://192.168.1.4:8000/health -> HTTP 200 {"status":"ok","version":"1.0.0","environment":"development","database_connected":true,"migration_head":"6f1a8b92c431","timestamp":1795843404,"service":"MeshLink Gateway Backend"}
+GET http://192.168.1.4:8000/health/ready -> HTTP 200 {"status":"READY","database":"OK","database_engine":"postgresql","outbox_lag":0,"environment":"development","timestamp":1795843404,"service":"MeshLink Gateway Backend"}
+GET http://127.0.0.1:5173/ -> HTTP 200 <!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Nexus Support incident coordination dashboar
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose logs --tail=25 backend
+rescuemesh-backend  | INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+rescuemesh-backend  | INFO  [alembic.runtime.migration] Will assume transactional DDL.
+rescuemesh-backend  | INFO  [alembic.runtime.migration] Running upgrade 1366b03464eb -> 3b9a1f28e05c, add postgis and spatial indexes
+rescuemesh-backend  | INFO  [alembic.runtime.migration] Running upgrade 3b9a1f28e05c -> 5d8e2a10b42f, add multi tenant organization isolation
+rescuemesh-backend  | INFO  [alembic.runtime.migration] Running upgrade 5d8e2a10b42f -> 6f1a8b92c431, add location events table
+rescuemesh-backend  | INFO:     Started server process [8]
+rescuemesh-backend  | INFO:     Waiting for application startup.
+rescuemesh-backend  | INFO:     Application startup complete.
+rescuemesh-backend  | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+rescuemesh-backend  | 2026-11-28 05:22:57,151 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.schemas
+rescuemesh-backend  | 2026-11-28 05:22:57,151 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.tables
+rescuemesh-backend  | 2026-11-28 05:22:57,151 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.types
+rescuemesh-backend  | 2026-11-28 05:22:57,151 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.constraints
+rescuemesh-backend  | 2026-11-28 05:22:57,152 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.defaults
+rescuemesh-backend  | 2026-11-28 05:22:57,152 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.comments
+rescuemesh-backend  | 2026-11-28 05:22:57,152 [INFO] alembic.runtime.plugins: setup plugin alembic.ext.checkconstraint_byname
+rescuemesh-backend  | INFO:     127.0.0.1:40940 - "GET /health HTTP/1.1" 200 OK
+rescuemesh-backend  | INFO:     172.18.0.1:33624 - "GET /health HTTP/1.1" 200 OK
+rescuemesh-backend  | INFO:     172.18.0.1:33626 - "GET /health/ready HTTP/1.1" 200 OK
+rescuemesh-backend  | INFO:     172.18.0.1:33628 - "GET /health HTTP/1.1" 200 OK
+rescuemesh-backend  | INFO:     172.18.0.1:33642 - "GET /health/ready HTTP/1.1" 200 OK
+EXIT=0
+

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import (
     GATEWAY_API_KEYS,
+    JWT_SECRET,
     OPERATOR_TOKENS,
     REVOKED_CREDENTIALS,
 )
@@ -142,8 +143,7 @@ ROLE_PERMISSIONS: Dict[str, Set[Permission]] = {
     },
 }
 
-# Secret key for JWT signing (defaults to secure constant if not provided in env)
-JWT_SECRET = secrets.token_hex(32)
+# Secret key for JWT signing imported from single-source config (app.core.config.JWT_SECRET)
 
 
 @dataclass

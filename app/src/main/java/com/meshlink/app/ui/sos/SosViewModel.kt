@@ -3,6 +3,8 @@ package com.meshlink.app.ui.sos
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.ExistingWorkPolicy
+import androidx.work.WorkManager
 import com.meshlink.app.domain.model.MeshPacket
 import com.meshlink.app.domain.model.SosPacketData
 import com.meshlink.app.domain.repository.NearbyRepository
@@ -10,6 +12,7 @@ import com.meshlink.app.domain.repository.SosRepository
 import com.meshlink.app.location.LocationTracker
 import com.meshlink.app.mesh.routing.MeshRouter
 import com.meshlink.app.mesh.transport.SosBeaconAdvertiser
+import com.meshlink.app.sync.GatewaySyncWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -266,12 +269,28 @@ class SosViewModel @Inject constructor(
                 return@launch
             }
 
+            // Schedule immediate gateway upload when internet/LAN link is available
+            enqueueGatewaySync()
+
             if (!_isBroadcasting.value) {
                 Timber.w("SosViewModel: SOS broadcasting was cancelled while enqueuing; aborting retry loop")
                 return@launch
             }
 
             startRetryLoop(packetData)
+        }
+    }
+
+    private fun enqueueGatewaySync() {
+        try {
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                GatewaySyncWorker.WORK_NAME_IMMEDIATE,
+                ExistingWorkPolicy.APPEND_OR_REPLACE,
+                GatewaySyncWorker.buildWorkRequest()
+            )
+        } catch (t: Throwable) {
+            // Ignored in Robolectric / unit test environments without WorkManager initialized
+            Timber.d(t, "SosViewModel: Skipping WorkManager enqueue in non-WorkManager environment")
         }
     }
 

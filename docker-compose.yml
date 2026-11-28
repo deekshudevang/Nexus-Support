@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-rescuemesh}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rescuemesh_dev_secret}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +22,7 @@ services:
     container_name: rescuemesh-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -41,13 +41,17 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     environment:
-      - ENVIRONMENT=development
-      - DATABASE_URL=postgresql://rescuemesh:rescuemesh_dev_secret@db:5432/rescuemesh
-      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173
-      - GATEWAY_API_KEYS=meshlink_gw_dev_secret
-      - OPERATOR_TOKENS=meshlink_op_dev_secret
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://rescuemesh:rescuemesh_dev_secret@db:5432/rescuemesh}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173}
+      GATEWAY_API_KEYS: ${GATEWAY_API_KEYS:-meshlink_gw_dev_secret}
+      OPERATOR_TOKENS: ${OPERATOR_TOKENS:-meshlink_op_dev_secret}
+      JWT_SECRET: ${JWT_SECRET:-meshlink_jwt_dev_secret_do_not_use_in_prod}
+      REVOKED_CREDENTIALS: ${REVOKED_CREDENTIALS:-}
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-120}
+      RATE_LIMIT_WINDOW_SEC: ${RATE_LIMIT_WINDOW_SEC:-60}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -58,12 +62,16 @@ services:
     build:
       context: ./cloud/frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+        VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8000}
     container_name: rescuemesh-frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
-      - "5173:80"
+      - "${FRONTEND_PORT:-5173}:80"
 
 volumes:
   postgres_data:

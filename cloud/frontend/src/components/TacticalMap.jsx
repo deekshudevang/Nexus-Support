@@ -77,18 +77,48 @@ const BASE_TILE_LAYERS = {
   },
 };
 
-// Map Controller for smooth flyTo
+// Map Controller for smooth flyTo + safe resize sync when toggled from hidden mobile tabs
 function MapFlyController({ targetCoords }) {
   const map = useMap();
+
   useEffect(() => {
-    if (
-      targetCoords &&
-      Number.isFinite(targetCoords[0]) &&
-      Number.isFinite(targetCoords[1])
-    ) {
-      map.flyTo(targetCoords, 14, { duration: 1.2 });
+    const flyIfVisible = () => {
+      if (
+        !targetCoords ||
+        !Number.isFinite(targetCoords[0]) ||
+        !Number.isFinite(targetCoords[1])
+      ) {
+        return;
+      }
+      const size = map.getSize?.();
+      if (!size || size.x <= 0 || size.y <= 0) {
+        return;
+      }
+      try {
+        map.flyTo(targetCoords, 14, { duration: 1.2 });
+      } catch {
+        // Ignore transient Leaflet layout errors when container is mid-transition
+      }
+    };
+
+    flyIfVisible();
+
+    const container = map.getContainer?.();
+    if (!container || typeof ResizeObserver === 'undefined') {
+      return undefined;
     }
+
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (rect && rect.width > 0 && rect.height > 0) {
+        map.invalidateSize?.(false);
+        flyIfVisible();
+      }
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
   }, [targetCoords, map]);
+
   return null;
 }
 

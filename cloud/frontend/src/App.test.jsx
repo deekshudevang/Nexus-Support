@@ -237,4 +237,77 @@ describe('MeshLink Tactical Responder Dashboard', () => {
     expect(screen.getByTestId('token-input')).toBeInTheDocument();
     expect(sessionStorage.getItem('meshlink_op_token')).toBeNull();
   });
+
+  it('stores returned JWT access_token on password fallback login and ingests live sos_alert WS events', async () => {
+    let capturedWs = null;
+    class CapturingMockWebSocket {
+      constructor(url) {
+        this.url = url;
+        capturedWs = this;
+        setTimeout(() => {
+          if (this.onopen) this.onopen();
+        }, 5);
+      }
+      send() {}
+      close() {}
+    }
+    global.WebSocket = CapturingMockWebSocket;
+
+    vi.spyOn(api, 'fetchSosPackets')
+      .mockRejectedValueOnce(new Error('Not a raw token'))
+      .mockResolvedValue([]);
+    vi.spyOn(api, 'loginOperator').mockResolvedValue({ access_token: 'jwt.header.sig', token_type: 'bearer' });
+    vi.spyOn(api, 'fetchNodes').mockResolvedValue([]);
+    vi.spyOn(api, 'fetchV1Responders').mockResolvedValue([]);
+    vi.spyOn(api, 'requestWsTicket').mockResolvedValue('ticket-ws-live');
+
+    render(<App />);
+    fireEvent.change(screen.getByTestId('token-input'), { target: { value: 'operator-pass' } });
+    fireEvent.click(screen.getByTestId('auth-submit'));
+
+    await waitFor(() => {
+      expect(sessionStorage.getItem('meshlink_op_token')).toBe('jwt.header.sig');
+      expect(capturedWs).not.toBeNull();
+    });
+
+    await act(async () => {
+      capturedWs.onmessage({
+        data: JSON.stringify({
+          type: 'sos_alert',
+          packet: {
+            uuid: 'ws-live-sos-1',
+            senderId: 'node-live',
+            senderName: 'Field Radio 7',
+            emergencyType: 'MEDICAL',
+            severity: 9,
+            latitude: 37.77,
+            longitude: -122.41,
+            message: 'Live WS emergency beacon',
+            timestamp: 1726815999,
+            status: 'ACTIVE',
+            hopCount: 1,
+          },
+        }),
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Live WS emergency beacon')[0]).toBeInTheDocument();
+    });
+  });
+
+  it('calls canonical /api/v1/responders and /api/v1/incidents/:id/assignments endpoints', async () => {
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    });
+
+    await api.fetchV1Responders('op-token', { availability: 'AVAILABLE' });
+    expect(fetchSpy.mock.calls[0][0]).toContain('/api/v1/responders?availability=AVAILABLE');
+
+    await api.createV1Assignment('op-token', { incident_id: 'inc-9', responder_id: 'resp-4', team_id: 'team-1' });
+    expect(fetchSpy.mock.calls[1][0]).toContain('/api/v1/incidents/inc-9/assignments');
+    expect(fetchSpy.mock.calls[1][1].method).toBe('POST');
+    expect(JSON.parse(fetchSpy.mock.calls[1][1].body)).toEqual({ responder_id: 'resp-4', team_id: 'team-1' });
+  });
 });

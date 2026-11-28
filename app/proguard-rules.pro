@@ -83,7 +83,7 @@
 # Keep all entities and domain models intact for Room and JSON serialisation
 -keep class com.meshlink.app.domain.model.** { *; }
 -keep class com.meshlink.app.data.local.entity.** { *; }
--keep class com.meshlink.app.data.remote.dto.** { *; }
+-keep class com.meshlink.app.data.remote.** { *; }
 
 # ── Protobuf ──────────────────────────────────────────────────────────────────
 -keep class com.google.protobuf.** { *; }

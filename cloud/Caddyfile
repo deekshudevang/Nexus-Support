@@ -1,0 +1,24 @@
+{$CADDY_SITE} {
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    @backend {
+        path /api/* /ws/* /health /health/*
+    }
+
+    handle @backend {
+        reverse_proxy backend:8000 {
+            header_up X-Forwarded-Proto https
+        }
+    }
+
+    handle {
+        reverse_proxy frontend:80
+    }
+}

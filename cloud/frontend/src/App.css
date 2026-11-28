@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 :root {
   color-scheme: dark;
   font-synthesis: none;
@@ -30,19 +32,29 @@
   --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
 
-html, body, #root {
-  height: 100%;
-  width: 100%;
-  background: var(--bg-void);
-  color: var(--text-main);
-  font-family: var(--font-sans);
-  overflow: hidden;
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    background: var(--bg-void);
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    overflow: hidden;
+  }
+
+  button {
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+  }
+
+  button:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 1px;
+  }
 }
 
 /* Crisp Scrollbars */
@@ -128,17 +140,4 @@ html, body, #root {
 /* Tabular & Coordinate Monospace */
 .font-mono {
   font-family: var(--font-mono);
-}
-
-/* Clean Focus & Button Affordances */
-button {
-  cursor: pointer;
-  border: none;
-  background: none;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-
-button:focus-visible, input:focus-visible, select:focus-visible {
-  outline: 2px solid var(--accent-blue);
-  outline-offset: 1px;
 }

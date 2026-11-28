@@ -26,5 +26,7 @@ data class SosPacketEntity(
     @ColumnInfo(defaultValue = "0")
     val hopCount: Int = 0,
     @ColumnInfo(defaultValue = "PENDING")
-    val status: String = "PENDING" // SosStatus.name
+    val status: String = "PENDING", // SosStatus.name
+    @ColumnInfo(defaultValue = "0")
+    val cloudSynced: Boolean = false
 )

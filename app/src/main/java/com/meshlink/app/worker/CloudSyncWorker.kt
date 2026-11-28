@@ -6,29 +6,35 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.meshlink.app.data.local.dao.LocationEventDao
 import com.meshlink.app.data.remote.MeshBackendService
+import com.meshlink.app.domain.repository.SettingsRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 import timber.log.Timber
 import java.net.UnknownHostException
 import javax.inject.Provider
+import javax.net.ssl.SSLException
 
 @HiltWorker
 class CloudSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val locationEventDao: LocationEventDao,
-    private val backendServiceProvider: Provider<MeshBackendService>
+    private val backendServiceProvider: Provider<MeshBackendService>,
+    private val settingsRepository: SettingsRepository
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
         Timber.i("CloudSyncWorker: Starting internet sync.")
 
         try {
             val backendService = backendServiceProvider.get()
-            
-            // 1. Upload Pending Events
+            var uploadedCount = 0
+
+            // 1. Upload Pending Location Events
             val pendingEvents = locationEventDao.getPendingCloudUploads()
             if (pendingEvents.isNotEmpty()) {
                 Timber.i("CloudSyncWorker: Found ${pendingEvents.size} pending location events. Uploading...")
@@ -36,36 +42,46 @@ class CloudSyncWorker @AssistedInject constructor(
                 if (response.success) {
                     val uploadedIds = pendingEvents.map { it.eventId }
                     locationEventDao.markAsUploaded(uploadedIds)
-                    Timber.i("CloudSyncWorker: Successfully uploaded and marked ${uploadedIds.size} events as UPLOADED.")
+                    uploadedCount = uploadedIds.size
+                    Timber.i("CloudSyncWorker: Marked $uploadedCount events as UPLOADED.")
                 } else {
-                    Timber.w("CloudSyncWorker: Backend rejected upload.")
+                    Timber.w("CloudSyncWorker: Backend rejected location upload.")
+                    settingsRepository.recordSyncResult(now, success = false, error = "Location upload rejected by backend")
                     return@withContext Result.retry()
                 }
-            } else {
-                Timber.i("CloudSyncWorker: No pending events to upload.")
             }
 
-            // 2. Fetch New Events
-            // In a real app we'd track the last sync timestamp in DataStore.
-            // For MVP, we just fetch events from the last 24 hours.
+            // 2. Fetch New Events from last 24h
             val yesterday = System.currentTimeMillis() - (24 * 60 * 60 * 1000L)
             val newEvents = backendService.fetchNewLocationEvents(yesterday)
-            
             if (newEvents.isNotEmpty()) {
-                Timber.i("CloudSyncWorker: Fetched ${newEvents.size} new events from backend.")
-                // Set syncStatus to 1 (UPLOADED) since they came from the cloud and don't need re-uploading
                 val eventsToInsert = newEvents.map { it.copy(syncStatus = 1) }
                 locationEventDao.insertEvents(eventsToInsert)
             }
 
+            settingsRepository.recordSyncResult(now, success = true, syncedCount = uploadedCount, httpStatus = 200)
             Timber.i("CloudSyncWorker: Sync complete.")
             Result.success()
-            
+        } catch (e: HttpException) {
+            val code = e.code()
+            val errorMsg = "Location sync HTTP $code: ${e.message()}"
+            Timber.e(e, "CloudSyncWorker: $errorMsg")
+            settingsRepository.recordSyncResult(now, success = false, httpStatus = code, error = errorMsg)
+            if (code == 401 || code == 403) Result.failure() else Result.retry()
+        } catch (e: SSLException) {
+            val errorMsg = "Location sync TLS error: ${e.message}"
+            Timber.e(e, "CloudSyncWorker: $errorMsg")
+            settingsRepository.recordSyncResult(now, success = false, error = errorMsg)
+            Result.retry()
         } catch (e: UnknownHostException) {
-            Timber.w(e, "CloudSyncWorker: No internet connection.")
+            val errorMsg = "No internet or DNS unreachable during location sync"
+            Timber.w(e, "CloudSyncWorker: $errorMsg")
+            settingsRepository.recordSyncResult(now, success = false, error = errorMsg)
             Result.retry()
         } catch (e: Exception) {
-            Timber.e(e, "CloudSyncWorker: Sync failed due to error.")
+            val errorMsg = "Location sync error: ${e.message ?: e::class.java.simpleName}"
+            Timber.e(e, "CloudSyncWorker: $errorMsg")
+            settingsRepository.recordSyncResult(now, success = false, error = errorMsg)
             Result.retry()
         }
     }

@@ -25,10 +25,34 @@ android {
         unitTests.isIncludeAndroidResources = true
     }
 
+    signingConfigs {
+        create("release") {
+            val keystorePath = System.getenv("MESHLINK_KEYSTORE_PATH")
+                ?: (project.findProperty("meshlink.keystore.path") as? String)
+            val storePass = System.getenv("MESHLINK_KEYSTORE_PASSWORD")
+                ?: (project.findProperty("meshlink.keystore.password") as? String)
+            val alias = System.getenv("MESHLINK_KEY_ALIAS")
+                ?: (project.findProperty("meshlink.key.alias") as? String)
+            val keyPass = System.getenv("MESHLINK_KEY_PASSWORD")
+                ?: (project.findProperty("meshlink.key.password") as? String)
+
+            if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
+                storeFile = file(keystorePath)
+                storePassword = storePass
+                keyAlias = alias
+                keyPassword = keyPass
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            val releaseSigning = signingConfigs.getByName("release")
+            if (releaseSigning.storeFile != null) {
+                signingConfig = releaseSigning
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -38,6 +62,12 @@ android {
             isMinifyEnabled = false
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+        }
+        create("staging") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".staging"
+            versionNameSuffix = "-staging"
+            matchingFallbacks += listOf("debug", "release")
         }
     }
 
@@ -104,6 +134,7 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.osmdroid.android)
+    implementation(libs.retrofit)
     implementation(libs.osmdroid.mapsforge)
     implementation(libs.mapsforge.map.android)
     implementation(libs.mapsforge.map.reader)

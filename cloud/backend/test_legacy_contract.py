@@ -122,3 +122,34 @@ def test_legacy_auth_and_ws_ticket_contract(client):
     login_data = login_res.json()
     assert "access_token" in login_data
     assert login_data["role"] in ["operator", "admin"]
+
+
+def test_sos_sync_accepts_blank_sender_name_from_mobile_client(client):
+    gw_headers = {"X-Gateway-Key": "gw_key_valid_1"}
+    op_headers = {"Authorization": "Bearer op_token_valid_1"}
+
+    res = client.post(
+        "/api/v1/sync/sos",
+        json=[{
+            "uuid": "sos-blank-sender-001",
+            "senderId": "bc20fc0890fd1fd0",
+            "senderName": "",
+            "emergencyType": "LOST",
+            "severity": 5,
+            "latitude": None,
+            "longitude": None,
+            "gpsFixAvailable": False,
+            "message": "SOS! [LOST] I need help!",
+            "timestamp": 1795844229904,
+            "status": "PENDING",
+            "hopCount": 0,
+        }],
+        headers=gw_headers,
+    )
+    assert res.status_code == 200
+    assert res.json()["synced_count"] == 1
+
+    fetched = client.get("/api/sos", headers=op_headers).json()
+    matched = next((p for p in fetched if p["uuid"] == "sos-blank-sender-001"), None)
+    assert matched is not None
+    assert matched["senderName"] == "bc20fc0890fd1fd0"

@@ -1,276 +1,315 @@
 package com.meshlink.app.sync
 
 import android.content.Context
+import android.provider.Settings
 import androidx.hilt.work.HiltWorker
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
-import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequest
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.meshlink.app.data.local.dao.AssignmentDao
 import com.meshlink.app.data.local.dao.SosPacketDao
 import com.meshlink.app.data.local.entity.AssignmentEntity
+import com.meshlink.app.data.remote.AssignmentStatusUpdateRequest
+import com.meshlink.app.data.remote.MeshBackendService
+import com.meshlink.app.data.remote.SosSyncPacketDto
+import com.meshlink.app.domain.repository.SettingsRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
+import retrofit2.HttpException
 import timber.log.Timber
-import com.meshlink.app.data.remote.MeshBackendService
-import com.meshlink.app.data.remote.AssignmentStatusUpdateRequest
-import javax.inject.Provider
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.io.OutputStreamWriter
-import java.net.HttpURLConnection
-import java.net.URL
+import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLException
 
+/**
+ * WorkManager worker responsible for syncing locally buffered SOS packets,
+ * pending assignment status updates, and server-to-device downlinks via unified Retrofit/OkHttp.
+ */
 @HiltWorker
 class GatewaySyncWorker @AssistedInject constructor(
     @Assisted context: Context,
-    @Assisted workerParams: WorkerParameters,
+    @Assisted params: WorkerParameters,
     private val sosDao: SosPacketDao,
     private val assignmentDao: AssignmentDao,
-    private val backendServiceProvider: Provider<MeshBackendService>
-) : CoroutineWorker(context, workerParams) {
-
-    constructor(
-        context: Context,
-        workerParams: WorkerParameters,
-        sosDao: SosPacketDao,
-        assignmentDao: AssignmentDao
-    ) : this(
-        context,
-        workerParams,
-        sosDao,
-        assignmentDao,
-        Provider { null }
-    )
+    private val backendService: MeshBackendService,
+    private val settingsRepository: SettingsRepository
+) : CoroutineWorker(context, params) {
 
     companion object {
-        const val KEY_GATEWAY_URL = "key_gateway_url"
-        const val KEY_GATEWAY_KEY = "key_gateway_key"
-        const val DEFAULT_GATEWAY_URL = "http://10.0.2.2:8000/api/v1/sync/sos"
-        const val DEFAULT_GATEWAY_KEY = "meshlink_gw_dev_secret"
+        const val KEY_GATEWAY_URL = "gateway_url"
+        const val KEY_GATEWAY_KEY = "gateway_key"
+        const val KEY_PULL_DOWNLINKS = "pull_downlinks"
+        const val KEY_DEVICE_ID = "device_id"
+        const val WORK_NAME_IMMEDIATE = "sos_gateway_sync"
+        const val WORK_NAME_PERIODIC = "gateway_periodic_sync"
 
         fun buildWorkRequest(
             gatewayUrl: String? = null,
-            gatewayKey: String? = null
+            gatewayKey: String? = null,
+            pullDownlinks: Boolean = false,
+            deviceId: String? = null
         ): OneTimeWorkRequest {
             val dataBuilder = Data.Builder()
-            gatewayUrl?.let { dataBuilder.putString(KEY_GATEWAY_URL, it) }
-            gatewayKey?.let { dataBuilder.putString(KEY_GATEWAY_KEY, it) }
+            if (!gatewayUrl.isNullOrBlank()) {
+                dataBuilder.putString(KEY_GATEWAY_URL, gatewayUrl)
+            }
+            if (!gatewayKey.isNullOrBlank()) {
+                dataBuilder.putString(KEY_GATEWAY_KEY, gatewayKey)
+            }
+            if (pullDownlinks) {
+                dataBuilder.putBoolean(KEY_PULL_DOWNLINKS, true)
+            }
+            if (!deviceId.isNullOrBlank()) {
+                dataBuilder.putString(KEY_DEVICE_ID, deviceId)
+            }
 
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
 
             return OneTimeWorkRequestBuilder<GatewaySyncWorker>()
-                .setInputData(dataBuilder.build())
                 .setConstraints(constraints)
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
+                .setInputData(dataBuilder.build())
+                .setBackoffCriteria(
+                    BackoffPolicy.EXPONENTIAL,
+                    15_000L,
+                    TimeUnit.MILLISECONDS
+                )
+                .build()
+        }
+
+        fun buildPeriodicWorkRequest(): PeriodicWorkRequest {
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+            val periodicData = Data.Builder()
+                .putBoolean(KEY_PULL_DOWNLINKS, true)
+                .build()
+            return PeriodicWorkRequestBuilder<GatewaySyncWorker>(15, TimeUnit.MINUTES)
+                .setConstraints(constraints)
+                .setInputData(periodicData)
+                .setBackoffCriteria(
+                    BackoffPolicy.EXPONENTIAL,
+                    30_000L,
+                    TimeUnit.MILLISECONDS
+                )
                 .build()
         }
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val gatewayUrl = inputData.getString(KEY_GATEWAY_URL)?.takeIf { it.isNotBlank() } ?: DEFAULT_GATEWAY_URL
-        val gatewayKey = inputData.getString(KEY_GATEWAY_KEY)?.takeIf { it.isNotBlank() } ?: DEFAULT_GATEWAY_KEY
+        val now = System.currentTimeMillis()
+        val inputUrl = inputData.getString(KEY_GATEWAY_URL)?.trim()?.takeIf { it.isNotBlank() }
+        val inputKey = inputData.getString(KEY_GATEWAY_KEY)?.trim()?.takeIf { it.isNotBlank() }
+
+        if (inputUrl != null) {
+            try {
+                // Allow explicit WorkRequest URL override without touching scheme normalization on full sync endpoint URLs
+                val rootUrl = inputUrl.substringBefore("api/").ifBlank { inputUrl }
+                settingsRepository.setBackendBaseUrl(rootUrl)
+            } catch (e: Exception) {
+                val msg = "Invalid backend URL override: ${e.message}"
+                Timber.e(e, "GatewaySyncWorker: $msg")
+                settingsRepository.recordSyncResult(now, success = false, error = msg)
+                return@withContext Result.failure()
+            }
+        }
+
+        val effectiveKey = inputKey ?: settingsRepository.getEffectiveGatewayKey()
+        val effectiveBase = settingsRepository.getEffectiveBackendBaseUrl()
+        if (effectiveBase.contains(".invalid", ignoreCase = true)) {
+            val msg = "Backend Base URL is not configured; set MESHLINK_PROD_URL or configure in Settings."
+            Timber.e("GatewaySyncWorker: $msg")
+            settingsRepository.recordSyncResult(now, success = false, error = msg)
+            return@withContext Result.failure()
+        }
+        if (effectiveKey.isBlank()) {
+            val msg = "Gateway API Key is not configured; set X-Gateway-Key in Settings or BuildConfig."
+            Timber.e("GatewaySyncWorker: $msg")
+            settingsRepository.recordSyncResult(now, success = false, error = msg)
+            return@withContext Result.failure()
+        }
+        Timber.i("GatewaySyncWorker started: syncing against $effectiveBase")
 
         try {
-            Timber.i("GatewaySyncWorker started: Attempting to sync SOS packets with gateway at $gatewayUrl")
-
-            // 1. Synchronize pending assignment status updates via dedicated REST endpoint
+            // 1. Sync any unsynced local assignment status updates
             val unsyncedAssignments = assignmentDao.getUnsyncedAssignments()
-            if (unsyncedAssignments.isNotEmpty()) {
-                val backendService = try { backendServiceProvider.get() } catch (e: Exception) { null }
-                if (backendService != null) {
-                    for (asgn in unsyncedAssignments) {
-                        try {
-                            val resp = backendService.updateAssignmentStatus(
-                                assignmentId = asgn.id,
-                                req = AssignmentStatusUpdateRequest(
-                                    status = asgn.status,
-                                    device_id = asgn.responderId
-                                )
-                            )
-                            if (resp.status == "success" || resp.assignment_status == asgn.status) {
-                                assignmentDao.markSynced(asgn.id)
-                                Timber.i("GatewaySyncWorker: Successfully synced status ${asgn.status} for assignment ${asgn.id}")
-                            }
-                        } catch (e: Exception) {
-                            Timber.w(e, "GatewaySyncWorker: Failed to sync status for assignment ${asgn.id}; will retry next cycle")
-                        }
-                    }
+            for (asgn in unsyncedAssignments) {
+                val resp = backendService.updateAssignmentStatus(
+                    assignmentId = asgn.id,
+                    req = AssignmentStatusUpdateRequest(
+                        status = asgn.status,
+                        device_id = asgn.responderId.takeIf { it.isNotBlank() }
+                    ),
+                    deviceId = asgn.responderId.takeIf { it.isNotBlank() },
+                    gatewayKey = effectiveKey.takeIf { it.isNotBlank() }
+                )
+                if (resp.status == "success" || resp.assignment_status == asgn.status) {
+                    assignmentDao.markSynced(asgn.id)
+                    Timber.i("GatewaySyncWorker: Synced status ${asgn.status} for assignment ${asgn.id}")
                 }
             }
 
-            // 2. Retrieve all SOS packets from the local Room database that need sync
+            // 2. Gather SOS packets not yet confirmed by the cloud gateway (peer-ACKed SOS still syncs!)
             val allPackets = sosDao.getAllPacketsBlocking()
             val packetsToSync = allPackets.filter {
-                it.status != "DELIVERED" && it.status != "ACKNOWLEDGED"
+                !it.cloudSynced &&
+                    it.status != "DELIVERED" &&
+                    it.status != "CANCELLED" &&
+                    it.status != "EXPIRED"
             }
 
-            if (packetsToSync.isEmpty()) {
+            val pullDownlinks = inputData.getBoolean(KEY_PULL_DOWNLINKS, false)
+            if (packetsToSync.isEmpty() && !pullDownlinks) {
                 Timber.i("GatewaySyncWorker: No unsynced SOS packets remaining.")
+                settingsRepository.recordSyncResult(
+                    timestampMs = now,
+                    success = true,
+                    syncedCount = unsyncedAssignments.size,
+                    httpStatus = 200
+                )
                 return@withContext Result.success()
             }
 
-            val ackAssignmentIds = unsyncedAssignments.map { it.id }
-
-            // Create JSON Array payload
-            val jsonArray = JSONArray()
-            for (packet in packetsToSync) {
-                val jsonObj = JSONObject()
-                jsonObj.put("uuid", packet.uuid)
-                jsonObj.put("senderId", packet.senderId)
-                jsonObj.put("senderName", packet.senderName)
-                jsonObj.put("emergencyType", packet.emergencyType)
-                jsonObj.put("severity", packet.severity)
-
+            val payload = packetsToSync.map { packet ->
                 val hasFix = (packet.latitude != 0.0 || packet.longitude != 0.0)
-                if (hasFix) {
-                    jsonObj.put("latitude", packet.latitude)
-                    jsonObj.put("longitude", packet.longitude)
-                } else {
-                    jsonObj.put("latitude", JSONObject.NULL)
-                    jsonObj.put("longitude", JSONObject.NULL)
-                }
-                jsonObj.put("gpsFixAvailable", hasFix)
-
-                jsonObj.put("message", packet.message)
-                jsonObj.put("timestamp", packet.timestamp)
-                jsonObj.put("status", packet.status)
-                jsonObj.put("hopCount", packet.hopCount)
-                jsonArray.put(jsonObj)
+                SosSyncPacketDto(
+                    uuid = packet.uuid,
+                    senderId = packet.senderId,
+                    senderName = packet.senderName.ifBlank { packet.senderId.ifBlank { "Field Node" } },
+                    emergencyType = packet.emergencyType,
+                    severity = packet.severity,
+                    latitude = if (hasFix) packet.latitude else null,
+                    longitude = if (hasFix) packet.longitude else null,
+                    gpsFixAvailable = hasFix,
+                    message = packet.message,
+                    timestamp = packet.timestamp,
+                    status = packet.status,
+                    hopCount = packet.hopCount
+                )
             }
 
-            val payload = jsonArray.toString()
+            val ackAssignmentIds = unsyncedAssignments.map { it.id }.joinToString(",").takeIf { it.isNotBlank() }
+            val primaryDeviceId = packetsToSync.firstOrNull()?.senderId?.takeIf { it.isNotBlank() }
+                ?: inputData.getString(KEY_DEVICE_ID)?.takeIf { it.isNotBlank() }
+                ?: allPackets.firstOrNull { it.senderId.isNotBlank() }?.senderId
+                ?: runCatching {
+                    Settings.Secure.getString(applicationContext.contentResolver, Settings.Secure.ANDROID_ID)
+                }.getOrNull()?.takeIf { it.isNotBlank() }
 
-            // Sync with backend
-            val url = URL(gatewayUrl)
-            val connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "POST"
-            connection.setRequestProperty("Content-Type", "application/json")
-            connection.setRequestProperty("Accept", "application/json")
-            connection.setRequestProperty("X-Gateway-Key", gatewayKey)
-            connection.setRequestProperty("Authorization", "Bearer $gatewayKey")
-            if (ackAssignmentIds.isNotEmpty()) {
-                connection.setRequestProperty("X-Ack-Assignment-Ids", ackAssignmentIds.joinToString(","))
-            }
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 15_000
-            connection.doOutput = true
+            val response = backendService.syncSos(
+                packets = payload,
+                deviceId = primaryDeviceId,
+                ackAssignmentIds = ackAssignmentIds,
+                gatewayKey = effectiveKey.takeIf { it.isNotBlank() }
+            )
 
-            OutputStreamWriter(connection.outputStream).use { writer ->
-                writer.write(payload)
-                writer.flush()
-            }
-
-            val responseCode = connection.responseCode
-            if (responseCode in 200..299) {
-                val responseBody = BufferedReader(InputStreamReader(connection.inputStream)).use { it.readText() }
-                Timber.i("GatewaySyncWorker: Gateway returned $responseCode: $responseBody")
-
-                // Per-event receipt reconciliation & downlink assignment processing
-                val acknowledgedUuids = mutableSetOf<String>()
-                val receivedDownlinks = mutableListOf<JSONObject>()
-                try {
-                    val respObj = JSONObject(responseBody)
-                    if (respObj.has("receipts")) {
-                        val receipts = respObj.getJSONArray("receipts")
-                        for (i in 0 until receipts.length()) {
-                            val r = receipts.getJSONObject(i)
-                            val uuid = r.optString("uuid")
-                            if (uuid.isNotEmpty()) {
-                                acknowledgedUuids.add(uuid)
-                            }
-                        }
+            // 3. Reconcile ONLY explicit receipts returned by backend
+            var reconciledCount = 0
+            for (receipt in response.receipts) {
+                if (receipt.uuid.isNotBlank() && receipt.synced) {
+                    sosDao.markCloudSynced(receipt.uuid)
+                    val matching = packetsToSync.find { it.uuid == receipt.uuid }
+                    if (matching != null && matching.status in setOf("PENDING", "SENT", "RELAYED")) {
+                        sosDao.updateStatus(receipt.uuid, "DELIVERED")
                     }
-
-                    // Process downlink assignments (Server -> Device Pull on Sync)
-                    if (respObj.has("downlinks")) {
-                        val downlinks = respObj.getJSONArray("downlinks")
-                        for (i in 0 until downlinks.length()) {
-                            val dl = downlinks.getJSONObject(i)
-                            val asgnId = dl.optString("id").takeIf { it.isNotBlank() } ?: dl.optString("assignment_id")
-                            val incidentId = dl.optString("incident_id")
-                            val role = dl.optString("role", "SAR")
-                            val notes = dl.optString("notes")
-                            val description = dl.optString("description")
-                            val responderId = dl.optString("responder_id")
-                            val status = dl.optString("status", "DISPATCHED")
-                            val lat = if (dl.has("latitude") && !dl.isNull("latitude")) dl.optDouble("latitude") else null
-                            val lon = if (dl.has("longitude") && !dl.isNull("longitude")) dl.optDouble("longitude") else null
-                            val prio = dl.optInt("priority", 3)
-                            val sev = dl.optInt("severity", 5)
-                            val offered = dl.optLong("offered_at", System.currentTimeMillis())
-
-                            if (asgnId.isNotBlank() && incidentId.isNotBlank()) {
-                                val existing = assignmentDao.getById(asgnId)
-                                val currentStatus = existing?.status ?: status
-                                val entity = AssignmentEntity(
-                                    id = asgnId,
-                                    incidentId = incidentId,
-                                    responderId = responderId,
-                                    role = role,
-                                    status = currentStatus,
-                                    notes = notes,
-                                    description = description,
-                                    latitude = lat,
-                                    longitude = lon,
-                                    priority = prio,
-                                    severity = sev,
-                                    offeredAt = offered,
-                                    respondedAt = existing?.respondedAt,
-                                    synced = existing?.synced ?: false
-                                )
-                                assignmentDao.insertOrUpdate(entity)
-                                receivedDownlinks.add(dl)
-                                Timber.i("GatewaySyncWorker: Downlink assignment persisted for incident $incidentId [role: $role]: $notes")
-
-                                if (existing == null && currentStatus == "DISPATCHED") {
-                                    com.meshlink.app.notification.AssignmentNotificationHelper.showAssignmentHeadsUpNotification(
-                                        context = applicationContext,
-                                        assignmentId = asgnId,
-                                        title = notes.ifBlank { "Incident #$incidentId" },
-                                        notes = description.ifBlank { "Role: $role | Priority $prio" }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    Timber.w(e, "Failed to parse receipt or downlink array, falling back to batch acknowledgement")
+                    reconciledCount++
                 }
+            }
 
-                // If no specific receipts parsed, acknowledge all sent in batch
-                if (acknowledgedUuids.isEmpty()) {
-                    for (p in packetsToSync) {
-                        acknowledgedUuids.add(p.uuid)
+            // 4. Persist any downlink assignments scoped for this device/responder
+            for (dl in response.downlinks) {
+                val asgnId = dl.id?.takeIf { it.isNotBlank() } ?: dl.assignment_id ?: continue
+                val incidentId = dl.incident_id?.takeIf { it.isNotBlank() } ?: continue
+                val existing = assignmentDao.getById(asgnId)
+                val currentStatus = existing?.status ?: dl.status.orEmpty().ifBlank { "DISPATCHED" }
+                val dlRole = dl.role.orEmpty().ifBlank { "SAR" }
+                val dlNotes = dl.notes.orEmpty()
+                val dlDesc = dl.description.orEmpty()
+                val entity = AssignmentEntity(
+                    id = asgnId,
+                    incidentId = incidentId,
+                    responderId = dl.responder_id.orEmpty(),
+                    role = dlRole,
+                    status = currentStatus,
+                    notes = dlNotes,
+                    description = dlDesc,
+                    latitude = dl.latitude,
+                    longitude = dl.longitude,
+                    priority = dl.priority,
+                    severity = dl.severity,
+                    offeredAt = dl.offered_at,
+                    respondedAt = existing?.respondedAt,
+                    synced = existing?.synced ?: false
+                )
+                assignmentDao.insertOrUpdate(entity)
+                if (existing == null && currentStatus == "DISPATCHED") {
+                    try {
+                        com.meshlink.app.notification.AssignmentNotificationHelper.showAssignmentHeadsUpNotification(
+                            context = applicationContext,
+                            assignmentId = asgnId,
+                            title = dlNotes.ifBlank { "Incident #$incidentId" },
+                            notes = dlDesc.ifBlank { "Role: $dlRole | Priority ${dl.priority}" }
+                        )
+                    } catch (t: Throwable) {
+                        Timber.w(t, "GatewaySyncWorker: unable to display assignment notification")
                     }
                 }
-
-                for (uuid in acknowledgedUuids) {
-                    sosDao.updateStatus(uuid, "ACKNOWLEDGED")
-                }
-
-                Timber.i("GatewaySyncWorker: Successfully reconciled ${acknowledgedUuids.size} SOS packets and ${receivedDownlinks.size} downlinks")
-                Result.success()
-            } else if (responseCode == 401 || responseCode == 403) {
-                Timber.e("GatewaySyncWorker: Authentication failure with gateway (HTTP $responseCode). Check X-Gateway-Key.")
-                Result.failure()
-            } else {
-                Timber.e("GatewaySyncWorker: Backend returned error code $responseCode")
-                Result.retry()
             }
+
+            settingsRepository.recordSyncResult(
+                timestampMs = now,
+                success = true,
+                syncedCount = reconciledCount,
+                httpStatus = 200
+            )
+            Timber.i("GatewaySyncWorker: Reconciled $reconciledCount SOS receipts and ${response.downlinks.size} downlinks")
+            Result.success()
+        } catch (e: HttpException) {
+            val code = e.code()
+            val errorMsg = when (code) {
+                401, 403 -> "Authentication failure (HTTP $code): check X-Gateway-Key"
+                429 -> "Rate limited by gateway (HTTP 429); retrying with backoff"
+                else -> "Gateway HTTP $code error: ${e.message()}"
+            }
+            Timber.e(e, "GatewaySyncWorker: $errorMsg")
+            settingsRepository.recordSyncResult(now, success = false, httpStatus = code, error = errorMsg)
+            if (code == 401 || code == 403) Result.failure() else Result.retry()
+        } catch (e: SSLException) {
+            val errorMsg = "TLS/Certificate error connecting to $effectiveBase: ${e.message}"
+            Timber.e(e, "GatewaySyncWorker: $errorMsg")
+            settingsRepository.recordSyncResult(now, success = false, error = errorMsg)
+            Result.retry()
+        } catch (e: UnknownHostException) {
+            val errorMsg = "Host unreachable ($effectiveBase): check DNS or network"
+            Timber.w(e, "GatewaySyncWorker: $errorMsg")
+            settingsRepository.recordSyncResult(now, success = false, error = errorMsg)
+            Result.retry()
+        } catch (e: SocketTimeoutException) {
+            val errorMsg = "Connection timed out to $effectiveBase"
+            Timber.w(e, "GatewaySyncWorker: $errorMsg")
+            settingsRepository.recordSyncResult(now, success = false, error = errorMsg)
+            Result.retry()
+        } catch (e: IOException) {
+            val errorMsg = "Network I/O error: ${e.message ?: "connection failed"}"
+            Timber.w(e, "GatewaySyncWorker: $errorMsg")
+            settingsRepository.recordSyncResult(now, success = false, error = errorMsg)
+            Result.retry()
         } catch (e: Exception) {
-            Timber.e(e, "GatewaySyncWorker: Exception during sync")
+            val errorMsg = "Sync failed: ${e.message ?: e::class.java.simpleName}"
+            Timber.e(e, "GatewaySyncWorker: $errorMsg")
+            settingsRepository.recordSyncResult(now, success = false, error = errorMsg)
             Result.retry()
         }
     }
