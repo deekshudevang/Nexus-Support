@@ -25,10 +25,34 @@ android {
         unitTests.isIncludeAndroidResources = true
     }
 
+    signingConfigs {
+        create("release") {
+            val keystorePath = System.getenv("MESHLINK_KEYSTORE_PATH")
+                ?: (project.findProperty("meshlink.keystore.path") as? String)
+            val storePass = System.getenv("MESHLINK_KEYSTORE_PASSWORD")
+                ?: (project.findProperty("meshlink.keystore.password") as? String)
+            val alias = System.getenv("MESHLINK_KEY_ALIAS")
+                ?: (project.findProperty("meshlink.key.alias") as? String)
+            val keyPass = System.getenv("MESHLINK_KEY_PASSWORD")
+                ?: (project.findProperty("meshlink.key.password") as? String)
+
+            if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
+                storeFile = file(keystorePath)
+                storePassword = storePass
+                keyAlias = alias
+                keyPassword = keyPass
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            val releaseSigning = signingConfigs.getByName("release")
+            if (releaseSigning.storeFile != null) {
+                signingConfig = releaseSigning
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

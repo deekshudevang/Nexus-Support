@@ -44,7 +44,7 @@ class AssignmentsViewModel @Inject constructor(
 
     private fun triggerSync() {
         try {
-            WorkManager.getInstance(context).enqueue(GatewaySyncWorker.buildWorkRequest())
+            WorkManager.getInstance(context).enqueue(GatewaySyncWorker.buildWorkRequest(pullDownlinks = true))
         } catch (e: Exception) {
             // Ignore in testing environments without WorkManager initialization
         }

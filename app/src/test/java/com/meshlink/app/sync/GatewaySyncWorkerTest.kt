@@ -322,4 +322,99 @@ class GatewaySyncWorkerTest {
         coVerify(exactly = 0) { sosDao.markCloudSynced(any()) }
         coVerify(exactly = 1) { settingsRepository.recordSyncResult(any(), success = false, httpStatus = 401, error = any()) }
     }
+
+    @Test
+    fun `doWork fails loudly before network call when production URL placeholder is unconfigured or gateway key blank`() = runTest {
+        every { settingsRepository.getEffectiveBackendBaseUrl() } returns "https://unconfigured.meshlink.invalid/"
+        val worker = GatewaySyncWorker(context, workerParams, sosDao, assignmentDao, mockk(relaxed = true), settingsRepository)
+        val result = worker.doWork()
+        assertEquals(ListenableWorker.Result.failure(), result)
+        coVerify(exactly = 1) { settingsRepository.recordSyncResult(any(), success = false, error = match { it.contains("not configured") }) }
+
+        every { settingsRepository.getEffectiveBackendBaseUrl() } returns "https://command.example.org/"
+        every { settingsRepository.getEffectiveGatewayKey() } returns ""
+        val worker2 = GatewaySyncWorker(context, workerParams, sosDao, assignmentDao, mockk(relaxed = true), settingsRepository)
+        val result2 = worker2.doWork()
+        assertEquals(ListenableWorker.Result.failure(), result2)
+        coVerify(exactly = 1) { settingsRepository.recordSyncResult(any(), success = false, error = match { it.contains("Gateway API Key") }) }
+    }
+
+    @Test
+    fun `doWork normalizes blank senderName to senderId when serializing SOS upload`() = runTest {
+        val server = MockWebServer()
+        server.start()
+        mockWebServer = server
+
+        val backendService = Retrofit.Builder()
+            .baseUrl(server.url("/"))
+            .client(OkHttpClient.Builder().build())
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(MeshBackendService::class.java)
+
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody("""{"status":"success","synced_count":1,"receipts":[{"uuid":"sos-blank-name-1","status":"ACKNOWLEDGED","synced":true}],"downlinks":[]}""")
+        )
+
+        val packet = SosPacketEntity(
+            uuid = "sos-blank-name-1",
+            senderId = "bc20fc0890fd1fd0",
+            senderName = "",
+            emergencyType = "LOST",
+            severity = 5,
+            message = "SOS!",
+            timestamp = 1795844229904L,
+            status = "PENDING",
+            cloudSynced = false
+        )
+        coEvery { sosDao.getAllPacketsBlocking() } returns listOf(packet)
+
+        val worker = GatewaySyncWorker(context, workerParams, sosDao, assignmentDao, backendService, settingsRepository)
+        val result = worker.doWork()
+
+        assertEquals(ListenableWorker.Result.success(), result)
+        val recorded = server.takeRequest()
+        val bodyText = recorded.body.readUtf8()
+        assertTrue(bodyText.contains("\"senderName\":\"bc20fc0890fd1fd0\""))
+    }
+
+    @Test
+    fun `doWork polls and persists downlinks when KEY_PULL_DOWNLINKS is true even with zero unsynced SOS packets`() = runTest {
+        val server = MockWebServer()
+        server.start()
+        mockWebServer = server
+
+        val backendService = Retrofit.Builder()
+            .baseUrl(server.url("/"))
+            .client(OkHttpClient.Builder().build())
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(MeshBackendService::class.java)
+
+        val downlinkInput = Data.Builder()
+            .putBoolean(GatewaySyncWorker.KEY_PULL_DOWNLINKS, true)
+            .putString(GatewaySyncWorker.KEY_DEVICE_ID, "cd28e60bcead5ac2")
+            .build()
+        every { workerParams.inputData } returns downlinkInput
+        coEvery { sosDao.getAllPacketsBlocking() } returns emptyList()
+        coEvery { assignmentDao.getById("asgn-dl-1") } returns null
+
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody("""{"status":"success","synced_count":0,"receipts":[],"downlinks":[{"id":"asgn-dl-1","incident_id":"inc-dl-1","responder_id":"resp-1","status":"DISPATCHED","role":"LEAD","notes":"Rescue Sector 4","severity":9,"priority":1,"offered_at":1795845000}]}""")
+        )
+
+        val worker = GatewaySyncWorker(context, workerParams, sosDao, assignmentDao, backendService, settingsRepository)
+        val result = worker.doWork()
+
+        assertEquals(ListenableWorker.Result.success(), result)
+        val recorded = server.takeRequest()
+        assertEquals("/api/v1/sync/sos", recorded.path)
+        assertEquals("cd28e60bcead5ac2", recorded.getHeader("X-Device-Id"))
+        assertEquals("[]", recorded.body.readUtf8())
+        coVerify(exactly = 1) { assignmentDao.insertOrUpdate(match { it.id == "asgn-dl-1" && it.incidentId == "inc-dl-1" && it.status == "DISPATCHED" }) }
+    }
 }

@@ -1,6 +1,7 @@
 package com.meshlink.app.sync
 
 import android.content.Context
+import android.provider.Settings
 import androidx.hilt.work.HiltWorker
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
@@ -48,12 +49,16 @@ class GatewaySyncWorker @AssistedInject constructor(
     companion object {
         const val KEY_GATEWAY_URL = "gateway_url"
         const val KEY_GATEWAY_KEY = "gateway_key"
+        const val KEY_PULL_DOWNLINKS = "pull_downlinks"
+        const val KEY_DEVICE_ID = "device_id"
         const val WORK_NAME_IMMEDIATE = "sos_gateway_sync"
         const val WORK_NAME_PERIODIC = "gateway_periodic_sync"
 
         fun buildWorkRequest(
             gatewayUrl: String? = null,
-            gatewayKey: String? = null
+            gatewayKey: String? = null,
+            pullDownlinks: Boolean = false,
+            deviceId: String? = null
         ): OneTimeWorkRequest {
             val dataBuilder = Data.Builder()
             if (!gatewayUrl.isNullOrBlank()) {
@@ -61,6 +66,12 @@ class GatewaySyncWorker @AssistedInject constructor(
             }
             if (!gatewayKey.isNullOrBlank()) {
                 dataBuilder.putString(KEY_GATEWAY_KEY, gatewayKey)
+            }
+            if (pullDownlinks) {
+                dataBuilder.putBoolean(KEY_PULL_DOWNLINKS, true)
+            }
+            if (!deviceId.isNullOrBlank()) {
+                dataBuilder.putString(KEY_DEVICE_ID, deviceId)
             }
 
             val constraints = Constraints.Builder()
@@ -82,8 +93,12 @@ class GatewaySyncWorker @AssistedInject constructor(
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
+            val periodicData = Data.Builder()
+                .putBoolean(KEY_PULL_DOWNLINKS, true)
+                .build()
             return PeriodicWorkRequestBuilder<GatewaySyncWorker>(15, TimeUnit.MINUTES)
                 .setConstraints(constraints)
+                .setInputData(periodicData)
                 .setBackoffCriteria(
                     BackoffPolicy.EXPONENTIAL,
                     30_000L,
@@ -113,6 +128,18 @@ class GatewaySyncWorker @AssistedInject constructor(
 
         val effectiveKey = inputKey ?: settingsRepository.getEffectiveGatewayKey()
         val effectiveBase = settingsRepository.getEffectiveBackendBaseUrl()
+        if (effectiveBase.contains(".invalid", ignoreCase = true)) {
+            val msg = "Backend Base URL is not configured; set MESHLINK_PROD_URL or configure in Settings."
+            Timber.e("GatewaySyncWorker: $msg")
+            settingsRepository.recordSyncResult(now, success = false, error = msg)
+            return@withContext Result.failure()
+        }
+        if (effectiveKey.isBlank()) {
+            val msg = "Gateway API Key is not configured; set X-Gateway-Key in Settings or BuildConfig."
+            Timber.e("GatewaySyncWorker: $msg")
+            settingsRepository.recordSyncResult(now, success = false, error = msg)
+            return@withContext Result.failure()
+        }
         Timber.i("GatewaySyncWorker started: syncing against $effectiveBase")
 
         try {
@@ -143,7 +170,8 @@ class GatewaySyncWorker @AssistedInject constructor(
                     it.status != "EXPIRED"
             }
 
-            if (packetsToSync.isEmpty()) {
+            val pullDownlinks = inputData.getBoolean(KEY_PULL_DOWNLINKS, false)
+            if (packetsToSync.isEmpty() && !pullDownlinks) {
                 Timber.i("GatewaySyncWorker: No unsynced SOS packets remaining.")
                 settingsRepository.recordSyncResult(
                     timestampMs = now,
@@ -159,7 +187,7 @@ class GatewaySyncWorker @AssistedInject constructor(
                 SosSyncPacketDto(
                     uuid = packet.uuid,
                     senderId = packet.senderId,
-                    senderName = packet.senderName,
+                    senderName = packet.senderName.ifBlank { packet.senderId.ifBlank { "Field Node" } },
                     emergencyType = packet.emergencyType,
                     severity = packet.severity,
                     latitude = if (hasFix) packet.latitude else null,
@@ -174,6 +202,11 @@ class GatewaySyncWorker @AssistedInject constructor(
 
             val ackAssignmentIds = unsyncedAssignments.map { it.id }.joinToString(",").takeIf { it.isNotBlank() }
             val primaryDeviceId = packetsToSync.firstOrNull()?.senderId?.takeIf { it.isNotBlank() }
+                ?: inputData.getString(KEY_DEVICE_ID)?.takeIf { it.isNotBlank() }
+                ?: allPackets.firstOrNull { it.senderId.isNotBlank() }?.senderId
+                ?: runCatching {
+                    Settings.Secure.getString(applicationContext.contentResolver, Settings.Secure.ANDROID_ID)
+                }.getOrNull()?.takeIf { it.isNotBlank() }
 
             val response = backendService.syncSos(
                 packets = payload,
@@ -198,17 +231,20 @@ class GatewaySyncWorker @AssistedInject constructor(
             // 4. Persist any downlink assignments scoped for this device/responder
             for (dl in response.downlinks) {
                 val asgnId = dl.id?.takeIf { it.isNotBlank() } ?: dl.assignment_id ?: continue
-                if (dl.incident_id.isBlank()) continue
+                val incidentId = dl.incident_id?.takeIf { it.isNotBlank() } ?: continue
                 val existing = assignmentDao.getById(asgnId)
-                val currentStatus = existing?.status ?: dl.status
+                val currentStatus = existing?.status ?: dl.status.orEmpty().ifBlank { "DISPATCHED" }
+                val dlRole = dl.role.orEmpty().ifBlank { "SAR" }
+                val dlNotes = dl.notes.orEmpty()
+                val dlDesc = dl.description.orEmpty()
                 val entity = AssignmentEntity(
                     id = asgnId,
-                    incidentId = dl.incident_id,
-                    responderId = dl.responder_id,
-                    role = dl.role,
+                    incidentId = incidentId,
+                    responderId = dl.responder_id.orEmpty(),
+                    role = dlRole,
                     status = currentStatus,
-                    notes = dl.notes,
-                    description = dl.description,
+                    notes = dlNotes,
+                    description = dlDesc,
                     latitude = dl.latitude,
                     longitude = dl.longitude,
                     priority = dl.priority,
@@ -219,12 +255,16 @@ class GatewaySyncWorker @AssistedInject constructor(
                 )
                 assignmentDao.insertOrUpdate(entity)
                 if (existing == null && currentStatus == "DISPATCHED") {
-                    com.meshlink.app.notification.AssignmentNotificationHelper.showAssignmentHeadsUpNotification(
-                        context = applicationContext,
-                        assignmentId = asgnId,
-                        title = dl.notes.ifBlank { "Incident #${dl.incident_id}" },
-                        notes = dl.description.ifBlank { "Role: ${dl.role} | Priority ${dl.priority}" }
-                    )
+                    try {
+                        com.meshlink.app.notification.AssignmentNotificationHelper.showAssignmentHeadsUpNotification(
+                            context = applicationContext,
+                            assignmentId = asgnId,
+                            title = dlNotes.ifBlank { "Incident #$incidentId" },
+                            notes = dlDesc.ifBlank { "Role: $dlRole | Priority ${dl.priority}" }
+                        )
+                    } catch (t: Throwable) {
+                        Timber.w(t, "GatewaySyncWorker: unable to display assignment notification")
+                    }
                 }
             }
 

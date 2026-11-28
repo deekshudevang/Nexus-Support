@@ -300,7 +300,7 @@ class SettingsViewModel @Inject constructor(
             wm.enqueueUniqueWork(
                 GatewaySyncWorker.WORK_NAME_IMMEDIATE,
                 ExistingWorkPolicy.REPLACE,
-                GatewaySyncWorker.buildWorkRequest()
+                GatewaySyncWorker.buildWorkRequest(pullDownlinks = true)
             )
             wm.enqueue(OneTimeWorkRequestBuilder<CloudSyncWorker>().build())
         } catch (t: Throwable) {

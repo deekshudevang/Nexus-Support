@@ -19,7 +19,7 @@ val backendDevUrl: String = (project.findProperty("MESHLINK_BACKEND_URL") as? St
 val backendStagingUrl: String = (project.findProperty("MESHLINK_STAGING_URL") as? String)
     ?: localProps.getProperty("meshlink.staging.url", "https://staging.meshlink.app/")
 val backendProdUrl: String = (project.findProperty("MESHLINK_PROD_URL") as? String)
-    ?: localProps.getProperty("meshlink.prod.url", "https://api.meshlink.app/")
+    ?: localProps.getProperty("meshlink.prod.url", "https://unconfigured.meshlink.invalid/")
 
 android {
     namespace = "com.meshlink.app.data"
