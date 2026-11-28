@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Unified Connectivity & Runtime Provisioning:**
+  - Android `SettingsScreen` / `SettingsViewModel` "Cloud Gateway Connectivity" card with DataStore `backendBaseUrl`, Tink-encrypted `gatewayKey`, live `/health` + `/health/ready` `"Test Connection"`, `"Sync Now"`, and truthful sync telemetry.
+  - Room schema v15 -> v16 (`MIGRATION_15_16`) adding `cloudSynced` to `sos_packets` so peer mesh ACKs never suppress gateway cloud upload.
+  - Periodic + immediate SOS `GatewaySyncWorker` scheduling from `MeshLinkApp` and `SosViewModel`.
+  - Root `.env.example` and expanded `cloud/backend/.env.example` / `cloud/frontend/.env.example` templates.
+  - Audit report (`docs/audit/CONNECTIVITY_AUDIT_2026-11-28.md`) and live integration/negative test evidence (`docs/evidence/live_integration_2026-11-28.txt`).
+
+### Fixed
+- Unified Retrofit + `GatewaySyncWorker` over OkHttp with explicit timeouts, relative paths, and dynamic interceptor URL/key resolution; removed silent `Provider { null }` fallback and raw `HttpURLConnection` split.
+- Split `network_security_config.xml` into HTTPS-only `src/main` (release/staging) and cleartext-capable `src/debug` for emulator, LAN, and Tailscale testing.
+- Fixed Web Command Center Tailwind CSS v4 pipeline (`@tailwindcss/vite`), enforced required `VITE_API_URL` / `VITE_WS_URL` in production `vite build`, fixed `/api/v1/responders`, `/api/v1/teams`, and `/api/v1/incidents/{id}/assignments` API parity, stored returned bearer token instead of raw password on fallback login, ingested live `sos_alert` WebSocket pushes, and added bounded exponential WS backoff.
+- Consolidated backend config into `cloud/backend/app/core/config.py`, moved `JWT_SECRET` out of ephemeral generation into env-backed config, added `DELETE`/`PUT`/`PATCH` to CORS methods, blocked unauthenticated key rotation on existing enrolled devices, and aligned `cli.py` roles with `rbac.py`.
+- Removed duplicate `cloud/docker-compose.yml`, keeping root `docker-compose.yml` with frontend build-arg wiring.
 - SAS (Short Authentication String) UI badge in the Chat Screen to support out-of-band TOFU verification.
 - Room `MigrationTest` coverage for schema upgrades from version 5 through 13.
 - Hardware-backed Android KeyStore (StrongBox/TEE) implementation for device identity keys (`ProductionKeyManager`).

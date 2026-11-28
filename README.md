@@ -141,8 +141,8 @@ npm install
 # Run Vitest test suite
 npm run test
 
-# Build production bundle
-npm run build
+# Build production bundle (requires explicit VITE_API_URL and VITE_WS_URL)
+VITE_API_URL=https://api.example.com VITE_WS_URL=wss://api.example.com npm run build
 
 # Start local development server
 npm run dev
@@ -204,15 +204,15 @@ To execute a complete end-to-end incident coordination walkthrough:
 Run clean test suites across all tiers:
 
 ```bash
-# 1. Backend tests (128 passed)
+# 1. Backend tests (129 passed)
 py -m pytest cloud/backend -q
 
-# 2. Frontend tests & production build (17 passed)
+# 2. Frontend tests & production build (19 passed; VITE_API_URL & VITE_WS_URL required for prod build)
 npm --prefix cloud/frontend test -- --run
-npm --prefix cloud/frontend run build
+VITE_API_URL=https://api.example.com VITE_WS_URL=wss://api.example.com npm --prefix cloud/frontend run build
 
-# 3. Android unit tests (149 actionable tasks passed)
-.\gradlew.bat clean testDebugUnitTest
+# 3. Android unit tests (clean build + unit tests across all modules)
+.\gradlew.bat testDebugUnitTest
 ```
 
 ---

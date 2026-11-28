@@ -1,0 +1,29 @@
+[PASS] GET http://192.168.1.4:18000/health -> 200 {"status":"ok","version":"1.0.0","environment":"development","database_connected":true,"migration_head":"6f1a8b92c431","timestamp":1795842732,"service":"MeshLink Gateway Backend"}
+[PASS] GET http://192.168.1.4:18000/health/ready -> 200 {"status":"READY","database":"OK","database_engine":"sqlite","outbox_lag":0,"environment":"development","timestamp":1795842732,"service":"MeshLink Gateway Backend"}
+[PASS] POST /api/auth/token returned operator bearer token
+[PASS] POST /api/v1/auth/ws-ticket issued single-use ticket
+[PASS] WS authenticated frame: {'type': 'authenticated', 'message': 'Connected to authenticated live SOS alert stream'}
+[PASS] POST http://192.168.1.4:18000/api/v1/sync/sos -> 200 {"status":"success","synced_count":1,"receipts":[{"uuid":"live-sos-e68d9b59","status":"ACKNOWLEDGED","synced":true}],"downlinks":[]}
+[PASS] WS live sos_alert received for live-sos-e68d9b59
+[PASS] GET /api/v1/responders -> 200
+[PASS] GET /api/v1/teams -> 200
+[PASS-NEG] Wrong X-Gateway-Key rejected with HTTP 401
+[PASS-NEG] Cross-tenant incident read rejected with HTTP 404
+[PASS-NEG] Production startup rejected insecure config (exit 1)
+
+--- Uvicorn Logs Tail ---
+2026-11-28 10:42:12,337 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.defaults
+2026-11-28 10:42:12,337 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.comments
+2026-11-28 10:42:12,337 [INFO] alembic.runtime.plugins: setup plugin alembic.ext.checkconstraint_byname
+INFO:     192.168.1.4:51567 - "GET /health HTTP/1.1" 200 OK
+INFO:     192.168.1.4:51570 - "GET /health/ready HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51571 - "POST /api/auth/token HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51572 - "POST /api/v1/auth/ws-ticket HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51575 - "WebSocket /ws/alerts?ticket=24mqnB8Fysa5OowZZ2j3dQo7HF2RT06Zu7q0PfvaWQs" [accepted]
+INFO:     connection open
+2026-11-28 10:42:12,470 [INFO] meshlink.backend: DEMO FLOW: SOS ingested from sender phone-lan-1 (UUID: live-sos-e68d9b59, type: MEDICAL, severity: 9)
+INFO:     192.168.1.4:51576 - "POST /api/v1/sync/sos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51577 - "GET /api/v1/responders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51578 - "GET /api/v1/teams HTTP/1.1" 200 OK
+INFO:     192.168.1.4:51579 - "POST /api/v1/sync/sos HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:51580 - "GET /api/v1/incidents/live-sos-e68d9b59 HTTP/1.1" 404 Not Found
