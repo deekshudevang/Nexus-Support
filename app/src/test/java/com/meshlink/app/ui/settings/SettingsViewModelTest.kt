@@ -3,6 +3,10 @@ package com.meshlink.app.ui.settings
 import com.meshlink.app.ai.domain.ModelAssetManager
 import com.meshlink.app.ai.domain.OfflineAiCoordinator
 import com.meshlink.app.ai.model.AiCapabilityState
+import com.meshlink.app.data.local.dao.SosPacketDao
+import com.meshlink.app.data.remote.HealthReadyResponseDto
+import com.meshlink.app.data.remote.HealthResponseDto
+import com.meshlink.app.data.remote.MeshBackendService
 import com.meshlink.app.domain.repository.NearbyRepository
 import com.meshlink.app.domain.repository.SettingsRepository
 import com.meshlink.app.location.LocationTracker
@@ -40,6 +44,8 @@ class SettingsViewModelTest {
     private val mockSettingsRepository: SettingsRepository = mockk(relaxed = true)
     private val mockAdaptiveScanController: AdaptiveScanController = mockk(relaxed = true)
     private val mockBatteryMonitor: BatteryMonitor = mockk(relaxed = true)
+    private val mockBackendService: MeshBackendService = mockk(relaxed = true)
+    private val mockSosPacketDao: SosPacketDao = mockk(relaxed = true)
 
     private val useNearbyFlow = MutableStateFlow(true)
     private val useMeshtasticFlow = MutableStateFlow(false)
@@ -71,8 +77,34 @@ class SettingsViewModelTest {
             modelAssetManager = mockAssetManager,
             settingsRepository = mockSettingsRepository,
             adaptiveScanController = mockAdaptiveScanController,
-            batteryMonitor = mockBatteryMonitor
+            batteryMonitor = mockBatteryMonitor,
+            backendService = mockBackendService,
+            sosPacketDao = mockSosPacketDao,
+            context = mockk(relaxed = true)
         )
+    }
+
+    @Test
+    fun saveAndTestConnection_whenHealthy_updatesSuccessState() = runTest(testDispatcher) {
+        coEvery { mockBackendService.checkHealth() } returns HealthResponseDto(
+            status = "ok",
+            environment = "development",
+            database_connected = true,
+            migration_head = "6f1a8b92c431"
+        )
+        coEvery { mockBackendService.checkReadiness() } returns retrofit2.Response.success(
+            HealthReadyResponseDto(status = "ready", database = "OK", outbox_lag = 0)
+        )
+
+        val vm = createViewModel()
+        vm.saveAndTestConnection("http://192.168.1.4:8000", "meshlink_gw_dev_secret")
+        advanceUntilIdle()
+
+        coVerify { mockSettingsRepository.setBackendBaseUrl("http://192.168.1.4:8000") }
+        coVerify { mockSettingsRepository.setGatewayKey("meshlink_gw_dev_secret") }
+        val state = vm.connectionTestState.value
+        assertTrue(state is ConnectionTestState.Success)
+        assertTrue((state as ConnectionTestState.Success).summary.contains("DB OK"))
     }
 
     @Test

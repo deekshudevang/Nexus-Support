@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -91,5 +92,36 @@ class SettingsRepositoryTest {
         assertTrue("Persisted crashReportingOptIn should be true", repo2.crashReportingOptIn.first())
 
         scope2.cancel()
+    }
+
+    @Test
+    fun normalizeBackendBaseUrl_rejectsCleartextWhenDisallowedAndAppendsTrailingSlash() {
+        val https = SettingsRepositoryImpl.normalizeBackendBaseUrl("https://api.example.org/gateway", allowCleartext = false)
+        assertEquals("https://api.example.org/gateway/", https)
+
+        var rejected = false
+        try {
+            SettingsRepositoryImpl.normalizeBackendBaseUrl("http://192.168.1.4:8000", allowCleartext = false)
+        } catch (_: IllegalArgumentException) {
+            rejected = true
+        }
+        assertTrue("Cleartext HTTP must be rejected when allowCleartext=false", rejected)
+    }
+
+    @Test
+    fun syncTelemetryAndBackendUrl_persistCorrectly() = runTest(testDispatcher) {
+        repository.setBackendBaseUrl("http://192.168.1.4:8000")
+        assertEquals("http://192.168.1.4:8000/", repository.getEffectiveBackendBaseUrl())
+
+        repository.recordSyncResult(
+            timestampMs = 1795840000000L,
+            success = true,
+            syncedCount = 3,
+            httpStatus = 200
+        )
+        val telemetry = repository.syncTelemetry.first()
+        assertEquals(1795840000000L, telemetry.lastSyncSuccessMs)
+        assertEquals(3, telemetry.lastSyncedCount)
+        assertEquals(200, telemetry.lastHttpStatus)
     }
 }

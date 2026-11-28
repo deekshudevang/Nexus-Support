@@ -75,7 +75,10 @@ class SettingsViewModelAiTest {
             modelAssetManager = mockAssetManager,
             settingsRepository = mockSettingsRepository,
             adaptiveScanController = mockAdaptiveScanController,
-            batteryMonitor = mockBatteryMonitor
+            batteryMonitor = mockBatteryMonitor,
+            backendService = mockk(relaxed = true),
+            sosPacketDao = mockk(relaxed = true),
+            context = mockk(relaxed = true)
         )
     }
 

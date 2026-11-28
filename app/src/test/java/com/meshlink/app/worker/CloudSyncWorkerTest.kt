@@ -6,6 +6,7 @@ import androidx.work.WorkerParameters
 import com.meshlink.app.data.local.dao.LocationEventDao
 import com.meshlink.app.data.local.entity.LocationEventEntity
 import com.meshlink.app.data.remote.MeshBackendService
+import com.meshlink.app.domain.repository.SettingsRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -26,6 +27,7 @@ class CloudSyncWorkerTest {
     private lateinit var mockWebServer: MockWebServer
     private lateinit var backendService: MeshBackendService
     private val locationEventDao: LocationEventDao = mockk(relaxed = true)
+    private val settingsRepository: SettingsRepository = mockk(relaxed = true)
     private val context: Context = mockk(relaxed = true)
     private val workerParams: WorkerParameters = mockk(relaxed = true)
 
@@ -89,7 +91,7 @@ class CloudSyncWorkerTest {
         )
 
         val provider = Provider { backendService }
-        val worker = CloudSyncWorker(context, workerParams, locationEventDao, provider)
+        val worker = CloudSyncWorker(context, workerParams, locationEventDao, provider, settingsRepository)
         val result = worker.doWork()
 
         assertEquals(ListenableWorker.Result.success(), result)
@@ -131,7 +133,7 @@ class CloudSyncWorkerTest {
         )
 
         val provider = Provider { backendService }
-        val worker = CloudSyncWorker(context, workerParams, locationEventDao, provider)
+        val worker = CloudSyncWorker(context, workerParams, locationEventDao, provider, settingsRepository)
         val result = worker.doWork()
 
         assertEquals(ListenableWorker.Result.success(), result)
@@ -151,7 +153,7 @@ class CloudSyncWorkerTest {
     }
 
     @Test
-    fun `doWork returns retry when backend returns 401 Unauthorized`() = runTest {
+    fun `doWork returns failure when backend returns 401 Unauthorized`() = runTest {
         val pendingEvents = listOf(
             LocationEventEntity(
                 eventId = "evt-loc-03",
@@ -176,11 +178,12 @@ class CloudSyncWorkerTest {
         )
 
         val provider = Provider { backendService }
-        val worker = CloudSyncWorker(context, workerParams, locationEventDao, provider)
+        val worker = CloudSyncWorker(context, workerParams, locationEventDao, provider, settingsRepository)
         val result = worker.doWork()
 
-        assertEquals(ListenableWorker.Result.retry(), result)
+        assertEquals(ListenableWorker.Result.failure(), result)
         coVerify(exactly = 0) { locationEventDao.markAsUploaded(any()) }
+        coVerify(exactly = 1) { settingsRepository.recordSyncResult(any(), success = false, httpStatus = 401, error = any()) }
     }
 
     @Test
@@ -209,7 +212,7 @@ class CloudSyncWorkerTest {
         )
 
         val provider = Provider { backendService }
-        val worker = CloudSyncWorker(context, workerParams, locationEventDao, provider)
+        val worker = CloudSyncWorker(context, workerParams, locationEventDao, provider, settingsRepository)
         val result = worker.doWork()
 
         assertEquals(ListenableWorker.Result.retry(), result)

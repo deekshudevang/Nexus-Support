@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Debug Network Security Configuration for Nexus-Support.
+    Permits cleartext HTTP only in debug builds so emulators (10.0.2.2), loopback,
+    physical Wi-Fi LAN backends (e.g. 192.168.x.x), and Tailscale dev hosts work smoothly.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

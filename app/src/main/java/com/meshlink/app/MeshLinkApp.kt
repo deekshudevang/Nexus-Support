@@ -7,6 +7,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.meshlink.app.sync.GatewaySyncWorker
 import com.meshlink.app.worker.CloudSyncWorker
 import com.meshlink.app.worker.MeshCleanupWorker
 import dagger.hilt.android.HiltAndroidApp
@@ -57,6 +58,7 @@ class MeshLinkApp : Application(), Configuration.Provider {
         crashReporter.initialize()
         scheduleCleanupWork()
         scheduleCloudSyncWork()
+        scheduleGatewaySyncWork()
     }
 
     /**
@@ -96,5 +98,14 @@ class MeshLinkApp : Application(), Configuration.Provider {
             request
         )
         Timber.d("CloudSyncWorker scheduled (every 15m when connected)")
+    }
+
+    private fun scheduleGatewaySyncWork() {
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            GatewaySyncWorker.WORK_NAME_PERIODIC,
+            ExistingPeriodicWorkPolicy.KEEP,
+            GatewaySyncWorker.buildPeriodicWorkRequest()
+        )
+        Timber.d("GatewaySyncWorker scheduled (every 15m when connected)")
     }
 }

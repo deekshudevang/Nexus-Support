@@ -28,7 +28,7 @@ import com.meshlink.app.data.local.entity.SosPacketEntity
         SosPacketEntity::class,
         AssignmentEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -259,6 +259,15 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_assignments_incidentId ON assignments (incidentId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_assignments_status ON assignments (status)")
+            }
+        }
+
+        /**
+         * v15 → v16: adds cloudSynced flag to sos_packets so peer ACKs never block cloud gateway upload
+         */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE sos_packets ADD COLUMN cloudSynced INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

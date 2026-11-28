@@ -14,6 +14,12 @@ if (localPropertiesFile.exists()) {
 }
 val gatewayDevKey: String = (project.findProperty("MESHLINK_GATEWAY_KEY") as? String)
     ?: localProps.getProperty("meshlink.gateway.key", "meshlink_gw_dev_secret")
+val backendDevUrl: String = (project.findProperty("MESHLINK_BACKEND_URL") as? String)
+    ?: localProps.getProperty("meshlink.backend.url", "http://10.0.2.2:8000/")
+val backendStagingUrl: String = (project.findProperty("MESHLINK_STAGING_URL") as? String)
+    ?: localProps.getProperty("meshlink.staging.url", "https://staging.meshlink.app/")
+val backendProdUrl: String = (project.findProperty("MESHLINK_PROD_URL") as? String)
+    ?: localProps.getProperty("meshlink.prod.url", "https://api.meshlink.app/")
 
 android {
     namespace = "com.meshlink.app.data"
@@ -27,9 +33,20 @@ android {
     buildTypes {
         release {
             buildConfigField("String", "GATEWAY_KEY", "\"${project.findProperty("MESHLINK_GATEWAY_KEY") ?: ""}\"")
+            buildConfigField("String", "BACKEND_BASE_URL", "\"$backendProdUrl\"")
+            buildConfigField("boolean", "ALLOW_CLEARTEXT_HTTP", "false")
+        }
+        create("staging") {
+            initWith(getByName("debug"))
+            matchingFallbacks += listOf("debug", "release")
+            buildConfigField("String", "GATEWAY_KEY", "\"${project.findProperty("MESHLINK_STAGING_GATEWAY_KEY") ?: gatewayDevKey}\"")
+            buildConfigField("String", "BACKEND_BASE_URL", "\"$backendStagingUrl\"")
+            buildConfigField("boolean", "ALLOW_CLEARTEXT_HTTP", "false")
         }
         debug {
             buildConfigField("String", "GATEWAY_KEY", "\"$gatewayDevKey\"")
+            buildConfigField("String", "BACKEND_BASE_URL", "\"$backendDevUrl\"")
+            buildConfigField("boolean", "ALLOW_CLEARTEXT_HTTP", "true")
         }
     }
 
@@ -71,7 +88,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.timber)
     
-    implementation(libs.retrofit)
+    api(libs.retrofit)
     implementation(libs.retrofit.converter.gson)
     implementation(libs.sqlcipher.android)
     implementation(libs.tink.android)

@@ -3,14 +3,26 @@ package com.meshlink.app.ui.settings
 import com.meshlink.app.ui.components.NexusCard
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 import androidx.hilt.navigation.compose.hiltViewModel
 
@@ -48,6 +60,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -351,6 +364,125 @@ fun SettingsScreen(
                         checked = crashReportingOptIn,
                         onCheckedChange = { viewModel.setCrashReportingOptIn(it) }
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val persistedUrl by viewModel.backendBaseUrl.collectAsState()
+            val persistedKey by viewModel.gatewayKey.collectAsState()
+            val syncTelemetry by viewModel.syncTelemetry.collectAsState()
+            val pendingSosCount by viewModel.pendingSosCount.collectAsState()
+            val connectionTestState by viewModel.connectionTestState.collectAsState()
+
+            var urlInput by remember(persistedUrl) { mutableStateOf(persistedUrl) }
+            var keyInput by remember(persistedKey) { mutableStateOf(persistedKey) }
+            var showGatewayKey by remember { mutableStateOf(false) }
+
+            Text(
+                text = "Cloud Gateway Connectivity",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+
+            NexusCard(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = urlInput,
+                        onValueChange = { urlInput = it },
+                        label = { Text("Backend Base URL") },
+                        placeholder = { Text("http://192.168.1.4:8000/ or https://api.meshlink.app/") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = keyInput,
+                        onValueChange = { keyInput = it },
+                        label = { Text("Gateway API Key (Encrypted at rest)") },
+                        singleLine = true,
+                        visualTransformation = if (showGatewayKey) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showGatewayKey = !showGatewayKey }) {
+                                Icon(
+                                    imageVector = if (showGatewayKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                    contentDescription = if (showGatewayKey) "Hide gateway key" else "Show gateway key"
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { viewModel.saveAndTestConnection(urlInput, keyInput) },
+                            enabled = connectionTestState !is ConnectionTestState.Testing,
+                            modifier = Modifier.weight(1f).defaultMinSize(minHeight = 48.dp)
+                        ) {
+                            Text(
+                                text = if (connectionTestState is ConnectionTestState.Testing) "Testing..." else "Test Connection",
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = { viewModel.triggerManualSync() },
+                            modifier = Modifier.weight(1f).defaultMinSize(minHeight = 48.dp)
+                        ) {
+                            Icon(Icons.Filled.CloudSync, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Sync Now", fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
+                    when (val state = connectionTestState) {
+                        is ConnectionTestState.Success -> {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Filled.CheckCircle, contentDescription = "Connected", tint = MaterialTheme.colorScheme.tertiary)
+                                Text(state.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
+                            }
+                        }
+                        is ConnectionTestState.Error -> {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Filled.ErrorOutline, contentDescription = "Connection Error", tint = MaterialTheme.colorScheme.error)
+                                Text(state.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                        else -> Unit
+                    }
+
+                    HorizontalDivider()
+
+                    val formatter = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
+                    val lastSuccessLabel = syncTelemetry.lastSyncSuccessMs?.let { formatter.format(Date(it)) } ?: "Never"
+                    val lastAttemptLabel = syncTelemetry.lastSyncAttemptMs?.let { formatter.format(Date(it)) } ?: "Never"
+
+                    Text(
+                        text = "Pending SOS uploads: $pendingSosCount",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Last successful sync: $lastSuccessLabel • Last attempt: $lastAttemptLabel",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (!syncTelemetry.lastError.isNullOrBlank()) {
+                        Text(
+                            text = "Last sync error: ${syncTelemetry.lastError}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
 

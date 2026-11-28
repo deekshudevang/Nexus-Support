@@ -39,6 +39,12 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
         }
+        create("staging") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".staging"
+            versionNameSuffix = "-staging"
+            matchingFallbacks += listOf("debug", "release")
+        }
     }
 
     compileOptions {
@@ -104,6 +110,7 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.osmdroid.android)
+    implementation(libs.retrofit)
     implementation(libs.osmdroid.mapsforge)
     implementation(libs.mapsforge.map.android)
     implementation(libs.mapsforge.map.reader)
