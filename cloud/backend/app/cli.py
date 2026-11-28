@@ -18,7 +18,15 @@ from app.models.user import UserModel
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("rescuemesh.cli")
 
-def create_admin(username: str, password: str, email: str = None, role: str = "super_admin"):
+_ROLE_ALIASES = {
+    "super_admin": "admin",
+    "incident_commander": "commander",
+    "observer": "viewer",
+}
+
+
+def create_admin(username: str, password: str, email: str = None, role: str = "admin"):
+    role = _ROLE_ALIASES.get(role, role)
     if not username or len(username) < 3:
         logger.error("Username must be at least 3 characters.")
         sys.exit(1)
@@ -70,7 +78,11 @@ def main():
     create_admin_parser.add_argument("--username", required=False, help="Administrator username")
     create_admin_parser.add_argument("--password", required=False, help="Administrator password (if omitted, prompts securely)")
     create_admin_parser.add_argument("--email", required=False, help="Optional administrator email")
-    create_admin_parser.add_argument("--role", default="super_admin", choices=["super_admin", "incident_commander", "dispatcher", "responder", "observer"])
+    create_admin_parser.add_argument(
+        "--role",
+        default="admin",
+        choices=["admin", "commander", "dispatcher", "responder", "viewer", "super_admin", "incident_commander", "observer"],
+    )
 
     args = parser.parse_args()
 

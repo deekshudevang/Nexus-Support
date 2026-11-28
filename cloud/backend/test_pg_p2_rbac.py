@@ -38,6 +38,11 @@ def db_session():
     Base.metadata.create_all(bind=engine)
     session = SessionLocal()
     try:
+        # Ensure idempotent clean state across repeated pytest runs for deterministic fixture IDs
+        session.query(DeviceModel).filter(
+            DeviceModel.device_id.in_(["node_tactical_99", "node_alpha", "node_bravo"])
+        ).delete(synchronize_session=False)
+        session.commit()
         yield session
     finally:
         session.close()
@@ -359,3 +364,17 @@ def test_revoked_device_cannot_authenticate(test_client, db_session, ec_keypair)
     )
     assert blocked_resp.status_code == 403
     assert "revoked" in blocked_resp.json()["detail"].lower()
+
+
+def test_unauthenticated_existing_device_key_overwrite_rejected(test_client, db_session, ec_keypair):
+    """Ensure unauthenticated callers cannot hijack an already-enrolled device's public key."""
+    _, pub_pem = ec_keypair
+    device_id = f"node_hijack_{uuid.uuid4().hex[:6]}"
+    r1 = test_client.post("/api/v1/devices/enroll", json={"device_id": device_id, "public_key_pem": pub_pem})
+    assert r1.status_code == 200
+
+    attacker_pub = ec.generate_private_key(ec.SECP256R1()).public_key().public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+    ).decode("utf-8")
+    r2 = test_client.post("/api/v1/devices/enroll", json={"device_id": device_id, "public_key_pem": attacker_pub})
+    assert r2.status_code == 401

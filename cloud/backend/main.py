@@ -27,90 +27,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger("meshlink.backend")
 
-# ── Configuration & Environment ──────────────────────────────────────────────
-ENVIRONMENT = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "development"
-IS_DEV = ENVIRONMENT.strip().lower() == "development"
-DATABASE_PATH = os.getenv("DATABASE_PATH", "meshlink_sync.db")
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATABASE_PATH}")
-
-raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173")
-CORS_ORIGINS = [orig.strip() for orig in raw_origins.split(",") if orig.strip()]
-
-# Credentials (comma-separated if multiple; set via env vars in production)
-# Dev default allowed only when ENV/ENVIRONMENT == development
-raw_gw_keys = os.getenv("GATEWAY_API_KEYS", "meshlink_gw_dev_secret" if IS_DEV else "")
-GATEWAY_API_KEYS = {k.strip() for k in raw_gw_keys.split(",") if k.strip()}
-if IS_DEV:
-    GATEWAY_API_KEYS.add("meshlink_gw_dev_secret")
-
-raw_op_tokens = os.getenv("OPERATOR_TOKENS", "meshlink_op_dev_secret,op_token_valid_1,demo" if IS_DEV else "")
-OPERATOR_TOKENS = {k.strip() for k in raw_op_tokens.split(",") if k.strip()}
-if IS_DEV:
-    OPERATOR_TOKENS.add("meshlink_op_dev_secret")
-    OPERATOR_TOKENS.add("op_token_valid_1")
-
-raw_revoked = os.getenv("REVOKED_CREDENTIALS", "")
-REVOKED_CREDENTIALS = {k.strip() for k in raw_revoked.split(",") if k.strip()}
-
-
-def validate_production_configuration(
-    environment: str,
-    gateway_keys: Set[str],
-    operator_tokens: Set[str],
-    allowed_origins: List[str],
-    database_url: Optional[str] = None,
-) -> None:
-    """Fail closed when production would start with development credentials, origins, or SQLite."""
-    if environment.strip().lower() != "production":
-        return
-
-    development_credentials = {"meshlink_gw_dev_secret", "meshlink_op_dev_secret"}
-    if (
-        not gateway_keys
-        or not operator_tokens
-        or gateway_keys.intersection(development_credentials)
-        or operator_tokens.intersection(development_credentials)
-    ):
-        raise RuntimeError(
-            "Unsafe production configuration: set explicit non-development gateway and operator credentials."
-        )
-
-    normalized_origins = {origin.strip().rstrip("/") for origin in allowed_origins if origin.strip()}
-    unsafe_origin = any(
-        urlparse(origin).scheme != "https"
-        or urlparse(origin).hostname in {"localhost", "127.0.0.1", "::1"}
-        for origin in normalized_origins
-    )
-    if not normalized_origins or "*" in normalized_origins or unsafe_origin:
-        raise RuntimeError(
-            "Unsafe production configuration: set an explicit HTTPS CORS origin allow-list without localhost or wildcard origins."
-        )
-
-    # Invariant 9: Production must never silently fall back to SQLite
-    if database_url is not None:
-        db_target = database_url.strip().lower()
-        if not db_target or db_target.startswith("sqlite") or ":memory:" in db_target:
-            raise RuntimeError(
-                "CRITICAL SAFETY INVARIANT 9 VIOLATION: Production environment must never run on SQLite. "
-                "A valid PostgreSQL connection URL is mandatory."
-            )
-        if not (db_target.startswith("postgresql://") or db_target.startswith("postgresql+psycopg2://") or db_target.startswith("postgresql+asyncpg://")):
-            raise RuntimeError(
-                f"CRITICAL SAFETY INVARIANT 9 VIOLATION: Invalid PostgreSQL database URL scheme for production: {db_target}"
-            )
-
-
-validate_production_configuration(
+from app.core.config import (
     ENVIRONMENT,
+    IS_DEV,
+    DATABASE_PATH,
+    DATABASE_URL,
+    CORS_ORIGINS,
     GATEWAY_API_KEYS,
     OPERATOR_TOKENS,
-    CORS_ORIGINS,
-    DATABASE_URL
+    REVOKED_CREDENTIALS,
+    JWT_SECRET,
+    RATE_LIMIT_REQUESTS,
+    RATE_LIMIT_WINDOW_SEC,
+    validate_production_configuration,
 )
-
-# Rate limiting settings (in-memory token bucket)
-RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "10000" if ENVIRONMENT != "production" else "120"))
-RATE_LIMIT_WINDOW_SEC = int(os.getenv("RATE_LIMIT_WINDOW_SEC", "60"))
 
 app = FastAPI(
     title="MeshLink Gateway Backend",
@@ -124,7 +54,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
