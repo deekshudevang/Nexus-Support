@@ -107,6 +107,7 @@ models/
 .env
 .env.*
 !.env.example
+!.env.production.example
 hf_token*
 
 
