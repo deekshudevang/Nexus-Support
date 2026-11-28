@@ -31,10 +31,12 @@ export default function App() {
   const [dispatchIncident, setDispatchIncident] = useState(null);
 
   const [wsStatus, setWsStatus] = useState('CLOSED'); // 'CLOSED' | 'CONNECTING' | 'OPEN'
+  const [wsRetryInfo, setWsRetryInfo] = useState(null); // { attempt, delayMs, error }
   const [soundEnabled, setSoundEnabled] = useState(true);
 
   const wsRef = useRef(null);
   const reconnectTimerRef = useRef(null);
+  const reconnectAttemptRef = useRef(0);
 
   // 1. Initial Authentication Handler
   const handleAuthenticate = async (enteredToken) => {
@@ -42,15 +44,18 @@ export default function App() {
     setAuthError(null);
 
     try {
-      // Validate token via fetchSosPackets or operator login
-      const packets = await fetchSosPackets(enteredToken).catch(async (err) => {
-        // Fallback: try operator login
+      let resolvedToken = enteredToken;
+      let packets;
+      try {
+        packets = await fetchSosPackets(enteredToken);
+      } catch (_err) {
         const loginRes = await loginOperator(enteredToken);
-        return await fetchSosPackets(loginRes.access_token);
-      });
+        resolvedToken = loginRes.access_token || loginRes.token || enteredToken;
+        packets = await fetchSosPackets(resolvedToken);
+      }
 
-      sessionStorage.setItem('meshlink_op_token', enteredToken);
-      setToken(enteredToken);
+      sessionStorage.setItem('meshlink_op_token', resolvedToken);
+      setToken(resolvedToken);
       setIncidents(Array.isArray(packets) ? packets : []);
       requestNotificationPermission();
     } catch (err) {
@@ -124,6 +129,8 @@ export default function App() {
 
         socket.onopen = () => {
           if (!isMounted) return;
+          reconnectAttemptRef.current = 0;
+          setWsRetryInfo(null);
           setWsStatus('OPEN');
         };
 
@@ -132,8 +139,13 @@ export default function App() {
           try {
             const data = JSON.parse(event.data);
 
-            // Handle SOS packet / Incident payload
-            if (data.type === 'NEW_SOS' || data.emergencyType || data.severity) {
+            // Handle live SOS packet / Incident payload (backend emits "sos_alert")
+            if (
+              data.type === 'sos_alert' ||
+              data.type === 'NEW_SOS' ||
+              data.emergencyType ||
+              data.severity
+            ) {
               const packet = data.packet || data;
               setIncidents((prev) => {
                 const id = packet.uuid || packet.id;
@@ -158,8 +170,9 @@ export default function App() {
               );
             }
 
-            // Append to stream audit timeline
-            setStreamEvents((prev) => [...prev, data]);
+            if (data.type !== 'pong' && data.type !== 'authenticated') {
+              setStreamEvents((prev) => [...prev, data]);
+            }
           } catch (err) {
             console.error('Failed to parse WebSocket message:', err);
           }
@@ -168,8 +181,12 @@ export default function App() {
         socket.onclose = () => {
           if (!isMounted) return;
           setWsStatus('CLOSED');
-          // Auto-reconnect after 3 seconds
-          reconnectTimerRef.current = setTimeout(connectWebSocket, 3000);
+          const attempt = reconnectAttemptRef.current + 1;
+          reconnectAttemptRef.current = attempt;
+          const baseDelay = Math.min(30000, 1000 * Math.pow(2, attempt - 1));
+          const delayMs = baseDelay + Math.floor(Math.random() * 500);
+          setWsRetryInfo({ attempt, delayMs, error: null });
+          reconnectTimerRef.current = setTimeout(connectWebSocket, delayMs);
         };
 
         socket.onerror = () => {
@@ -180,7 +197,17 @@ export default function App() {
       } catch (err) {
         if (!isMounted) return;
         setWsStatus('CLOSED');
-        reconnectTimerRef.current = setTimeout(connectWebSocket, 4000);
+        if (err.status === 401 || err.status === 403) {
+          setWsRetryInfo({ attempt: reconnectAttemptRef.current, delayMs: null, error: 'Session rejected (HTTP ' + err.status + ')' });
+          setAuthError('Operator session expired or revoked. Please sign in again.');
+          return;
+        }
+        const attempt = reconnectAttemptRef.current + 1;
+        reconnectAttemptRef.current = attempt;
+        const baseDelay = Math.min(30000, 1000 * Math.pow(2, attempt - 1));
+        const delayMs = baseDelay + Math.floor(Math.random() * 500);
+        setWsRetryInfo({ attempt, delayMs, error: err.message || 'Gateway unreachable' });
+        reconnectTimerRef.current = setTimeout(connectWebSocket, delayMs);
       }
     };
 
@@ -214,6 +241,7 @@ export default function App() {
       {/* 1. Top HUD & Emergency Broadcast Ticker */}
       <TopHUD
         wsStatus={wsStatus}
+        wsRetryInfo={wsRetryInfo}
         soundEnabled={soundEnabled}
         setSoundEnabled={setSoundEnabled}
         onLogout={handleLogout}

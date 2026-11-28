@@ -2,16 +2,18 @@
 // HARD RULE: Zero secrets in VITE_* environment variables or client bundle.
 
 export const getApiBaseUrl = () => {
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL.replace(/\/+$/, '');
+  if (import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim()) {
+    return import.meta.env.VITE_API_URL.trim().replace(/\/+$/, '');
   }
-  // Fallback to relative or localhost
-  return 'http://localhost:8000';
+  if (import.meta.env.DEV || import.meta.env.MODE === 'test') {
+    return 'http://localhost:8000';
+  }
+  throw new Error('VITE_API_URL is not configured for production dashboard bundle.');
 };
 
 export const getWsBaseUrl = () => {
-  if (import.meta.env.VITE_WS_URL) {
-    return import.meta.env.VITE_WS_URL.replace(/\/+$/, '');
+  if (import.meta.env.VITE_WS_URL && import.meta.env.VITE_WS_URL.trim()) {
+    return import.meta.env.VITE_WS_URL.trim().replace(/\/+$/, '');
   }
   const apiBase = getApiBaseUrl();
   if (apiBase.startsWith('https://')) {
@@ -19,6 +21,13 @@ export const getWsBaseUrl = () => {
   }
   return apiBase.replace('http://', 'ws://');
 };
+
+function buildHttpError(response, errorBody, fallbackMessage) {
+  const err = new Error(errorBody?.detail || `${fallbackMessage} (${response.status})`);
+  err.status = response.status;
+  err.detail = errorBody?.detail;
+  return err;
+}
 
 // Legacy compatible fetch for SOS packets
 export async function fetchSosPackets(token, severityMin = null) {
@@ -85,7 +94,7 @@ export async function requestWsTicket(token) {
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
-    throw new Error(errorBody.detail || `Failed to obtain WebSocket ticket (${response.status})`);
+    throw buildHttpError(response, errorBody, 'Failed to obtain WebSocket ticket');
   }
 
   const data = await response.json();
@@ -140,9 +149,9 @@ export async function fetchV1Incidents(token, params = {}) {
 
 export async function fetchV1Responders(token, params = {}) {
   const baseUrl = getApiBaseUrl();
-  const url = new URL(`${baseUrl}/api/v1/dispatch/responders`);
-  if (params.status) url.searchParams.set('status', params.status);
-  if (params.team_id) url.searchParams.set('team_id', params.team_id);
+  const url = new URL(`${baseUrl}/api/v1/responders`);
+  if (params.availability) url.searchParams.set('availability', params.availability);
+  if (params.responder_type) url.searchParams.set('responder_type', params.responder_type);
 
   const response = await fetch(url.toString(), {
     headers: {
@@ -153,7 +162,7 @@ export async function fetchV1Responders(token, params = {}) {
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
-    throw new Error(errorBody.detail || `Failed to fetch responders (${response.status})`);
+    throw buildHttpError(response, errorBody, 'Failed to fetch responders');
   }
 
   return response.json();
@@ -161,7 +170,7 @@ export async function fetchV1Responders(token, params = {}) {
 
 export async function fetchV1Teams(token) {
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}/api/v1/dispatch/teams`, {
+  const response = await fetch(`${baseUrl}/api/v1/teams`, {
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: 'application/json',
@@ -170,7 +179,7 @@ export async function fetchV1Teams(token) {
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
-    throw new Error(errorBody.detail || `Failed to fetch teams (${response.status})`);
+    throw buildHttpError(response, errorBody, 'Failed to fetch teams');
   }
 
   return response.json();
@@ -178,22 +187,27 @@ export async function fetchV1Teams(token) {
 
 export async function createV1Assignment(token, assignmentData) {
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}/api/v1/dispatch/assignments`, {
+  const incidentId = assignmentData.incident_id;
+  if (!incidentId) {
+    throw new Error('incident_id is required to create an assignment');
+  }
+  const payload = {
+    responder_id: assignmentData.responder_id,
+    team_id: assignmentData.team_id || null,
+  };
+  const response = await fetch(`${baseUrl}/api/v1/incidents/${encodeURIComponent(incidentId)}/assignments`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
-    body: JSON.stringify(assignmentData),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
-    const err = new Error(errorBody.detail || `Assignment failed (${response.status})`);
-    err.status = response.status;
-    err.detail = errorBody.detail;
-    throw err;
+    throw buildHttpError(response, errorBody, 'Assignment failed');
   }
 
   return response.json();

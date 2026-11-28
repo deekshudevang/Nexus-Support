@@ -13,6 +13,7 @@ import {
 
 export default function TopHUD({
   wsStatus,
+  wsRetryInfo = null,
   soundEnabled,
   setSoundEnabled,
   onLogout,
@@ -90,6 +91,8 @@ export default function TopHUD({
                 ? 'WSS LIVE'
                 : wsStatus === 'CONNECTING'
                 ? 'WSS SYNCING'
+                : wsRetryInfo?.delayMs
+                ? `WSS OFFLINE (RETRY ${Math.ceil(wsRetryInfo.delayMs / 1000)}S)`
                 : 'WSS OFFLINE'}
             </span>
           </div>
