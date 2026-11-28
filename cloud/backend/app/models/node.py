@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, Boolean, Index
+from sqlalchemy import Column, BigInteger, String, Integer, Float, Boolean, Index
 from app.core.database import Base
 
 class NodeStatusModel(Base):
@@ -11,7 +11,7 @@ class NodeStatusModel(Base):
     needsHelp = Column(Boolean, nullable=False, default=False)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
-    timestamp = Column(Integer, nullable=False, index=True)
+    timestamp = Column(BigInteger().with_variant(Integer, "sqlite"), nullable=False, index=True)
 
     __table_args__ = (
         Index("idx_node_status_timestamp_desc", timestamp.desc()),

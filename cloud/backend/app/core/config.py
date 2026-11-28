@@ -26,7 +26,11 @@ def _resolve_database_url() -> str:
             raise RuntimeError(
                 f"CRITICAL SAFETY INVARIANT 9 VIOLATION: Invalid PostgreSQL database URL scheme for production: '{raw_url}'"
             )
+        if raw_url.startswith("postgresql://"):
+            return "postgresql+psycopg2://" + raw_url[len("postgresql://"):]
         return raw_url
+    if raw_url.startswith("postgresql://"):
+        return "postgresql+psycopg2://" + raw_url[len("postgresql://"):]
     db_path = os.getenv("DATABASE_PATH", "meshlink_sync.db")
     return raw_url or f"sqlite:///{db_path}"
 

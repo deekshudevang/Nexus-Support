@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, Text, CheckConstraint, Index, Sequence
+from sqlalchemy import Column, BigInteger, String, Integer, Float, Text, CheckConstraint, Index, Sequence
 from app.core.database import Base
 
 incident_number_seq = Sequence("incident_number_seq", start=1001)
@@ -24,9 +24,9 @@ class IncidentModel(Base):
     location_description = Column(String(512), nullable=True)
     commander_id = Column(String(128), nullable=True, index=True)
     version = Column(Integer, nullable=False, default=1)
-    created_at = Column(Integer, nullable=False, index=True)
-    updated_at = Column(Integer, nullable=False)
-    resolved_at = Column(Integer, nullable=True)
+    created_at = Column(BigInteger().with_variant(Integer, "sqlite"), nullable=False, index=True)
+    updated_at = Column(BigInteger().with_variant(Integer, "sqlite"), nullable=False)
+    resolved_at = Column(BigInteger().with_variant(Integer, "sqlite"), nullable=True)
 
     __table_args__ = (
         CheckConstraint(

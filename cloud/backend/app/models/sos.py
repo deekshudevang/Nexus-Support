@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, Boolean, Index
+from sqlalchemy import Column, BigInteger, String, Integer, Float, Boolean, Index
 from app.core.database import Base
 
 class SosPacketModel(Base):
@@ -13,7 +13,7 @@ class SosPacketModel(Base):
     longitude = Column(Float, nullable=True)
     gpsFixAvailable = Column(Boolean, default=True)
     message = Column(String(4096), nullable=False)
-    timestamp = Column(Integer, nullable=False, index=True)
+    timestamp = Column(BigInteger().with_variant(Integer, "sqlite"), nullable=False, index=True)
     status = Column(String(32), nullable=False, default="PENDING", index=True)
     hopCount = Column(Integer, default=0)
 

@@ -165,7 +165,7 @@ def get_db(db_path: Optional[str] = None):
 class SosPacket(BaseModel):
     uuid: str = Field(..., min_length=1, max_length=128)
     senderId: str = Field(..., min_length=1, max_length=128)
-    senderName: str = Field(..., min_length=1, max_length=128)
+    senderName: str = Field("", max_length=128)
     emergencyType: str = Field(..., min_length=1, max_length=64)
     severity: int = Field(..., ge=1, le=10)
     latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
@@ -499,12 +499,13 @@ async def sync_sos(
         try:
             for p in packets:
                 has_fix = bool(p.gpsFixAvailable if p.gpsFixAvailable is not None else (p.latitude is not None and p.longitude is not None))
+                normalized_sender_name = (p.senderName or "").strip() or p.senderId or "Unknown Node"
                 sos_entry = db.query(SosPacketModel).filter(SosPacketModel.uuid == p.uuid).first()
                 if not sos_entry:
                     sos_entry = SosPacketModel(
                         uuid=p.uuid,
                         senderId=p.senderId,
-                        senderName=p.senderName,
+                        senderName=normalized_sender_name,
                         emergencyType=p.emergencyType,
                         severity=p.severity,
                         latitude=p.latitude,
@@ -518,7 +519,7 @@ async def sync_sos(
                     db.add(sos_entry)
                 else:
                     sos_entry.senderId = p.senderId
-                    sos_entry.senderName = p.senderName
+                    sos_entry.senderName = normalized_sender_name
                     sos_entry.emergencyType = p.emergencyType
                     sos_entry.severity = p.severity
                     sos_entry.latitude = p.latitude
@@ -535,7 +536,7 @@ async def sync_sos(
                 if not inc:
                     inc = IncidentModel(
                         id=p.uuid,
-                        title=f"SOS: {p.emergencyType} from {p.senderName}",
+                        title=f"SOS: {p.emergencyType} from {normalized_sender_name}",
                         description=p.message,
                         category=p.emergencyType.upper(),
                         priority=prio,
@@ -543,7 +544,7 @@ async def sync_sos(
                         status="REPORTED" if p.status in ["PENDING", "ACTIVE"] else p.status,
                         organization_id=caller_org,
                         source="MESH_SOS",
-                        reporter_name=p.senderName,
+                        reporter_name=normalized_sender_name,
                         reporter_contact=p.senderId,
                         latitude=p.latitude if (p.latitude != 0.0 or p.longitude != 0.0) else None,
                         longitude=p.longitude if (p.latitude != 0.0 or p.longitude != 0.0) else None,
