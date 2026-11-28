@@ -1,0 +1,61 @@
+NEXUS-SUPPORT SECURITY & QUALITY GATES EVIDENCE
+Date: 2026-11-28 (Asia/Kolkata IST)
+Branch: m3-15-to-m3-24-production
+
+===============================================================================
+1. SECRET & ARTIFACT SCAN (TREE + GIT HISTORY)
+===============================================================================
+Tracked files scanned: 685
+High-risk secrets found in HEAD (private keys, AWS, GitHub PAT, Google keys,
+non-dev production secrets): 0
+Note: Pattern matcher flagged only documented local dev templates / .example
+files (.env.example, cloud/backend/.env.example, docker-compose.yml dev fallbacks,
+docs/M3_24_DEPLOYMENT_GUIDE.md placeholder, STATE.md doc verification command).
+
+Git history paths flagged for optional history rewrite (already untracked in HEAD):
+- logs/* (logs/startup_logcat.txt and cached log files in 21c4a49..6bcf7e1/4cbe2c0)
+- *.db (meshlink_sync.db in 599b520..072b556)
+Command for owner if purging history:
+  git filter-repo --path logs --path-glob "*.db" --invert-paths
+
+Working-tree hygiene verified:
+- git ls-files logs/ -> 0 tracked files
+- *.db, *.apk, *.jks, *.keystore, .env, .env.production ignored in .gitignore
+
+===============================================================================
+2. DEPENDENCY & SECURITY AUDITS
+===============================================================================
+Frontend (cloud/frontend):
+  $ npx vitest run --reporter=verbose -> 3 test files, 19 / 19 passed (2.20s)
+  $ npm audit -> found 0 vulnerabilities
+
+Backend (cloud/backend):
+  $ python -m pytest -q -> 131 passed, 2 warnings (49.98s)
+    Includes multi-tenant org isolation (test_pg_p25), RBAC/auth ACK (test_pg_p2,
+    test_pg_p30, test_pg_p32), OpenAPI schema contract (test_pg_p27), PostgreSQL
+    BigInteger epoch-ms check (test_pg_p16), and blank senderName mobile ingest
+    (test_legacy_contract).
+  $ python -m pip check -> No broken requirements found.
+  $ Installed Python packages audited: 120 (pip-audit not installed offline)
+
+Web Console E2E (Playwright Chromium against Docker Compose):
+  $ python docs/evidence/playwright/e2e_verify.py
+    - Invalid operator token -> AUTHENTICATION REJECTED banner shown
+    - Valid operator token -> WSS LIVE connected
+    - Live SOS API ingest -> WS sos_alert visible in UI < 5s
+    - Dispatch assignment committed via DispatchPanel modal
+    - Mobile 390x844 layout: docW=390, overflowX=false, RADAR MAP w=390, h=673
+    - Docker backend restart -> WSS OFFLINE (RETRY 2S) -> auto-recovered WSS LIVE
+    - page_errors: [] (0 uncaught runtime exceptions)
+
+Android (Gradle 8.14.5 / JDK 17):
+  $ .\gradlew.bat testDebugUnitTest :core:domain:test :app:lintDebug --console=plain
+    - app/build/test-results/testDebugUnitTest: 201 passed, 0 failed, 0 skipped
+    - core/*/build/test-results/testDebugUnitTest: 173 passed, 0 failed, 0 skipped
+    - core/domain/build/test-results/test: 9 passed, 0 failed, 0 skipped
+    - Total Gradle unit tests: 383 passed, 0 failed, 0 skipped
+    - :app:lintDebug -> PASSED (report at app/build/reports/lint-results-debug.html)
+  $ .\gradlew.bat assembleRelease (with throwaway keystore -> verified & deleted) -> BUILD SUCCESSFUL
+  $ .\gradlew.bat assembleRelease (without prod URL/key) -> BUILD SUCCESSFUL; Release BuildConfig:
+      ALLOW_CLEARTEXT_HTTP=false, BACKEND_BASE_URL="https://unconfigured.meshlink.invalid/", GATEWAY_KEY=""
+

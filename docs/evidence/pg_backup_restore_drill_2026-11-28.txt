@@ -1,0 +1,33 @@
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T db psql -U rescuemesh -d postgres -c DROP DATABASE IF EXISTS rescuemesh_restore_test;
+DROP DATABASE
+NOTICE:  database "rescuemesh_restore_test" does not exist, skipping
+EXIT=0
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T db psql -U rescuemesh -d postgres -c CREATE DATABASE rescuemesh_restore_test;
+CREATE DATABASE
+EXIT=0
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T db psql -U rescuemesh -d rescuemesh_restore_test -c CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION
+EXIT=0
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T db pg_dump -U rescuemesh -Fc rescuemesh -f /tmp/rescuemesh_drill.dump
+EXIT=0
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T db pg_restore --no-owner --no-privileges -U rescuemesh -d rescuemesh_restore_test /tmp/rescuemesh_drill.dump
+EXIT=0
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T db psql -U rescuemesh -d rescuemesh_restore_test -c SELECT count(*) AS restored_tables FROM information_schema.tables WHERE table_schema = 'public';
+restored_tables 
+-----------------
+              20
+(1 row)
+EXIT=0
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T db psql -U rescuemesh -d postgres -c DROP DATABASE IF EXISTS rescuemesh_restore_test;
+DROP DATABASE
+EXIT=0
+
+$ C:\Users\deeks\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe compose exec -T db rm -f /tmp/rescuemesh_drill.dump
+EXIT=0
+

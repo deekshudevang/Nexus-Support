@@ -1,0 +1,83 @@
+NEXUS-SUPPORT REAL DEVICE & EMULATOR VERIFICATION EVIDENCE
+Date: 2026-11-28 (Asia/Kolkata IST)
+Branch: m3-15-to-m3-24-production
+
+===============================================================================
+1. HARDWARE & AVD TARGETS TESTED
+===============================================================================
+- Physical Phone: ZD222M3BNH (motorola_edge_50_pro, product: eqe_g, Android 16, wlan0 IP: 192.168.1.2/24)
+- Host LAN Backend: http://192.168.1.4:8000/ (Docker Compose rescuemesh-backend + PostGIS 3.4)
+- Android Emulator: emulator-5554 (AVD meshlink_api34, pixel_6, system-images;android-34;google_apis;x86_64)
+- Emulator Backend Route: http://10.0.2.2:8000/
+
+===============================================================================
+2. EMULATOR (emulator-5554) END-TO-END RESULTS
+===============================================================================
+Command: adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
+11:19:14 IST - Settings -> Cloud Gateway Connectivity -> Test Connection:
+  UI: Connected (development) • DB OK • Head 8a2c4f91d3b0 • Outbox lag: 0
+11:19:14 IST - Settings -> Sync Now:
+  UI: Pending SOS uploads: 0
+  UI: Last successful sync: 2026-11-28 11:19:14 • Last attempt: 2026-11-28 11:19:14
+11:20:07 IST - SOS Screen (mock GPS 12.9716, 77.5946) -> Hold SOS:
+  logcat:
+    11-28 11:20:07.686 D SosViewModel$startRetryLoop: SosViewModel: broadcast attempt 1 succeeded for 7e0b248a-5376-439d-aa21-cfac14d6c813
+    11-28 11:20:07.784 I GatewaySyncWorker$doWork: GatewaySyncWorker started: syncing against http://10.0.2.2:8000/
+    11-28 11:20:07.896 I GatewaySyncWorker$doWork: GatewaySyncWorker: Reconciled 1 SOS receipts and 0 downlinks
+    11-28 11:20:07.904 I WM-WorkerWrapper: Worker result SUCCESS for Work [id=3e0aaa15-bbab-4a41-a260-3d1d4d913a47]
+
+===============================================================================
+3. PHYSICAL PHONE (ZD222M3BNH) END-TO-END & NEGATIVE TESTS
+===============================================================================
+A) Real Wi-Fi LAN Connectivity Check & Live SOS Upload (192.168.1.4:8000):
+  $ adb -s ZD222M3BNH shell "curl -sS -m 4 http://192.168.1.4:8000/health"
+  {"status":"ok","version":"1.0.0","environment":"development","database_connected":true,"migration_head":"6f1a8b92c431",...}
+  Settings UI -> Test Connection:
+  Connected (development) • DB OK • Head 8a2c4f91d3b0 • Outbox lag: 0
+
+  Real Hardware SOS Bugs Caught & Fixed During Phone Run:
+  1. PostgreSQL 32-bit Integer Overflow: SosViewModel sends epoch ms (13 digits, e.g. 1795844316733) which overflowed PostgreSQL Integer columns in incidents/sos_packets/node_status/responders. Fixed in Alembic migration 8a2c4f91d3b0 (BigInteger).
+  2. Blank senderName HTTP 422: SosViewModel creates SosPacketData with senderName="", which FastAPI SosPacket rejected with min_length=1. Fixed in cloud/backend/main.py (senderName defaults "", falls back to senderId) and GatewaySyncWorker.kt.
+  3. Zero-SOS Early Return Blocked Downlinks: GatewaySyncWorker skipped backend sync when packetsToSync was empty. Fixed via KEY_PULL_DOWNLINKS on manual/assignment/periodic sync.
+
+  Post-fix Physical Phone SOS Ingest Verified in Docker PostgreSQL (/api/sos):
+    uuid: 47c2a346-202e-46f8-9f1f-6d7ccb0235ab | senderId: cd28e60bcead5ac2 | gps: (13.0140458, 76.1040649) | timestamp: 1795844316733
+    uuid: d2d7b531-75a3-46aa-b3ef-e38ae25241f1 | senderId: cd28e60bcead5ac2 | timestamp: 1795845173623
+    (4 unique SOS UUIDs synced once each; 0 duplicates)
+
+B) Negative Test 1 — Backend Stopped (Unreachable + Queue Retention):
+  Stopped Docker rescuemesh-backend; tapped Test Connection + triggered Hold SOS on ZD222M3BNH:
+  Settings UI:
+    Test Connection error: Unreachable: failed to connect to /192.168.1.4 (port 8000) from /192.168.1.2 (port 37232) after 15000ms
+    Pending SOS uploads: 1
+    Last sync error: Connection timed out to http://192.168.1.4:8000/
+  logcat:
+    11-28 11:23:08.721 I WM-WorkerWrapper: Worker result RETRY for Work [id=428a3303-bbfd-48d4-a033-4c4d3195b9a1]
+
+C) Negative Test 2 — Wrong Gateway API Key (HTTP 401):
+  Restarted backend; changed Gateway API Key in Settings to wrong_gw_key_401 and tapped Test Connection + Sync Now:
+  Settings UI:
+    Pending SOS uploads: 1
+    Last sync error: Authentication failure (HTTP 401): check X-Gateway-Key
+
+D) Negative Test 3 — Key Restored + Wi-Fi Disable/Enable Recovery Flush (No Duplicates):
+  Restored meshlink_gw_dev_secret, toggled `svc wifi disable` -> `svc wifi enable`, ran Test Connection + Sync Now:
+  Settings UI:
+    Pending SOS uploads: 0
+    Last successful sync: 2026-11-28 11:24:20 • Last attempt: 2026-11-28 11:24:20
+  Verified via GET /api/sos: d2d7b531-75a3-46aa-b3ef-e38ae25241f1 recorded once (0 duplicates).
+
+E) Downlink Assignment Loop (Backend -> Motorola Phone):
+  Created responder MOTO-FIELD-1 (device_id=cd28e60bcead5ac2) and dispatched assignment asgn_93f80b636c6e.
+  Tapped Sync Now on ZD222M3BNH (11:28:44 IST):
+    11-28 11:28:44.448 I GatewaySyncWorker$doWork: GatewaySyncWorker: Synced status DISPATCHED for assignment asgn_93f80b636c6e
+    11-28 11:28:44.564 I GatewaySyncWorker$doWork: GatewaySyncWorker: Reconciled 0 SOS receipts and 1 downlinks
+    11-28 11:28:44.565 I WM-WorkerWrapper: Worker result SUCCESS
+
+F) Release Build Cleartext & Unconfigured Placeholder Policy:
+  core/data release BuildConfig verified:
+    ALLOW_CLEARTEXT_HTTP = false
+    BACKEND_BASE_URL = "https://unconfigured.meshlink.invalid/"
+    GATEWAY_KEY = ""
+  app/src/main/res/xml/network_security_config.xml: cleartextTrafficPermitted="false".
+  GatewaySyncWorker fails closed with Result.failure() before network I/O when URL is unconfigured or key blank.
