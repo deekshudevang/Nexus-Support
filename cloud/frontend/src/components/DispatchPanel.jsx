@@ -91,7 +91,7 @@ export default function DispatchPanel({
   return (
     <>
       {/* Right Column: Field Responders Telemetry */}
-      <aside className="w-80 md:w-88 xl:w-96 flex flex-col bg-[#0b0f19] border-l border-[#334155] shrink-0 z-20 select-none">
+      <aside className="w-full md:w-88 xl:w-96 flex flex-col bg-[#0b0f19] border-l border-[#334155] shrink-0 z-20 select-none">
         {/* Panel Header & Statistics */}
         <div className="p-2.5 bg-[#111827] border-b border-[#334155]">
           <div className="flex items-center justify-between mb-2">

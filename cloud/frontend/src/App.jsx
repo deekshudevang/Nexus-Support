@@ -29,6 +29,7 @@ export default function App() {
 
   const [selectedIncident, setSelectedIncident] = useState(null);
   const [dispatchIncident, setDispatchIncident] = useState(null);
+  const [mobileTab, setMobileTab] = useState('QUEUE'); // 'QUEUE' | 'MAP' | 'DISPATCH'
 
   const [wsStatus, setWsStatus] = useState('CLOSED'); // 'CLOSED' | 'CONNECTING' | 'OPEN'
   const [wsRetryInfo, setWsRetryInfo] = useState(null); // { attempt, delayMs, error }
@@ -250,36 +251,67 @@ export default function App() {
         totalNodesCount={nodes.length}
       />
 
+      {/* Mobile Workspace View Switcher (< 768px) */}
+      <nav
+        aria-label="Mobile workspace view"
+        className="md:hidden grid grid-cols-3 bg-[#111827] border-b border-[#334155] shrink-0 text-xs font-semibold"
+      >
+        {[
+          { id: 'QUEUE', label: `QUEUE (${incidents.length})` },
+          { id: 'MAP', label: 'RADAR MAP' },
+          { id: 'DISPATCH', label: `ASSETS (${responders.length})` },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            data-testid={`mobile-tab-${tab.id.toLowerCase()}`}
+            onClick={() => setMobileTab(tab.id)}
+            className={`min-h-[44px] px-2 border-b-2 transition-colors ${
+              mobileTab === tab.id
+                ? 'bg-[#1e293b] text-[#f8fafc] border-[#38bdf8]'
+                : 'text-[#94a3b8] border-transparent'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+
       {/* 2. Main 3-Column Tactical Bento Workspace */}
       <div className="flex-1 flex overflow-hidden w-full relative">
         {/* Left Column: Incident Priority Queue */}
-        <IncidentQueue
-          incidents={incidents}
-          selectedIncident={selectedIncident}
-          onSelectIncident={(inc) => setSelectedIncident(inc)}
-          onOpenDispatch={(inc) => setDispatchIncident(inc)}
-        />
+        <div className={`${mobileTab === 'QUEUE' ? 'flex w-full h-full' : 'hidden'} md:contents`}>
+          <IncidentQueue
+            incidents={incidents}
+            selectedIncident={selectedIncident}
+            onSelectIncident={(inc) => setSelectedIncident(inc)}
+            onOpenDispatch={(inc) => setDispatchIncident(inc)}
+          />
+        </div>
 
         {/* Center Canvas: Tactical Radar Map with Zero GPS Fabrication */}
-        <TacticalMap
-          incidents={incidents}
-          nodes={nodes}
-          responders={responders}
-          selectedIncident={selectedIncident}
-          onSelectIncident={(inc) => setSelectedIncident(inc)}
-          onOpenDispatch={(inc) => setDispatchIncident(inc)}
-        />
+        <div className={`${mobileTab === 'MAP' ? 'flex flex-1 w-full h-full' : 'hidden'} md:contents`}>
+          <TacticalMap
+            incidents={incidents}
+            nodes={nodes}
+            responders={responders}
+            selectedIncident={selectedIncident}
+            onSelectIncident={(inc) => setSelectedIncident(inc)}
+            onOpenDispatch={(inc) => setDispatchIncident(inc)}
+          />
+        </div>
 
         {/* Right Column: Live Responder Telemetry & Dispatch Panel */}
-        <DispatchPanel
-          responders={responders}
-          dispatchIncident={dispatchIncident}
-          onCloseDispatchModal={() => setDispatchIncident(null)}
-          onAssignmentSuccess={() => {
-            refreshTacticalState();
-          }}
-          token={token}
-        />
+        <div className={`${mobileTab === 'DISPATCH' ? 'flex w-full h-full' : 'hidden'} md:contents`}>
+          <DispatchPanel
+            responders={responders}
+            dispatchIncident={dispatchIncident}
+            onCloseDispatchModal={() => setDispatchIncident(null)}
+            onAssignmentSuccess={() => {
+              refreshTacticalState();
+            }}
+            token={token}
+          />
+        </div>
       </div>
 
       {/* 3. Bottom Real-time Stream Audit Timeline & Replay */}
